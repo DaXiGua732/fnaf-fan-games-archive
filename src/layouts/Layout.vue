@@ -147,7 +147,7 @@ const currentYear = new Date().getFullYear()
               亦未获得其授权或认可。
             </p>
             <p class="swiss-meta mt-8 text-white/50">
-              CONTACT — fnaf-archive@example.com
+              CONTACT — 3589561553@qq.com
             </p>
           </div>
 
