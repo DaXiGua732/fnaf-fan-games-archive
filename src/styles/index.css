@@ -1,0 +1,121 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =====================================================================
+   Swiss International Style —— 全局硬重置
+   本节是视觉规范的「最后一道防线」：即使第三方样式（如后续的
+   Giscus iframe、浏览器 UA 样式）试图注入圆角或阴影，也会在
+   编译/运行层被强制抹平为 0。
+   ===================================================================== */
+@layer base {
+  :root {
+    --swiss-accent: #ff0000;
+    --swiss-ink: #000000;
+    --swiss-paper: #ffffff;
+    --swiss-line: #cccccc;
+    --swiss-surface: #f9f9f9;
+  }
+
+  /* 绝对禁忌：零圆角 / 零阴影 —— 全局强制 */
+  *,
+  *::before,
+  *::after {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: auto;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--swiss-paper);
+    color: var(--swiss-ink);
+    font-family: Helvetica, Arial, sans-serif;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    line-height: 1.5;
+  }
+
+  /* 绝对禁忌：居中对齐 —— 所有文本元素默认强制左对齐 */
+  body,
+  h1, h2, h3, h4, h5, h6,
+  p, span, a, li, dd, dt,
+  td, th, label, blockquote, figcaption {
+    text-align: left;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* 焦点态用直角描边替代阴影，保证键盘可达性同时不违反规范 */
+  :focus-visible {
+    outline: 2px solid var(--swiss-accent);
+    outline-offset: 2px;
+  }
+
+  img,
+  svg,
+  video {
+    display: block;
+    max-width: 100%;
+  }
+
+  /* 运行期哨兵：若检测到组件出现圆角/阴影，控制台报错（仅供开发期自检） */
+  ::selection {
+    background: var(--swiss-accent);
+    color: #ffffff;
+  }
+}
+
+@layer components {
+  /* 全大写标签字体：年份 / 作者 / 元信息 */
+  .swiss-meta {
+    @apply font-sans text-[11px] uppercase tracking-[0.18em];
+  }
+
+  /* ---------------------------------------------------------------------
+     Giscus 评论区容器
+     注意：父页面能控制的**只有 iframe 元素本身**（尺寸 / 直角 / 无阴影）。
+     iframe 内部是 giscus.app 的跨域文档，父页面 CSS 注入不进去，
+     全部内部视觉定制必须走 data-theme 指向的 public/giscus-swiss.css。
+     --------------------------------------------------------------------- */
+  .giscus,
+  .giscus iframe {
+    display: block;
+    width: 100%;
+    border: 0;
+  }
+  .giscus {
+    min-height: 200px;
+  }
+}
+
+@layer utilities {
+  /* 规范中「唯一允许的位移」：按钮内部箭头 */
+  .u-arrow {
+    transition: transform 150ms ease-out;
+    will-change: transform;
+  }
+  .group:hover .u-arrow {
+    transform: translateX(0.5rem);
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "games": [
+    {
+      "id": "tjoc-reborn",
+      "title": "The Joy of Creation: Reborn",
+      "author": "Nikson",
+      "releaseYear": 2017,
+      "ipSeries": "FNAF 主线同人",
+      "engine": "Unreal Engine 4",
+      "coverImage": "/images/tjoc-reborn-cover.svg",
+      "bannerImage": "/images/tjoc-reborn-banner.svg",
+      "gallery": ["/images/tjoc-reborn-banner.svg", "/images/tjoc-reborn-cover.svg"],
+      "videoUrl": "https://www.bilibili.com/video/BV1Js41137YQ",
+      "description": "以第一人称视角重述「被烧毁的宅邸」之夜。玩家在五个夜晚中躲避 Ignited 系列机械玩偶的追杀，需要用相机闪光灯自保。Reborn 是重制版，重置了全部场景光照与 AI 行为树，被公认为 FNAF 同人 3D 恐怖向的标杆之作。",
+      "downloads": [
+        { "provider": "123云盘", "url": "https://www.123pan.com/s/example-tjoc", "password": "tjoc" },
+        { "provider": "百度网盘", "url": "https://pan.baidu.com/s/example-tjoc", "password": "2017" }
+      ],
+      "metrics": { "fakeViews": 12540, "score": 4.8 }
+    },
+    {
+      "id": "tjoc-story-mode",
+      "title": "The Joy of Creation: Story Mode",
+      "author": "Nikson",
+      "releaseYear": 2019,
+      "ipSeries": "FNAF 主线同人",
+      "engine": "Unreal Engine 4",
+      "coverImage": "/images/tjoc-story-mode-cover.svg",
+      "bannerImage": "/images/tjoc-story-mode-banner.svg",
+      "gallery": ["/images/tjoc-story-mode-banner.svg", "/images/tjoc-story-mode-cover.svg"],
+      "videoUrl": "https://www.bilibili.com/video/BV1X4411J7dv",
+      "description": "Reborn 的正统续作，改为逐日推进的剧情模式。玩家扮演 Scott 本人，在七个章节中经历从创作到失控的全过程。新增潜行、解谜与多结局系统，是系列叙事最完整的一部。",
+      "downloads": [
+        { "provider": "123云盘", "url": "https://www.123pan.com/s/example-tjocsm", "password": "tsm" },
+        { "provider": "阿里云盘", "url": "https://www.aliyundrive.com/s/example-tjocsm" }
+      ],
+      "metrics": { "fakeViews": 8730, "score": 4.6 }
+    },
+    {
+      "id": "one-night-at-flumptys",
+      "title": "One Night at Flumpty's",
+      "author": "Jonochrome",
+      "releaseYear": 2015,
+      "ipSeries": "玩梗向混搭",
+      "engine": "Clickteam Fusion 2.5",
+      "coverImage": "/images/one-night-at-flumptys-cover.svg",
+      "bannerImage": "/images/one-night-at-flumptys-banner.svg",
+      "gallery": [
+        "/images/one-night-at-flumptys-banner.svg",
+        "/images/one-night-at-flumptys-cover.svg"
+      ],
+      "videoUrl": "https://www.bilibili.com/video/BV1Wx411s7hM",
+      "description": "「Flumpty Bumpty 不受物理规则限制。」一款画风人畜无害、实际难度极高的恶搞向同人。玩家只有一夜要守，蛋形角色会无视摄像头与门的规则直接逼近办公室。公认的「史上最不讲道理同人」。",
+      "downloads": [
+        { "provider": "百度网盘", "url": "https://pan.baidu.com/s/example-onaf", "password": "egg1" }
+      ],
+      "metrics": { "fakeViews": 20180, "score": 4.9 }
+    },
+    {
+      "id": "five-nights-at-candys",
+      "title": "Five Nights at Candy's",
+      "author": "Emil Macko",
+      "releaseYear": 2015,
+      "ipSeries": "FNAF 主线同人",
+      "engine": "Clickteam Fusion 2.5",
+      "coverImage": "/images/five-nights-at-candys-cover.svg",
+      "bannerImage": "/images/five-nights-at-candys-banner.svg",
+      "gallery": ["/images/five-nights-at-candys-banner.svg", "/images/five-nights-at-candys-cover.svg"],
+      "videoUrl": "https://www.bilibili.com/video/BV1ks411k7JY",
+      "description": "以「糖果猫」Candy the Cat 为首的独立玩偶阵容，构建了一套完整的原创世界观与时间线。以干净的像素美术、严密的 AI 难度曲线和出色的氛围营造，成为最早获得原作粉丝认可的同人系列之一。",
+      "downloads": [
+        { "provider": "123云盘", "url": "https://www.123pan.com/s/example-fnac", "password": "fnac" },
+        { "provider": "百度网盘", "url": "https://pan.baidu.com/s/example-fnac", "password": "candy" }
+      ],
+      "metrics": { "fakeViews": 16320, "score": 4.7 }
+    },
+    {
+      "id": "popgoes",
+      "title": "POPGOES",
+      "author": "Kane Carter",
+      "releaseYear": 2016,
+      "ipSeries": "FNAF 主线同人",
+      "engine": "Clickteam Fusion 2.5",
+      "coverImage": "/images/popgoes-cover.svg",
+      "bannerImage": "/images/popgoes-banner.svg",
+      "gallery": ["/images/popgoes-banner.svg", "/images/popgoes-cover.svg"],
+      "videoUrl": "https://www.bilibili.com/video/BV1Ns41167wa",
+      "description": "设定于原作时间线数十年后的未来。玩家作为看守人管理 Popgoes Pizza 的旧设施，靠一套「昼夜循环 + 电量分配」的双层资源机制生存。以极高的机制复杂度与隐藏剧情密度著称。",
+      "downloads": [
+        { "provider": "123云盘", "url": "https://www.123pan.com/s/example-popgoes", "password": "pg16" },
+        { "provider": "夸克网盘", "url": "https://pan.quark.cn/s/example-popgoes" }
+      ],
+      "metrics": { "fakeViews": 11260, "score": 4.5 }
+    },
+    {
+      "id": "dayshift-at-freddys",
+      "title": "Dayshift at Freddy's",
+      "author": "DirectDogman",
+      "releaseYear": 2017,
+      "ipSeries": "玩梗向混搭",
+      "engine": "Clickteam Fusion 2.5",
+      "coverImage": "/images/dayshift-at-freddys-cover.svg",
+      "bannerImage": "/images/dayshift-at-freddys-banner.svg",
+      "gallery": [
+        "/images/dayshift-at-freddys-banner.svg",
+        "/images/dayshift-at-freddys-cover.svg"
+      ],
+      "videoUrl": "https://www.bilibili.com/video/BV1jx411x7Kz",
+      "description": "把恐怖生存彻底反转成「打工喜剧」。玩家白天在披萨店上班，通过对话选项、道具与一本会说话的账本推进多条荒诞分支剧情。以密集的玩梗密度和超多结局成为同人圈的经典。",
+      "downloads": [
+        { "provider": "百度网盘", "url": "https://pan.baidu.com/s/example-dsaf", "password": "dsaf" },
+        { "provider": "阿里云盘", "url": "https://www.aliyundrive.com/s/example-dsaf" }
+      ],
+      "metrics": { "fakeViews": 9450, "score": 4.4 }
+    }
+  ]
+}

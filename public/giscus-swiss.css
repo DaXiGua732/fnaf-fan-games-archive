@@ -1,0 +1,155 @@
+/* ==========================================================================
+   Giscus 自定义主题 —— Swiss International Style
+   ==========================================================================
+   为什么必须做成「主题文件」而不是写在主站 CSS 里：
+   Giscus 渲染在 giscus.app 域下的跨域 iframe 内，父页面的 CSS 完全注入不进去。
+   唯一正确的途径是通过 data-theme 传入本文件的 URL，由 giscus 在 iframe 内部加载。
+
+   giscus 主题的约定：所有变量都声明在 `main` 选择器下（GitHub Primer 变量）。
+   本文件基于官方 light 主题改写，把整套色板压到 白 / 黑 / #ff0000 / #cccccc。
+   ========================================================================== */
+
+main {
+  /* —— 代码高亮（尽量中性化，避免彩色噪点破坏黑白灰体系）—— */
+  --color-prettylights-syntax-comment: #666666;
+  --color-prettylights-syntax-constant: #000000;
+  --color-prettylights-syntax-entity: #000000;
+  --color-prettylights-syntax-storage-modifier-import: #000000;
+  --color-prettylights-syntax-entity-tag: #000000;
+  --color-prettylights-syntax-keyword: #ff0000;
+  --color-prettylights-syntax-string: #000000;
+  --color-prettylights-syntax-variable: #000000;
+  --color-prettylights-syntax-brackethighlighter-unmatched: #ff0000;
+  --color-prettylights-syntax-invalid-illegal-text: #ffffff;
+  --color-prettylights-syntax-invalid-illegal-bg: #ff0000;
+  --color-prettylights-syntax-carriage-return-text: #ffffff;
+  --color-prettylights-syntax-carriage-return-bg: #ff0000;
+  --color-prettylights-syntax-string-regexp: #000000;
+  --color-prettylights-syntax-markup-list: #000000;
+  --color-prettylights-syntax-markup-heading: #000000;
+  --color-prettylights-syntax-markup-italic: #000000;
+  --color-prettylights-syntax-markup-bold: #000000;
+  --color-prettylights-syntax-markup-deleted-text: #000000;
+  --color-prettylights-syntax-markup-deleted-bg: #f9f9f9;
+  --color-prettylights-syntax-markup-inserted-text: #000000;
+  --color-prettylights-syntax-markup-inserted-bg: #f9f9f9;
+  --color-prettylights-syntax-markup-changed-text: #000000;
+  --color-prettylights-syntax-markup-changed-bg: #f9f9f9;
+  --color-prettylights-syntax-markup-ignored-text: #000000;
+  --color-prettylights-syntax-markup-ignored-bg: #cccccc;
+  --color-prettylights-syntax-meta-diff-range: #000000;
+  --color-prettylights-syntax-brackethighlighter-angle: #666666;
+  --color-prettylights-syntax-sublimelinter-gutter-mark: #cccccc;
+  --color-prettylights-syntax-constant-other-reference-link: #000000;
+
+  /* —— 按钮：直角 + 零阴影，主按钮黑底、悬停转强调红 —— */
+  --color-btn-text: #000000;
+  --color-btn-bg: #ffffff;
+  --color-btn-border: #000000;
+  --color-btn-shadow: none;
+  --color-btn-inset-shadow: none;
+  --color-btn-hover-bg: #000000;
+  --color-btn-hover-border: #000000;
+  --color-btn-active-bg: #f9f9f9;
+  --color-btn-active-border: #000000;
+  --color-btn-selected-bg: #f9f9f9;
+
+  --color-btn-primary-text: #ffffff;
+  --color-btn-primary-bg: #000000;
+  --color-btn-primary-border: #000000;
+  --color-btn-primary-shadow: none;
+  --color-btn-primary-inset-shadow: none;
+  --color-btn-primary-hover-bg: #ff0000;
+  --color-btn-primary-hover-border: #ff0000;
+  --color-btn-primary-selected-bg: #ff0000;
+  --color-btn-primary-selected-shadow: none;
+  --color-btn-primary-disabled-text: rgba(255, 255, 255, 0.6);
+  --color-btn-primary-disabled-bg: #cccccc;
+  --color-btn-primary-disabled-border: #cccccc;
+
+  --color-action-list-item-default-hover-bg: #f9f9f9;
+  --color-segmented-control-bg: #f9f9f9;
+  --color-segmented-control-button-bg: #ffffff;
+  --color-segmented-control-button-selected-border: #000000;
+
+  /* —— 文字与画布 —— */
+  --color-fg-default: #000000;
+  --color-fg-muted: #666666;
+  --color-fg-subtle: #999999;
+  --color-canvas-default: #ffffff;
+  --color-canvas-overlay: #ffffff;
+  --color-canvas-inset: #f9f9f9;
+  --color-canvas-subtle: #f9f9f9;
+
+  /* —— 边框：一律细灰线，强调态用黑 —— */
+  --color-border-default: #cccccc;
+  --color-border-muted: #cccccc;
+  --color-neutral-muted: #cccccc;
+
+  /* —— 强调色：全部收敛到规范红 —— */
+  --color-accent-fg: #ff0000;
+  --color-accent-emphasis: #ff0000;
+  --color-accent-muted: rgba(255, 0, 0, 0.4);
+  --color-accent-subtle: #f9f9f9;
+
+  --color-success-fg: #000000;
+  --color-attention-fg: #000000;
+  --color-attention-muted: #cccccc;
+  --color-attention-subtle: #f9f9f9;
+  --color-danger-fg: #ff0000;
+  --color-danger-muted: rgba(255, 0, 0, 0.4);
+  --color-danger-subtle: #f9f9f9;
+
+  --color-primer-shadow-inset: none;
+  --color-primer-shadow-highlight: none;
+  --color-primer-border-active: #ff0000;
+
+  --color-scale-gray-1: #f9f9f9;
+  --color-scale-blue-1: #f9f9f9;
+}
+
+/* —— 兜底硬约束：即使某个组件用了内联圆角或阴影也一律抹平 —— */
+main,
+main *,
+main *::before,
+main *::after {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  /* 规范要求只允许无衬线字体，这里连代码块也统一回 Helvetica */
+  font-family: Helvetica, Arial, sans-serif !important;
+}
+
+main {
+  letter-spacing: -0.01em;
+  background: #ffffff;
+  color: #000000;
+}
+
+/* 表单控件保持直角、黑边框，聚焦时只换颜色 */
+main input,
+main textarea,
+main button,
+main select {
+  border-radius: 0 !important;
+  border-color: #cccccc;
+}
+
+main input:focus,
+main textarea:focus {
+  border-color: #ff0000 !important;
+  outline: 2px solid #ff0000;
+  outline-offset: 1px;
+}
+
+/* 头像也做直角处理，避免圆形破坏网格语言 */
+main img.avatar,
+main .avatar {
+  border-radius: 0 !important;
+}
+
+/* 悬停一律只改颜色，不做位移或缩放 */
+main a,
+main button {
+  transition: color 150ms ease-out, background-color 150ms ease-out,
+    border-color 150ms ease-out;
+}
