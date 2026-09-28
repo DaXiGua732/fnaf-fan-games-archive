@@ -8,7 +8,6 @@ Five Nights at Freddy's **同人游戏资源导航站**。纯前端静态站，�
 | 线上地址 | https://daxigua732.github.io/fnaf-fan-games-archive/ |
 | 代码仓库 | https://github.com/DaXiGua732/fnaf-fan-games-archive |
 | 原始需求文档 | [`fnaf_fan_game_website_technical_specification.md`](./fnaf_fan_game_website_technical_specification.md) |
-| 当前提交 | `851ddf7`（本地与远程 SHA 完全一致） |
 | 包名 | `fnaf-fan-game-archive` |
 
 ---
@@ -532,6 +531,10 @@ node_modules**，`package-lock.json` 也不会记录它们，导致 `vite build`
 - 但 `verify` 里 smoke 也清目录的话会累计超限 → **已让 smoke 构建不清空目录**（`vite.smoke.config.ts`）
 - 若 `build` 仍被拦，需申请一次免沙箱执行（`dist/` 是构建产物，清空是正常行为）
 - GitHub 上**不能删除默认分支**（`Cannot delete the default branch` 422）
+
+> **实用技巧：需要清空临时目录时，不要 `rm -rf`，换个新目录名。**
+> `rm -rf .tmp/xxx` 可能触发删除保护（甚至报 `SAFE_DELETE_FAIL_CLOSED`）。
+> 直接用 `.tmp/exp2`、`.tmp/exp3` 这类递增目录名，完全绕开删除需求，`.tmp/` 本身已被 gitignore。
 
 ### 9.3 Tailwind 内容提取器会扫描注释
 
