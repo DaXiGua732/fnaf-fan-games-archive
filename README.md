@@ -10,6 +10,10 @@ Five Nights at Freddy's **同人游戏资源导航站**。纯前端静态站，�
 | 原始需求文档 | [`fnaf_fan_game_website_technical_specification.md`](./fnaf_fan_game_website_technical_specification.md) |
 | 包名 | `fnaf-fan-game-archive` |
 
+> 🤖 **AI / 新协作者接手请先读** [`HANDOVER.md`](./HANDOVER.md) —— 它是交接地图：
+> 当前状态、架构数据流、运维命令、关键设计与"为什么"、铁律与踩坑清单、已知缺口。
+> 本 README 是完整手册（最详细），HANDOVER 是快速入口。
+
 ---
 
 ## 0. 给接手者（尤其是 AI 上下文）的先读段落
