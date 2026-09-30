@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useSearchField } from '../composables/useSearchField'
+import { computed } from 'vue'
 import { onMounted, ref } from 'vue'
 import {
   useGameLibrary,
@@ -53,9 +55,8 @@ const FILTER_GROUPS: {
   { category: 'series', title: 'IP 系列', options: () => availableSeries.value },
 ]
 
-function onSearchInput(event: Event): void {
-  setSearchQuery((event.target as HTMLInputElement).value)
-}
+/** 见 composables/useSearchField.ts：受控输入的回写会让反向选中后打字变成倒序 */
+const searchText = useSearchField(computed(() => activeFilters.value.search), setSearchQuery)
 
 function chipClass(category: FilterCategory, value: string): string {
   return isFilterActive(category, value)
@@ -167,9 +168,8 @@ onMounted(runSelfTest)
               id="debug-search"
               type="text"
               placeholder="输入标题 / 作者 / 系列 / 引擎…"
-              :value="activeFilters.search"
+              v-model="searchText"
               class="mb-10 w-full rounded-none border border-black bg-white px-4 py-3 font-sans text-sm transition-colors duration-150 placeholder:text-black/35 focus:border-[#ff0000] focus:outline-none"
-              @input="onSearchInput"
             />
 
             <div v-for="group in FILTER_GROUPS" :key="group.category" class="mb-10">

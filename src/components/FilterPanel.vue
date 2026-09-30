@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useGameLibrary, type FilterCategory, type SortKey } from '../composables/useGameLibrary'
+import { useSearchField } from '../composables/useSearchField'
 
 /**
  * FilterPanel —— 筛选与排序面板
@@ -51,9 +53,15 @@ function chipClass(active: boolean): string {
   ].join(' ')
 }
 
-function onSearchInput(event: Event): void {
-  setSearchQuery((event.target as HTMLInputElement).value)
-}
+/**
+ * 关键词输入框的值由本地 ref 驱动（不再用 `:value` + `@input`）。
+ * 原因见 useSearchField：受控输入的「回写 → 浏览器重置光标」会让
+ * 「反向选中后打字」变成倒序。
+ */
+const searchText = useSearchField(
+  computed(() => activeFilters.value.search),
+  setSearchQuery,
+)
 </script>
 
 <template>
@@ -63,13 +71,12 @@ function onSearchInput(event: Event): void {
       <label class="swiss-meta mb-3 block text-black/60" for="library-search">关键词搜索</label>
       <input
         id="library-search"
+        v-model="searchText"
         type="search"
         autocomplete="off"
         placeholder="输入标题 / 作者 / 系列 / 引擎…"
-        :value="activeFilters.search"
         class="w-full rounded-none border border-black bg-white px-4 py-3 font-sans text-sm transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-[#ff0000] focus:outline-none"
-        @input="onSearchInput"
-      />
+        />
     </div>
 
     <!-- 三组分类标签 -->

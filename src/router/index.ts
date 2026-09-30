@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { installAuthGuard } from './authGuard'
 import { routes } from './routes'
 
 export { routes }
@@ -16,6 +17,8 @@ const router = createRouter({
     return savedPosition ?? { top: 0 }
   },
 })
+
+installAuthGuard(router)
 
 router.afterEach((to) => {
   // 守卫：SSR / 非浏览器环境（如冒烟测试）下没有 document

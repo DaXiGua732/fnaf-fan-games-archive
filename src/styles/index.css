@@ -110,12 +110,29 @@
 }
 
 @layer utilities {
-  /* 规范中「唯一允许的位移」：按钮内部箭头 */
+  /* 规范中「唯一允许的位移」：按钮内部箭头。
+     这一版向右滑出，用于「下一页 →」这类箭头位于文字**右侧**的按钮。 */
   .u-arrow {
     transition: transform 150ms ease-out;
     will-change: transform;
   }
   .group:hover .u-arrow {
     transform: translateX(0.5rem);
+  }
+
+  /* 反向箭头：用于「← 上一页」这类箭头位于文字**左侧**、应当向左滑出的按钮。
+     滑出方向与箭头朝向一致，视觉上才是「往前走」的镜像。
+
+     ⚠️ 旋转**必须写进 transform 里**，不能靠 `rotate-180` 工具类：
+     `.group:hover .u-arrow` 的优先级 (0,3,0) 高于 `.rotate-180` 的 (0,1,0)，
+     悬停时 translate 会把 rotate 整个覆盖掉 —— 箭头会在鼠标移上去的瞬间
+     从 ← 翻成 → 并向右跑。（这就是「上一页箭头动画有问题」的根因。） */
+  .u-arrow-back {
+    transform: rotate(180deg);
+    transition: transform 150ms ease-out;
+    will-change: transform;
+  }
+  .group:hover .u-arrow-back {
+    transform: translateX(-0.5rem) rotate(180deg);
   }
 }

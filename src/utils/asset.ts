@@ -7,8 +7,14 @@
  */
 export function assetUrl(path: string): string {
   if (!path) return ''
-  // 已经是完整外链就不处理
-  if (/^(https?:)?\/\//.test(path) || path.startsWith('data:')) return path
+  // 已经是完整外链 / 内联数据 / 本地临时对象地址就不处理
+  if (
+    /^(https?:)?\/\//.test(path) ||
+    path.startsWith('data:') ||
+    path.startsWith('blob:')
+  ) {
+    return path
+  }
   const base = import.meta.env.BASE_URL
   return `${base}${path.replace(/^\/+/, '')}`
 }

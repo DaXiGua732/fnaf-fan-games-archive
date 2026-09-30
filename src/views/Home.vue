@@ -138,7 +138,7 @@ const SKELETON_KEYS = [1, 2, 3, 4, 5, 6]
             :disabled="currentPage <= 1"
             @click="setPage(currentPage - 1)"
           >
-            <span class="u-arrow rotate-180" aria-hidden="true">&#8594;</span>
+            <span class="u-arrow-back" aria-hidden="true">&#8594;</span>
             <span>上一页</span>
           </button>
 

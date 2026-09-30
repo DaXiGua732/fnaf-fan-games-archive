@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
 
 /**
- * Layout —— 全局骨架
+ * Layout —— 公开站骨架
  * 结构：Header（白底黑字黑边框）→ main（路由出口）→ Footer（黑底白字）
+ *
+ * 【Phase 1 变更】本组件从「App.vue 传 slot 进来的被动容器」升级为
+ * routes.ts 中 `/` 这一层路由记录的组件，因此 main 内部改由 `<RouterView />`
+ * 渲染子路由（原来是 `<slot />`）。已逐字节核对：视觉零变化，DOM 差异仅为
+ * 少一对 slot 片段注释锚点、以及 `<a href="/">` 上多出惰性的 `router-link-active` 类。
  *
  * Swiss 约束复查点：
  *  - Header 用 1px 黑色下边框与内容分离，禁止用阴影
@@ -21,8 +26,17 @@ interface NavItem {
   dev?: boolean
 }
 
+/**
+ * 前台导航项。
+ * 这个数组同时驱动**桌面导航 / 移动端菜单 / 页脚站点导航**三处，改一处即可。
+ *
+ * 顺序约定：公开入口在前，`dev: true` 的开发期入口聚在最后（上线前整体移除）。
+ */
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: '首页', exact: true },
+  // 站点管理入口。放在这里是为了不用手输 /#/admin/games；
+  // Phase 15 接入认证之前，它只是一个普通链接（后台目前没有权限校验）。
+  { to: '/admin/games', label: '后台管理', exact: false },
   { to: '/debug', label: '调试台', exact: false, dev: true },
   { to: '/style', label: '样式规范', exact: false, dev: true },
 ]
@@ -126,7 +140,7 @@ const currentYear = new Date().getFullYear()
 
     <!-- ============ 主体 ============ -->
     <main id="main" class="flex-1">
-      <slot />
+      <RouterView />
     </main>
 
     <!-- ============ Footer ============ -->

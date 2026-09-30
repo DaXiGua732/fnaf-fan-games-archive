@@ -37,6 +37,13 @@ jobs:
 
       # 以下三步是本地一直在跑的质量门禁，部署前必须全绿，
       # 保证线上永远不会出现「编译通过但页面白屏」的版本。
+
+      # 数据来自数据仓（两仓分离）。构建前同步一次，否则前台读到的永远是旧快照。
+      # continue-on-error：一次网络抖动不该让站点发不出去；脚本内部会校验内容，
+      # 校验不过就保留仓库里那份快照并告警，绝不写入坏数据。
+      - name: Sync data from data repo
+        run: npm run data:pull
+        continue-on-error: true
       - name: Type check
         run: npm run typecheck
 

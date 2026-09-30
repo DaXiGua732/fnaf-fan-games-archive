@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "data:pull": "node scripts/pull-data.mjs",
     "build": "vite build",
     "typecheck": "vue-tsc --noEmit",
     "assets": "node scripts/gen-placeholders.mjs",

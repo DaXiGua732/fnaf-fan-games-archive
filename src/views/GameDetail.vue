@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, watchEffect } from 'vue'
+import { computed, inject, watchEffect } from 'vue'
 import { RouterLink } from 'vue-router'
 import Button from '../components/Button.vue'
 import CommentSection from '../components/CommentSection.vue'
 import DownloadPanel from '../components/DownloadPanel.vue'
 import { useGameLibrary } from '../composables/useGameLibrary'
+import { PREVIEW_GAME_KEY } from '../composables/useGamePreview'
 import { useViewCounter } from '../composables/useViewCounter'
 import { assetUrl } from '../utils/asset'
 
@@ -12,7 +13,21 @@ import { assetUrl } from '../utils/asset'
 const props = defineProps<{ id: string }>()
 
 const { getGameById } = useGameLibrary()
-const game = computed(() => getGameById(props.id))
+
+/**
+ * 预览分支（Phase 18）。
+ *
+ * 后台的「预览」路由会注入一条**未保存的草稿** —— 这时本页渲染的就是它，
+ * 而不是资源库里那条已发布的数据。
+ *
+ * 关键在于：预览**复用本组件本身**，而不是另写一个"像前台"的预览页。
+ * 另写一份的话，预览跟真实前台迟早会分叉 —— 那预览就失去意义了。
+ * 没有注入时（也就是全部公开访问）这里恒为 null，行为与从前一模一样。
+ */
+const previewSource = inject(PREVIEW_GAME_KEY, null)
+const previewGame = computed(() => previewSource?.value ?? null)
+
+const game = computed(() => previewGame.value ?? getGameById(props.id))
 
 const banner = computed(() => (game.value ? assetUrl(game.value.bannerImage) : ''))
 

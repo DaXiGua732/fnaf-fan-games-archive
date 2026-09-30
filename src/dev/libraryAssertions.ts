@@ -10,6 +10,7 @@
  */
 import { nextTick } from 'vue'
 import type { GameLibraryAPI } from '../composables/useGameLibrary'
+import { publicGameRepository } from '../repositories'
 
 export interface Assertion {
   name: string
@@ -27,6 +28,19 @@ export async function settle(lib: Pick<GameLibraryAPI, 'isLoading'>): Promise<vo
     guard += 1
   }
   await nextTick()
+}
+
+
+/**
+ * 「按标题升序」这条规则的独立推导。
+ *
+ * ⚠️ 这里的断言**不能写死某个标题**。原先写死了 "Dayshift at Freddy's"，
+ * 结果站长在后台把那条作品的标题改成了别的内容，测试就挂了 ——
+ * 数据是随时会被改的（这正是这个后台存在的意义），断言不能把内容编码进去。
+ * 要断言的是**排序规则**：首位应该是全部标题里 localeCompare 最小的那一个。
+ */
+function titleAsc(games: { title: string }[]): string[] {
+  return games.map((game) => game.title).sort((a, b) => a.localeCompare(b, 'en'))
 }
 
 export async function runLibraryAssertions(lib: GameLibraryAPI): Promise<Assertion[]> {
@@ -109,7 +123,8 @@ export async function runLibraryAssertions(lib: GameLibraryAPI): Promise<Asserti
   lib.clearFilters()
   lib.setSortBy('title')
   await settle(lib)
-  check('按首字母排序首位', lib.games.value[0]?.title, "Dayshift at Freddy's")
+  // 断言规则本身，而不是写死某个标题 —— 数据是会被改的，见 titleAsc 说明
+  check('按首字母排序首位 = 标题升序首位', lib.games.value[0]?.title, titleAsc(lib.games.value)[0])
 
   lib.setSortBy('views')
   await settle(lib)
@@ -151,6 +166,65 @@ export async function runLibraryAssertions(lib: GameLibraryAPI): Promise<Asserti
   check('可用作者数量', lib.availableAuthors.value.length, 5)
   check('可用年份数量（去重）', lib.availableYears.value.length, 4)
   check('年份降序排列', lib.availableYears.value.join(','), '2019,2017,2016,2015')
+
+  /* ---------------------------------------------------------------- 17. 前台可见性联动 */
+  // Phase 10：前台与后台读的是**同一份**数据，所以改一处就能观察到前台的实时反应。
+  // Phase 11 起统一走仓储的写入方法 —— 这顺带也验证了「前台能看到仓储写进去的东西」。
+  //
+  // ⚠️ 实验必须用**一次性探针条目**，不能拿 db.json 里的真实作品做：
+  //    仓储每次更新都会打上真实的 updatedAt，而某些后台断言（缺省排序）依赖
+  //    「原有条目的 updatedAt 全为空」。用探针做完就删，既不污染数据也不会互相干扰。
+  lib.clearFilters()
+  lib.setSortBy('views')
+  lib.setPageSize(12)
+  await settle(lib)
+  check('联动 · 起点前台可见 6 款', lib.total.value, 6)
+
+  const probe = await publicGameRepository.createGame({
+    title: 'Visibility Probe',
+    author: 'Probe Author',
+    releaseYear: 2030,
+    ipSeries: 'Probe Series',
+    // 新建缺省就是 draft —— 先验证「草稿前台不可见」
+    status: 'draft',
+  })
+  await settle(lib)
+
+  check('探针（草稿）· 前台列表看不到', lib.total.value, 6)
+  check('探针（草稿）· 详情页取不到', lib.getGameById(probe.id), undefined)
+  check('探针（草稿）· Hero 的收录数不含它', lib.catalogSize.value, 6)
+  check('探针（草稿）· 作者不进「可用作者」', lib.availableAuthors.value.includes('Probe Author'), false)
+  check('探针（草稿）· 年份不进「可用年份」', lib.availableYears.value.includes(2030), false)
+
+  await publicGameRepository.publishGame(probe.id)
+  await settle(lib)
+  check('探针（已上线）· 前台可见 7 款', lib.total.value, 7)
+  check('探针（已上线）· 详情页能取到', Boolean(lib.getGameById(probe.id)), true)
+  check('探针（已上线）· 作者进入「可用作者」', lib.availableAuthors.value.includes('Probe Author'), true)
+  check('探针（已上线）· 年份进入「可用年份」', lib.availableYears.value.includes(2030), true)
+
+  await publicGameRepository.unpublishGame(probe.id)
+  await settle(lib)
+  check('探针（已下线）· 前台列表看不到', lib.total.value, 6)
+  check('探针（已下线）· 详情页取不到（前台完全隐藏）', lib.getGameById(probe.id), undefined)
+
+  await publicGameRepository.updateGame(probe.id, { status: 'published', archived: true })
+  await settle(lib)
+  check('探针（已归档但已上线）· 前台列表看不到', lib.total.value, 6)
+  check('探针（已归档）· 详情页取不到', lib.getGameById(probe.id), undefined)
+
+  await publicGameRepository.updateGame(probe.id, { archived: false })
+  await settle(lib)
+  check('探针（取消归档）· 恢复可见', lib.total.value, 7)
+
+  // 收尾：删掉探针，数据彻底复原（原有 6 条一个字段都没被动过）
+  await publicGameRepository.deleteGame(probe.id)
+  await settle(lib)
+  check('收尾 · 前台恢复 6 款', lib.total.value, 6)
+  check('收尾 · 探针已彻底移除', lib.getGameById(probe.id), undefined)
+  check('收尾 · 可用作者复原', lib.availableAuthors.value.length, 5)
+  check('收尾 · 可用年份复原', lib.availableYears.value.length, 4)
+  check('收尾 · 原有条目仍可正常取到', lib.getGameById('popgoes')?.title, 'POPGOES')
 
   // 复原默认状态
   lib.setPageSize(12)
