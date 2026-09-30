@@ -180,13 +180,17 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   await settle()
   // updatedAt 字段当前全为空 → 主键全部相等 → 退化为按标题升序。
   // 这条断言的意义是锁定「顺序确定，不依赖 db.json 数组位置」这个契约。
-  // 断言规则本身，而不是某一个标题（见 titleAsc 的说明）
-  const ascAll = titleAsc(lib.games.value)
-  check('缺省排序（更新时间）首位 = 标题升序首位', lib.games.value[0]?.title, ascAll[0])
+  // ⚠️ 断言默认排序的**完整规则**：updatedAt 降序，同值时按标题升序。
+  //    不要写成「等于标题升序」—— 那隐含了「updatedAt 全为空」这个前提，
+  //    而数据一旦被后台编辑过（updatedAt 有值），前提就没了，断言跟着假失败。
+  //    （CI 上真实发生过：本地全绿、部署却挂，因为 CI 同步的是数据仓里已被编辑过的数据。）
+  const byDefault = [...lib.games.value].sort(
+    (a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.title.localeCompare(b.title, 'en'),
+  )
   check(
-    '缺省排序（更新时间）末位 = 标题升序末位',
-    lib.games.value[lib.games.value.length - 1]?.title,
-    ascAll[ascAll.length - 1],
+    '缺省排序 = updatedAt 降序（同值按标题升序）',
+    lib.games.value.map((game) => game.title).join('|'),
+    byDefault.map((game) => game.title).join('|'),
   )
 
   /* ---------------------------------------------------------------- 4. 排序 */
