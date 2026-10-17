@@ -132,6 +132,17 @@ const shot = (name) => page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage:
 const localDb = JSON.parse(
   readFileSync(resolve(ROOT, 'src/data/db.json'), 'utf8'),
 )
+
+/**
+ * 起点数量从数据推导，不写死。
+ *
+ * ⚠️ `src/data/db.json` 是「上次构建用的快照」，会随 `data:pull` 变化；
+ * 写死「6 款」会让一次正常的数据更新把 UI 测试弄挂。
+ */
+const TOTAL_COUNT = localDb.games.length
+const VISIBLE_COUNT = localDb.games.filter(
+  (game) => (game.status ?? 'published') === 'published' && !game.archived,
+).length
 let fakeDb = JSON.parse(JSON.stringify(localDb))
 let fakeSha = 'sha-1'
 let fakeCommits = 0
@@ -270,14 +281,14 @@ await step('Phase 15 · 有令牌时后台恢复可用', async () => {
 /* ======================================================================
    一、公开站回归 —— 后台做了 6 个阶段，前台必须一点没变
    ====================================================================== */
-await step('公开站 · 首页正常渲染 6 张卡片', async () => {
+await step('公开站 · 首页渲染出全部可见作品', async () => {
   await go('/', 'FNAF Fan Games')
   await page.waitForTimeout(400)
   await need('游戏库')
   await need('关键词搜索')
   await need('The Joy of Creation: Reborn')
   const cards = await page.locator('article').count()
-  assert(cards === 6, `首页卡片数应为 6，实际 ${cards}`)
+  assert(cards === VISIBLE_COUNT, `首页卡片数应为 ${VISIBLE_COUNT}，实际 ${cards}`)
   await shot('01-home')
 })
 
@@ -344,10 +355,10 @@ await step('Phase 1 · 输错的后台地址落在后台 404', async () => {
 /* ======================================================================
    三、Phase 2 —— 游戏管理列表
    ====================================================================== */
-await step('Phase 2 · 列表默认 6 行', async () => {
+await step('Phase 2 · 列表默认展示全部作品', async () => {
   await go('/admin/games', '收录作品')
   const n = await rowCount()
-  assert(n === 6, `应有 6 行，实际 ${n}`)
+  assert(n === TOTAL_COUNT, `应有 ${TOTAL_COUNT} 行，实际 ${n}`)
   await need('未选择任何作品')
   await need('已上线')
   await shot('04-admin-games')
@@ -395,21 +406,23 @@ await step('Phase 2 · 每页条数可调小 → 分页控件出现并能前后�
 
   await page.locator('#admin-page-size').selectOption('5')
   await page.waitForTimeout(400)
+  const PAGE_COUNT = Math.ceil(TOTAL_COUNT / 5)
   let n = await rowCount()
-  assert(n === 5, `每页 5 条时应有 5 行，实际 ${n}`)
-  await need('1 / 2')
+  assert(n === Math.min(5, TOTAL_COUNT), `每页 5 条时应有 ${Math.min(5, TOTAL_COUNT)} 行，实际 ${n}`)
+  await need(`1 / ${PAGE_COUNT}`)
   await shot('05a-admin-paging')
 
   await btn('下一页').click()
   await page.waitForTimeout(400)
   n = await rowCount()
-  assert(n === 1, `第 2 页应有 1 行，实际 ${n}`)
-  await need('2 / 2')
+  const secondPageRows = TOTAL_COUNT - 5
+  assert(n === secondPageRows, `第 2 页应有 ${secondPageRows} 行，实际 ${n}`)
+  await need(`2 / ${PAGE_COUNT}`)
   assert(await btn('下一页').isDisabled(), '末页时「下一页」应禁用')
 
   await btn('上一页').click()
   await page.waitForTimeout(400)
-  await need('1 / 2')
+  await need(`1 / ${PAGE_COUNT}`)
   assert(await btn('上一页').isDisabled(), '首页时「上一页」应禁用')
 
   await page.locator('#admin-page-size').selectOption('20')
@@ -466,6 +479,12 @@ await step('上一页箭头动画 = 下一页的镜像（旋转不丢、向左�
 })
 
 await step('Phase 3 · 勾选 2 行 → 批量条展开 7 个动作', async () => {
+  // ⚠️ 默认列表可能包含已下线的作品（数据里本来就有），直接取前两行会选到它们，
+  //    「下线」就会变成「跳过」而不是「改动」。先筛到已上线，选完再切回全部。
+  await page.locator('#admin-filter-sort').selectOption('updatedAt')
+  await page.waitForTimeout(300)
+  await chip('已上线').click()
+  await page.waitForTimeout(400)
   await page.locator('tbody input[type=checkbox]').nth(0).check()
   await page.locator('tbody input[type=checkbox]').nth(1).check()
   await page.waitForTimeout(300)
@@ -477,6 +496,11 @@ await step('Phase 3 · 勾选 2 行 → 批量条展开 7 个动作', async () =
     )
   }
   await shot('06-batch-bar')
+
+  // 切回全部：勾选按 id 保持，随后下线会让这两条因 updatedAt 排到最前，
+  // 下一步「重复下线」才能重新选中同一批。
+  await chip('全部').click()
+  await page.waitForTimeout(400)
 })
 
 await step('Phase 3 · 点「下线」出现二次确认，确认后生效', async () => {
@@ -538,7 +562,10 @@ await step('Phase 3 · 归档后默认列表隐藏，切「已归档」可见', 
   await btn('确认执行').click()
   await page.waitForTimeout(400)
   const afterArchive = await rowCount()
-  assert(afterArchive === 4, `归档后默认列表应剩 4 行，实际 ${afterArchive}`)
+  assert(
+    afterArchive === TOTAL_COUNT - 2,
+    `归档后默认列表应剩 ${TOTAL_COUNT - 2} 行，实际 ${afterArchive}`,
+  )
   await chip('已归档').click()
   await page.waitForTimeout(400)
   const archivedRows = await rowCount()
@@ -546,7 +573,7 @@ await step('Phase 3 · 归档后默认列表隐藏，切「已归档」可见', 
   await shot('10-archived')
 })
 
-await step('Phase 3 · 取消归档后数据复原为 6 行', async () => {
+await step('Phase 3 · 取消归档后数据复原', async () => {
   await page.locator('tbody input[type=checkbox]').nth(0).check()
   await page.locator('tbody input[type=checkbox]').nth(1).check()
   await page.waitForTimeout(200)
@@ -555,7 +582,7 @@ await step('Phase 3 · 取消归档后数据复原为 6 行', async () => {
   await chip('全部').click()
   await page.waitForTimeout(400)
   const n = await rowCount()
-  assert(n === 6, `复原后应有 6 行，实际 ${n}`)
+  assert(n === TOTAL_COUNT, `复原后应有 ${TOTAL_COUNT} 行，实际 ${n}`)
 })
 
 /* ======================================================================
@@ -1037,7 +1064,7 @@ await step('Phase 16 · 后台改状态会提交到数据仓（前台要等重�
   await nav('/', '游戏库')
   await page.waitForTimeout(500)
   const stillCards = await page.locator('article').count()
-  assert(stillCards === 6, `前台此时仍应是 6 款（等重新构建才更新），实际 ${stillCards}`)
+  assert(stillCards === VISIBLE_COUNT, `前台此时仍应是 ${VISIBLE_COUNT} 款（等重新构建才更新），实际 ${stillCards}`)
   await shot('32-public-unchanged-until-rebuild')
 
   // 复原：把 popgoes 放回上线

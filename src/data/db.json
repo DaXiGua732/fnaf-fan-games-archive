@@ -1,6 +1,44 @@
 {
   "games": [
     {
+      "id": "jolly-anniversary-edition",
+      "title": "Jolly: Anniversary Edition",
+      "author": "Mannyboi",
+      "releaseYear": 2026,
+      "ipSeries": "Jolly",
+      "engine": "Clickteam Fusion",
+      "coverImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/games/jolly-anniversary-edition/cover-20261011155613.png",
+      "bannerImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/games/jolly-anniversary-edition/banner-20261011155700.webp",
+      "gallery": [
+        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/jolly-anniversary-edition/gallery-20261011155618.jpg"
+      ],
+      "description": "故事背景（STORY）：\n“2017年11月5日。\n欢迎来到 Jolly 娱乐公司！这家公司建立在全美儿童的梦想之上，旨在为西海岸带来最棒的娱乐体验。至少‘他们’是这么说的。\n你将以米哈伊尔·施密特（Mikhail Schmidt）的视角进行游戏，他是一名跳槽频繁的工作狂，如今深陷于一场难以脱身的情境之中。现在，他必须面对这家公司隐瞒的不可告人的秘密，并最终让它们得以安息。\n你能成功解脱它们，还是任由它们逐渐腐朽逝去？”\n\n内容简介（SUMMARY）：\n《JOLLY：周年纪念版》（JOLLY: Anniversary Edition）是对 IvanG 原版《Jolly 1》进行彻底重制的粉丝作品。本作旨在为原版游戏换上崭新的面貌，提供打磨得更出色的玩法，以及全新的故事线，从而使其能更好地融入更宏大的 Jolly 系列故事中。",
+      "downloads": [
+        {
+          "provider": "123",
+          "url": "https://1813252629.share.123pan.cn/123pan/Et1UVv-YJXeA?pwd=28u7#",
+          "password": "28u7"
+        }
+      ],
+      "metrics": {
+        "fakeViews": 0,
+        "score": 0
+      },
+      "shortDescription": "",
+      "tags": [
+        "Jolly"
+      ],
+      "platforms": [],
+      "status": "published",
+      "featured": false,
+      "archived": false,
+      "sortOrder": 0,
+      "createdAt": "2026-10-11T15:56:41.257Z",
+      "updatedAt": "2026-10-11T15:57:43.724Z",
+      "publishedAt": "",
+      "updatedBy": "DaXiGua732"
+    },
+    {
       "id": "tjoc-reborn",
       "title": "The Joy of Creation: Reborn",
       "author": "Nikson",
@@ -49,13 +87,18 @@
       "releaseYear": 2019,
       "ipSeries": "FNAF 主线同人",
       "engine": "Unreal Engine 4",
-      "coverImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/tjoc-story-mode-cover.svg",
+      "coverImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-story-mode/cover-20260930131757.jpg",
       "bannerImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/tjoc-story-mode-banner.svg",
       "gallery": [
         "https://daxigua732.github.io/fnaf-fan-games-data/images/tjoc-story-mode-banner.svg",
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/tjoc-story-mode-cover.svg"
+        "https://daxigua732.github.io/fnaf-fan-games-data/images/tjoc-story-mode-cover.svg",
+        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-story-mode/gallery-20260930131815.jpg",
+        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-story-mode/gallery-20260930131817.jpg",
+        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-story-mode/gallery-20260930131819.jpg",
+        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-story-mode/gallery-20260930131822.jpg",
+        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-story-mode/gallery-20260930131823.jpg",
+        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-story-mode/gallery-20260930131826.jpg"
       ],
-      "videoUrl": "https://www.bilibili.com/video/BV1X4411J7dv",
       "description": "Reborn 的正统续作，改为逐日推进的剧情模式。玩家扮演 Scott 本人，在七个章节中经历从创作到失控的全过程。新增潜行、解谜与多结局系统，是系列叙事最完整的一部。",
       "downloads": [
         {
@@ -75,13 +118,15 @@
       "shortDescription": "",
       "tags": [],
       "platforms": [],
-      "status": "published",
+      "status": "offline",
       "featured": false,
       "archived": false,
       "sortOrder": 0,
       "createdAt": "",
-      "updatedAt": "",
-      "publishedAt": ""
+      "updatedAt": "2026-10-17T09:49:00.515Z",
+      "publishedAt": "",
+      "updatedBy": "DaXiGua732",
+      "videoUrl": "https://www.bilibili.com/video/BV1X4411J7dv"
     },
     {
       "id": "one-night-at-flumptys",
@@ -205,7 +250,7 @@
     },
     {
       "id": "dayshift-at-freddys",
-      "title": "4321",
+      "title": "Dayshift at Freddy's",
       "author": "DirectDogman",
       "releaseYear": 2017,
       "ipSeries": "玩梗向混搭",
@@ -237,13 +282,14 @@
       "shortDescription": "",
       "tags": [],
       "platforms": [],
-      "status": "published",
+      "status": "offline",
       "featured": false,
       "archived": false,
       "sortOrder": 0,
       "createdAt": "",
-      "updatedAt": "2026-09-30T12:48:15.333Z",
-      "publishedAt": ""
+      "updatedAt": "2026-10-17T09:49:00.516Z",
+      "publishedAt": "",
+      "updatedBy": "DaXiGua732"
     }
   ]
 }
