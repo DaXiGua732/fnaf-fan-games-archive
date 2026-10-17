@@ -52,6 +52,14 @@ export interface GameRepository {
    */
   reload(): Promise<void>
 
+  /**
+   * 用外部数据**整表替换**内存目录。
+   *
+   * 前台启动 / 回到公开页时，用它把「构建期快照」换成数据仓的最新数据。
+   * 刻意**不写本机存档**：这是「读最新」，不是「本地编辑」。
+   */
+  hydrate(games: AdminGame[]): void
+
   /** 全量列表（返回副本，调用方无法借此改到内部数据） */
   listGames(): Promise<AdminGame[]>
   /** 按 id 取单条 */

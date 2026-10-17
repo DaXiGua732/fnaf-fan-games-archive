@@ -9,7 +9,7 @@
  *         绝不重新实现过滤/排序逻辑（那属于深模块内部职责）。
  */
 import { nextTick } from 'vue'
-import type { GameLibraryAPI } from '../composables/useGameLibrary'
+import { isPubliclyVisible, type GameLibraryAPI } from '../composables/useGameLibrary'
 import { publicGameRepository } from '../repositories'
 
 export interface Assertion {
@@ -304,6 +304,20 @@ export async function runLibraryAssertions(lib: GameLibraryAPI): Promise<Asserti
   check('收尾 · 可用作者复原', lib.availableAuthors.value.length, uniqueAuthors)
   check('收尾 · 可用年份复原', lib.availableYears.value.length, uniqueYears.length)
   check('收尾 · 原有条目仍可正常取到', lib.getGameById(lookup.id)?.title, lookup.title)
+
+  /* ---------------------------------------------------------------- 18. 运行时整表同步 */
+  // hydratePublicCatalog() 的落点就是仓储的 hydrate：整表替换内存目录，
+  // 让 totalSize / catalogSize 立即按新数据重算。这里直接测这一步的行为。
+  const snapshot = await publicGameRepository.listGames()
+  publicGameRepository.hydrate(snapshot.slice(0, 1))
+  check('hydrate · 整表替换后总数', lib.totalSize.value, 1)
+  check(
+    'hydrate · 可见数按新数据重算',
+    lib.catalogSize.value,
+    snapshot.slice(0, 1).filter(isPubliclyVisible).length,
+  )
+  publicGameRepository.hydrate(snapshot)
+  check('hydrate · 恢复原快照', lib.totalSize.value, TOTAL_BASE)
 
   // 复原默认状态
   lib.setPageSize(12)

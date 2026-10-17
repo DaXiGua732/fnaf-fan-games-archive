@@ -1106,9 +1106,9 @@ await step('永久删除 · 必须输入 id 才能确认，删除后回到列表
 })
 
 /* ======================================================================
-   八、Phase 16 —— 改动提交到数据仓（前台要等重新构建）
+   八、Phase 16 —— 改动提交到数据仓（开发环境前台仍读快照）
    ====================================================================== */
-await step('Phase 16 · 后台改状态会提交到数据仓（前台要等重新构建）', async () => {
+await step('Phase 16 · 后台改状态会提交到数据仓（开发环境前台仍读快照）', async () => {
   // ⚠️ 先强刷。筛选 / 搜索是**会话内**状态，上一步留下的条件会把目标作品挡在外面
   //    （我重写这一步时漏掉过这句，结果 popgoes 被残留筛选挡住、表格里一行都没有）。
   await page.goto(hash('/admin/games'), { waitUntil: 'domcontentloaded' })
@@ -1133,14 +1133,15 @@ await step('Phase 16 · 后台改状态会提交到数据仓（前台要等重�
   await need('已下线')
   await shot('31-committed-to-data-repo')
 
-  // ✅ 前台**不会**立刻变：它读的是构建期快照，要等数据仓触发重新构建。
+  // ✅ 开发环境不执行运行时同步（避免测试依赖网络），所以前台仍是构建期快照；
+  //    生产环境会在公开页挂载 / 切回时从数据仓同步。
   //    这是静态站的固有性质，不是缺陷 —— 这条断言把「异步生效」这个语义钉住，
   //    防止哪天有人悄悄把前台改成运行时查库。
   await nav('/', '游戏库')
   await page.waitForTimeout(500)
   const stillCards = await page.locator('article').count()
-  assert(stillCards === VISIBLE_COUNT, `前台此时仍应是 ${VISIBLE_COUNT} 款（等重新构建才更新），实际 ${stillCards}`)
-  await shot('32-public-unchanged-until-rebuild')
+  assert(stillCards === VISIBLE_COUNT, `前台此时应仍是快照中的 ${VISIBLE_COUNT} 款，实际 ${stillCards}`)
+  await shot('32-public-unchanged-in-dev')
 
   // 复原：把 popgoes 放回上线
   await nav('/admin/games', '收录作品')

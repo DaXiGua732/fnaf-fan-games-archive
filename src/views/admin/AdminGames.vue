@@ -149,8 +149,8 @@ const pageSizeValue = computed<string>({
         <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
           数据来自 <span class="font-bold text-black">数据仓</span>。你的改动会通过 GitHub API
           <span class="font-bold text-black">提交到数据仓</span> —— 那是线上真实数据。
-          前台读的是构建期快照，需要下一次构建才会更新
-          （自动构建每小时一次，也可以在 GitHub 上手动触发）；提交历史就是完整的回滚手段。
+          前台下次打开或切回页面时会自动同步最新数据（通常几秒）；断网 / 数据仓不可达时退回构建期快照。
+          提交历史就是完整的回滚手段。
         </p>
         <p class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
           多人同时编辑时，提交若撞车会自动重读最新内容再重放你的改动，无需手工处理。

@@ -299,7 +299,7 @@ const CHECKBOX_CLASS =
       <p class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
         会从数据仓的 <span class="font-bold text-black">db.json</span>
         中移除这条作品，并清理只被它引用的上传图片。删除后条目不存在，无法通过筛选找回；
-        前台要等下一次构建后才会消失（最长约 1 小时，也可手动触发构建）。
+        前台下次打开或切回页面时会自动同步（通常几秒），断网时退回构建期快照。
       </p>
 
       <label
@@ -359,7 +359,7 @@ const CHECKBOX_CLASS =
               同时清理了 {{ deleteDone.imagesCleaned }} 张只被它引用的上传图片。
             </template>
             <template v-else>它没有专属的上传图片需要清理。</template>
-            数据仓已提交；前台要等下一次构建后才会消失。
+            数据仓已提交；前台下次打开或切回页面时就会同步消失。
           </p>
         </div>
         <button

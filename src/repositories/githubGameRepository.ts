@@ -232,6 +232,9 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
     // 给「加载失败 → 重试」用的同一个入口
     reload: load,
 
+    // 远程仓以 GitHub 上的数据为准，不接受外部注入
+    hydrate() {},
+
     async listGames() {
       return store.value.map((game) => ({ ...game }))
     },

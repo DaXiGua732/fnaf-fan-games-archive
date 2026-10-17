@@ -485,7 +485,8 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
 
     <!-- ============ 阶段说明 ============ -->
     <p class="mt-8 max-w-[78ch] font-sans text-xs leading-relaxed text-black/60">
-      保存会通过 GitHub API 提交到数据仓，前台要等下一次构建（自动每小时一次，可手动触发）。
+      保存会通过 GitHub API 提交到数据仓；前台下次打开或切回页面时会自动同步（通常几秒），
+      断网时退回构建期快照。
       <span class="font-bold text-black">「已上线」要求封面、Banner 与至少一个下载渠道</span>
       —— 内容没凑齐时先留在草稿。
     </p>

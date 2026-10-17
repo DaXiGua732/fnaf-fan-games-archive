@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import FilterPanel from '../components/FilterPanel.vue'
 import GameCard from '../components/GameCard.vue'
 import { useGameLibrary } from '../composables/useGameLibrary'
@@ -18,7 +18,25 @@ const {
   availableYears,
   clearFilters,
   setPage,
+  refreshCatalog,
 } = useGameLibrary()
+
+// 每次回到公开首页都与数据仓对一次账：后台刚改完状态 / 删了作品，
+// 这里不需要等下一次构建就能看到（生产构建才真正发请求）。
+function refreshWhenVisible(): void {
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+    void refreshCatalog()
+  }
+}
+
+onMounted(() => {
+  void refreshCatalog()
+  document.addEventListener('visibilitychange', refreshWhenVisible)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', refreshWhenVisible)
+})
 
 /** 年份跨度，如 2015–2019（availableYears 已按降序排列） */
 const yearRange = computed(() => {

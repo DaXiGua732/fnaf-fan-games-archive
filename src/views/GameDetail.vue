@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref, watchEffect } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { RouterLink } from 'vue-router'
 import Button from '../components/Button.vue'
 import CommentSection from '../components/CommentSection.vue'
@@ -24,7 +24,23 @@ import { assetUrl } from '../utils/asset'
  */
 const props = defineProps<{ id: string }>()
 
-const { getGameById } = useGameLibrary()
+const { getGameById, refreshCatalog } = useGameLibrary()
+
+// 直接打开详情链接 / 从后台预览返回时，同样与数据仓对一次账
+function refreshWhenVisible(): void {
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+    void refreshCatalog()
+  }
+}
+
+onMounted(() => {
+  void refreshCatalog()
+  document.addEventListener('visibilitychange', refreshWhenVisible)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', refreshWhenVisible)
+})
 
 /**
  * 预览分支（Phase 18）：后台注入未保存草稿时渲染它。

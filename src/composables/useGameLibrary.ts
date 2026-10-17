@@ -12,13 +12,15 @@
  *   4. 排序（热度 / 评分 / 首字母 / 年份）
  *   5. 分页
  *   6. 模拟异步加载状态
+ *   7. 运行时同步（refreshCatalog）—— 公开页挂载 / 重新可见时用数据仓最新数据
+ *      替换构建期快照；失败保留快照，保证断网也能打开
  *
  * 【铁律】视图组件 (.vue) 只允许调用 setFilter / setSearchQuery 并遍历 games，
  *         绝对禁止在 .vue 文件内手写 .filter() / .sort() 逻辑。
  * ============================================================================
  */
 import { computed, reactive, ref, watch } from 'vue'
-import { publicGameRepository } from '../repositories'
+import { hydratePublicCatalog, publicGameRepository } from '../repositories'
 import type { AdminGame } from '../types/admin'
 import type { Game } from '../types/game'
 
@@ -263,6 +265,15 @@ function getGameById(id: string): Game | undefined {
   return VISIBLE.value.find((game) => game.id === id)
 }
 
+/**
+ * 与数据仓同步一次。
+ * 生产构建才会真正发请求；开发 / 测试直接返回。失败时保留构建期快照。
+ * 公开页挂载时调用它，解决「后台改完、前台还是旧数据」的割裂。
+ */
+function refreshCatalog(): Promise<void> {
+  return hydratePublicCatalog()
+}
+
 /* ---------------------------------------------------------------------------
    对外暴露的极简接口
    --------------------------------------------------------------------------- */
@@ -299,6 +310,7 @@ export interface GameLibraryAPI {
   setPageSize: typeof setPageSize
   isFilterActive: typeof isFilterActive
   getGameById: typeof getGameById
+  refreshCatalog: typeof refreshCatalog
 }
 
 export function useGameLibrary(): GameLibraryAPI {
@@ -327,5 +339,6 @@ export function useGameLibrary(): GameLibraryAPI {
     setPageSize,
     isFilterActive,
     getGameById,
+    refreshCatalog,
   }
 }

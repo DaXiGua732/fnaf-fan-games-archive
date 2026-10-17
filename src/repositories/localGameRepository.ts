@@ -144,6 +144,14 @@ export function createLocalGameRepository(
     // 本地数据本来就在手边，没有「重新拉取」这回事
     reload: async () => {},
 
+    hydrate(games) {
+      // 整表替换，但不 persist：下一次启动仍然从构建期快照 / 本机存档开始，
+      // 再由前台同步逻辑拉到最新 —— 避免把「服务端数据」写成本机存档。
+      // 用 JSON 深拷贝而不是 structuredClone：调用方可能传 Vue 响应式代理，
+      // structuredClone 遇到 Proxy 会抛 DataCloneError。
+      store.value = normalizeGames(JSON.parse(JSON.stringify(games)))
+    },
+
     async listGames() {
       // 返回副本：调用方改不动内部数据
       return store.value.map((game) => ({ ...game }))
