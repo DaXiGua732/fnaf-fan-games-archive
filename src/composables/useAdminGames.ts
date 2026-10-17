@@ -530,7 +530,7 @@ async function uploadImage(
  *   2. 只清理**删除后不再被任何作品引用**的图 —— 共用图（比如多篇引用同一张 Banner）会保留
  *   3. 图片清理失败**不会**让删除失败：条目已经删了，顶多留下一张废图，git 历史可找回
  *
- * 不可逆动作，所以 UI 必须做输入 id 的二次确认；这里只负责执行，不再弹窗。
+ * 不可逆动作，所以 UI 必须做二次确认（弹窗）；这里只负责执行，不再弹窗。
  */
 async function deleteGame(id: string): Promise<DeleteOutcome> {
   const target = getGameById(id)

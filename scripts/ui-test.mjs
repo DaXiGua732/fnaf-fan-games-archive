@@ -1047,26 +1047,22 @@ await step('列表 · 行内快捷上线 / 下线', async () => {
   )
 })
 
-await step('列表 · 删除入口要求输入 id，取消不会删数据', async () => {
+await step('列表 · 删除入口弹出二次确认，取消不会删数据', async () => {
   await btn('删除这条').click()
-  await page.waitForTimeout(300)
-  await need('永久删除《UI Test Sample Saved》')
-
-  await page.fill('#admin-row-delete-confirm', 'wrong-id')
-  await btn('确认永久删除').click()
-  await page.waitForTimeout(300)
-  await need('请输入完整 id')
+  await page.waitForTimeout(400)
+  await need('确认永久删除？')
+  await need('UI Test Sample Saved')
 
   await btn('取消').click()
-  await page.waitForTimeout(300)
-  await needNot('永久删除《UI Test Sample Saved》')
+  await page.waitForTimeout(400)
+  await needNot('确认永久删除？')
   assert(
     (await page.locator('tbody tr').first().innerText()).includes('UI Test Sample Saved'),
     '取消删除后条目应仍在',
   )
 })
 
-await step('永久删除 · 必须输入 id 才能确认，删除后回到列表且条目消失', async () => {
+await step('永久删除 · 二次确认后删除，回到列表且条目消失', async () => {
   await go('/admin/games', '收录作品')
   await chip('全部').click()
   await page.waitForTimeout(300)
@@ -1077,20 +1073,11 @@ await step('永久删除 · 必须输入 id 才能确认，删除后回到列表
   await need('永久删除这条作品')
 
   await btn('删除这条作品').click()
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(400)
+  await need('确认永久删除？')
+  await need('ui-test-sample')
 
-  const confirmDelete = btn('确认永久删除')
-  assert(await confirmDelete.isDisabled(), '未输入 id 时不该允许删除')
-
-  // 输错也不放行
-  await page.fill('input[aria-label*="以确认删除"]', 'wrong-id')
-  await page.waitForTimeout(200)
-  assert(await confirmDelete.isDisabled(), 'id 不匹配时不该允许删除')
-
-  await page.fill('input[aria-label*="以确认删除"]', 'ui-test-sample')
-  await page.waitForTimeout(200)
-  assert(await confirmDelete.isEnabled(), 'id 匹配后应允许删除')
-  await confirmDelete.click()
+  await btn('确认永久删除').click()
   await page.waitForTimeout(1000)
 
   // 回到列表，并有如实的结果提示
