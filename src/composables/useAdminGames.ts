@@ -39,11 +39,13 @@ import type {
   AdminGameQuery,
   AdminSortKey,
   GamePatch,
+  ImageSlot,
   StatusFilter,
   StorageKind,
 } from '../types/admin'
 import { TAG_LIMITS, isValidTag, normalizeTag } from '../types/admin'
 import type { GameStatus } from '../types/game'
+import { prepareImageForUpload } from '../utils/imageProcess'
 
 /** 每页条数默认值（后台表格，比前台网格密，默认放宽到 20） */
 const DEFAULT_PAGE_SIZE = 20
@@ -404,6 +406,23 @@ export interface BatchOutcome {
 
 const lastOutcome = ref<BatchOutcome | null>(null)
 
+/**
+ * 一次「永久删除」的结果。
+ *
+ * 与批量操作分开存放：删除是不可逆动作，提示条要说清「删了哪一条、清理了几张图」，
+ * 塞进 BatchOutcome 的 changed/skipped 语义里只会让两边都说不清。
+ */
+export interface DeleteOutcome {
+  id: string
+  title: string
+  /** 顺带清理掉的、不再被任何作品引用的上传图片数 */
+  imagesCleaned: number
+  /** 这次写入实际落在了哪里 */
+  storage: StorageKind
+}
+
+const lastDelete = ref<DeleteOutcome | null>(null)
+
 /** 写入实际落在哪里（转自仓储）—— 页面据此**如实**说明数据现状，不写死文案 */
 const storage = computed<StorageKind>(() => adminGameRepository.value.storage.value)
 
@@ -463,14 +482,83 @@ function imagesOf(game: AdminGame): string[] {
 }
 
 /**
+ * 一次图片上传的结果。
+ *
+ * 返回的不只是地址：上传前可能做了缩放 / 转 WebP，UI 需要把**实际发生了什么**
+ * 告诉用户（尤其是「本来 1.6 MB，现在 240 KB」这种能让人放心的数字）。
+ */
+export interface UploadedImage {
+  url: string
+  /** 压缩结果；没有处理时为 null */
+  compression: { originalBytes: number; bytes: number } | null
+  /** 给人看的处理说明；没有处理时为空串 */
+  note: string
+}
+
+/**
  * 上传一张图片到数据仓，返回它的**公开地址**。
  * 只有远程模式可用 —— 本地模式没有可写的远端，会抛错（调用方先看 `storage`）。
+ *
+ * 压缩放在这里而不是仓储里：仓储的契约是「把给你的字节原样存进去」，
+ * 「上传前要把图处理成什么样」是产品行为，换存储实现时不该跟着变。
  */
-function uploadImage(
-  file: Blob,
-  options: { gameId: string; slot: 'cover' | 'banner' | 'gallery' },
-): Promise<string> {
-  return adminGameRepository.value.uploadImage(file, options)
+async function uploadImage(
+  file: File,
+  options: { gameId: string; slot: ImageSlot },
+): Promise<UploadedImage> {
+  const prepared = await prepareImageForUpload(file, options.slot)
+  const url = await adminGameRepository.value.uploadImage(prepared.blob, options)
+
+  return {
+    url,
+    compression: prepared.converted
+      ? { originalBytes: prepared.originalBytes, bytes: prepared.bytes }
+      : null,
+    note: prepared.note,
+  }
+}
+
+/**
+ * 永久删除一条作品，并顺手清理**只属于它**的上传图片。
+ *
+ * 【为什么现在才敢提供】
+ * 早先不暴露删除，是因为删掉条目会让它的图片变成孤儿 —— 数据没了，文件还在仓库里。
+ * 现在有了「删除后清理」这条路径，删除才是完整的：先删数据，再删图。
+ *
+ * 【安全边界，三道】
+ *   1. 只清理 `images/games/` 下的上传图（仓储实现里再兜一道），站内旧 SVG 与外链不碰
+ *   2. 只清理**删除后不再被任何作品引用**的图 —— 共用图（比如多篇引用同一张 Banner）会保留
+ *   3. 图片清理失败**不会**让删除失败：条目已经删了，顶多留下一张废图，git 历史可找回
+ *
+ * 不可逆动作，所以 UI 必须做输入 id 的二次确认；这里只负责执行，不再弹窗。
+ */
+async function deleteGame(id: string): Promise<DeleteOutcome> {
+  const target = getGameById(id)
+  if (!target) {
+    throw new Error('要删除的作品不存在 —— 可能已被别处删除，请刷新后重试。')
+  }
+
+  const previousImages = imagesOf(target)
+  const removed = await adminGameRepository.value.deleteGame(id)
+  if (!removed) throw new Error('数据里已经没有这条作品，未产生删除提交。')
+
+  clearSelection()
+  // 第二个参数为空：这条作品已经不在数据里，剩下的引用关系全在其它作品上
+  const imagesCleaned = await cleanupOrphanImages(previousImages, [])
+
+  const outcome: DeleteOutcome = {
+    id,
+    title: target.title || id,
+    imagesCleaned,
+    storage: storage.value,
+  }
+  lastDelete.value = outcome
+  return outcome
+}
+
+/** 关掉删除结果提示条 */
+function dismissDelete(): void {
+  lastDelete.value = null
 }
 
 /** 重新拉取一次（给「加载失败 → 重试」用） */
@@ -823,6 +911,13 @@ export interface AdminGamesAPI {
   // —— 单条保存 ——
   saveGame: typeof saveGame
 
+  // —— 单条删除 ——
+  /** 最近一次永久删除的结果；null 表示没有待展示的结果 */
+  lastDelete: typeof lastDelete
+  dismissDelete: typeof dismissDelete
+  /** 永久删除一条作品并清理其专属上传图 */
+  deleteGame: typeof deleteGame
+
   // —— 标签级操作 ——
   renameTag: typeof renameTag
   deleteTag: typeof deleteTag
@@ -888,6 +983,10 @@ export function useAdminGames(): AdminGamesAPI {
     batchSetAuthor,
 
     saveGame,
+
+    lastDelete,
+    dismissDelete,
+    deleteGame,
 
     renameTag,
     deleteTag,

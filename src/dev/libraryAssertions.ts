@@ -57,61 +57,122 @@ export async function runLibraryAssertions(lib: GameLibraryAPI): Promise<Asserti
   lib.setSortBy('views')
   lib.setPageSize(12)
   await settle(lib)
-  check('清除筛选后返回全量', lib.total.value, 6)
+
+  // ⚠️ 期望值一律从**当前数据**推导，不写死条数 / 作者 / 年份。
+  //    部署前会 data:pull，CI 用的就是数据仓里那份随时会被后台改的数据；
+  //    写死「6 款」这类断言会让部署在一个完全正常的编辑之后失败。
+  const base = [...lib.filtered.value]
+  const BASE = base.length
+
+  /** 出现次数最多的作者 / 年份 / 系列 —— 用它做筛选，断言才有实际覆盖面 */
+  function mostCommon<T, K>(items: T[], key: (item: T) => K): K {
+    const counts = new Map<K, number>()
+    for (const item of items) {
+      const value = key(item)
+      counts.set(value, (counts.get(value) ?? 0) + 1)
+    }
+    return [...counts.entries()].sort(
+      (a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]), 'en'),
+    )[0][0]
+  }
+
+  const busiestAuthor = mostCommon(base, (game) => game.author)
+  const authorCount = base.filter((game) => game.author === busiestAuthor).length
+  const sample = base.find((game) => game.author === busiestAuthor)!
+  const sampleYear = sample.releaseYear
+  const crossCount = base.filter(
+    (game) => game.author === busiestAuthor && game.releaseYear === sampleYear,
+  ).length
+
+  check('清除筛选后返回全量', lib.total.value, BASE)
 
   // 2. 单作者过滤
-  lib.setFilter('author', 'Nikson')
+  lib.setFilter('author', busiestAuthor)
   await settle(lib)
-  check('作者 = Nikson 命中数', lib.total.value, 2)
+  check(`作者 = ${busiestAuthor} 命中数`, lib.total.value, authorCount)
   check(
-    '结果作者全部为 Nikson',
-    [...new Set(lib.filtered.value.map((g) => g.author))].join(','),
-    'Nikson',
+    '结果作者全部一致',
+    [...new Set(lib.filtered.value.map((game) => game.author))].join(','),
+    busiestAuthor,
   )
 
   // 3. 作者 × 年份 交叉过滤（组间 AND）
-  lib.setFilter('year', '2019')
+  lib.setFilter('year', String(sampleYear))
   await settle(lib)
-  check('作者 Nikson + 年份 2019 交叉命中', lib.total.value, 1)
-  check('交叉命中标题', lib.filtered.value[0]?.title, 'The Joy of Creation: Story Mode')
+  check('作者 × 年份交叉命中', lib.total.value, crossCount)
+  check(
+    '交叉结果的作者与年份都匹配',
+    lib.filtered.value.every(
+      (game) => game.author === busiestAuthor && game.releaseYear === sampleYear,
+    ),
+    true,
+  )
 
   // 4. 同组内单选切换（再点一次同值应取消）
-  lib.setFilter('year', '2019')
+  lib.setFilter('year', String(sampleYear))
   await settle(lib)
-  check('再次点击同一年份应取消该筛选', lib.total.value, 2)
+  check('再次点击同一年份应取消该筛选', lib.total.value, authorCount)
 
   // 5. 年份过滤
+  const busiestYear = mostCommon(base, (game) => game.releaseYear)
+  const yearCount = base.filter((game) => game.releaseYear === busiestYear).length
   lib.clearFilters()
-  lib.setFilter('year', '2015')
+  lib.setFilter('year', String(busiestYear))
   await settle(lib)
-  check('年份 = 2015 命中数', lib.total.value, 2)
+  check(`年份 = ${busiestYear} 命中数`, lib.total.value, yearCount)
 
   // 6. 系列过滤
+  const busiestSeries = mostCommon(base, (game) => game.ipSeries)
+  const seriesCount = base.filter((game) => game.ipSeries === busiestSeries).length
   lib.clearFilters()
-  lib.setFilter('series', '玩梗向混搭')
+  lib.setFilter('series', busiestSeries)
   await settle(lib)
-  check('系列 = 玩梗向混搭 命中数', lib.total.value, 2)
+  check(`系列 = ${busiestSeries} 命中数`, lib.total.value, seriesCount)
 
   // 7. 模糊搜索：命中标题（大小写不敏感）
+  //    用某条作品的完整标题当检索词 —— 它至少必须命中自己。
+  const titleProbe = base[0].title
   lib.clearFilters()
-  lib.setSearchQuery('FLUMPTY')
+  lib.setSearchQuery(titleProbe)
   await settle(lib)
-  check('搜索 "FLUMPTY"（标题命中 / 大小写不敏感）', lib.total.value, 1)
+  check('搜索完整标题至少命中自己', lib.filtered.value.some((game) => game.id === base[0].id), true)
+  const lowerHits = lib.total.value
+  lib.setSearchQuery(titleProbe.toUpperCase())
+  await settle(lib)
+  check('搜索大小写不敏感（命中数一致）', lib.total.value, lowerHits)
 
-  // 8. 模糊搜索：命中作者
-  lib.setSearchQuery('kane')
+  // 8. 模糊搜索：命中作者 —— 至少该作者的每一条都要被搜到
+  lib.setSearchQuery(busiestAuthor)
   await settle(lib)
-  check('搜索 "kane"（作者命中）', lib.total.value, 1)
+  check(
+    '搜索作者命中该作者的全部作品',
+    base
+      .filter((game) => game.author === busiestAuthor)
+      .every((game) => lib.filtered.value.some((hit) => hit.id === game.id)),
+    true,
+  )
 
-  // 9. 模糊搜索：命中引擎
-  lib.setSearchQuery('unreal')
+  // 9. 模糊搜索：命中引擎 —— 同理，至少该引擎的每一条都要被搜到
+  const busiestEngine = mostCommon(base, (game) => game.engine)
+  lib.setSearchQuery(busiestEngine)
   await settle(lib)
-  check('搜索 "unreal"（引擎命中）', lib.total.value, 2)
+  check(
+    '搜索引擎命中该引擎的全部作品',
+    base
+      .filter((game) => game.engine === busiestEngine)
+      .every((game) => lib.filtered.value.some((hit) => hit.id === game.id)),
+    true,
+  )
 
   // 10. 检索词与筛选叠加
-  lib.setFilter('author', 'Nikson')
+  lib.setFilter('author', busiestAuthor)
   await settle(lib)
-  check('搜索 unreal + 作者 Nikson 叠加', lib.total.value, 2)
+  check(
+    '搜索 + 作者筛选叠加后只剩该作者',
+    lib.filtered.value.every((game) => game.author === busiestAuthor),
+    true,
+  )
+  check('叠加后命中数不超过该作者总数', lib.total.value <= authorCount, true)
 
   // 11. 空结果
   lib.clearFilters()
@@ -119,53 +180,68 @@ export async function runLibraryAssertions(lib: GameLibraryAPI): Promise<Asserti
   await settle(lib)
   check('搜索 "zzzzz" 应返回 0 条', lib.total.value, 0)
 
-  // 12. 排序
+  // 12. 排序 —— 断言规则，不写死标题
   lib.clearFilters()
   lib.setSortBy('title')
   await settle(lib)
-  // 断言规则本身，而不是写死某个标题 —— 数据是会被改的，见 titleAsc 说明
   check('按首字母排序首位 = 标题升序首位', lib.games.value[0]?.title, titleAsc(lib.games.value)[0])
 
   lib.setSortBy('views')
   await settle(lib)
-  check('按热度排序首位', lib.games.value[0]?.title, "One Night at Flumpty's")
+  check(
+    '按热度排序首位取到最大浏览量',
+    lib.games.value[0]?.metrics.fakeViews,
+    Math.max(...base.map((game) => game.metrics.fakeViews)),
+  )
 
   lib.setSortBy('year')
   await settle(lib)
-  check('按年份排序首位', lib.games.value[0]?.title, 'The Joy of Creation: Story Mode')
+  check(
+    '按年份排序首位取到最新年份',
+    lib.games.value[0]?.releaseYear,
+    Math.max(...base.map((game) => game.releaseYear)),
+  )
 
   lib.setSortBy('score')
   await settle(lib)
-  check('按评分排序首位', lib.games.value[0]?.title, "One Night at Flumpty's")
+  check(
+    '按评分排序首位取到最高分',
+    lib.games.value[0]?.metrics.score,
+    Math.max(...base.map((game) => game.metrics.score)),
+  )
 
-  // 13. 分页
+  // 13. 分页 —— 页数由总量推导
   lib.clearFilters()
   lib.setSortBy('views')
   lib.setPageSize(2)
   await settle(lib)
-  check('每页 2 条 → 总页数', lib.totalPages.value, 3)
-  check('第 1 页条数', lib.games.value.length, 2)
-  check('第 1 页首条为热度最高', lib.games.value[0]?.title, "One Night at Flumpty's")
+  const pageCount = Math.ceil(BASE / 2)
+  check('每页 2 条 → 总页数', lib.totalPages.value, pageCount)
+  check('第 1 页条数', lib.games.value.length, Math.min(2, BASE))
+  check('第 1 页首条为热度最高', lib.games.value[0]?.metrics.fakeViews, Math.max(...base.map((game) => game.metrics.fakeViews)))
 
-  lib.setPage(3)
+  lib.setPage(pageCount)
   await settle(lib)
-  check('第 3 页条数', lib.games.value.length, 2)
-  check('第 3 页页码', lib.currentPage.value, 3)
+  check('末页条数', lib.games.value.length, BASE - (pageCount - 1) * 2)
+  check('末页页码', lib.currentPage.value, pageCount)
 
   // 14. 页码越界夹紧（不应出现空白页）
   lib.setPage(99)
   await settle(lib)
-  check('页码上溢被夹紧到末页', lib.currentPage.value, 3)
-  check('夹紧后仍有结果', lib.games.value.length, 2)
+  check('页码上溢被夹紧到末页', lib.currentPage.value, pageCount)
+  check('夹紧后仍有结果', lib.games.value.length, BASE - (pageCount - 1) * 2)
 
   // 15. getGameById
-  check('getGameById 命中', lib.getGameById('popgoes')?.title, 'POPGOES')
+  const lookup = base[0]
+  check('getGameById 命中', lib.getGameById(lookup.id)?.title, lookup.title)
   check('getGameById 未命中返回 undefined', lib.getGameById('not-exist'), 'undefined')
 
-  // 16. 元数据
-  check('可用作者数量', lib.availableAuthors.value.length, 5)
-  check('可用年份数量（去重）', lib.availableYears.value.length, 4)
-  check('年份降序排列', lib.availableYears.value.join(','), '2019,2017,2016,2015')
+  // 16. 元数据 —— 去重数量与降序规则都从数据推导
+  const uniqueAuthors = new Set(base.map((game) => game.author)).size
+  const uniqueYears = [...new Set(base.map((game) => game.releaseYear))].sort((a, b) => b - a)
+  check('可用作者数量', lib.availableAuthors.value.length, uniqueAuthors)
+  check('可用年份数量（去重）', lib.availableYears.value.length, uniqueYears.length)
+  check('年份降序排列', lib.availableYears.value.join(','), uniqueYears.join(','))
 
   /* ---------------------------------------------------------------- 17. 前台可见性联动 */
   // Phase 10：前台与后台读的是**同一份**数据，所以改一处就能观察到前台的实时反应。
@@ -178,7 +254,7 @@ export async function runLibraryAssertions(lib: GameLibraryAPI): Promise<Asserti
   lib.setSortBy('views')
   lib.setPageSize(12)
   await settle(lib)
-  check('联动 · 起点前台可见 6 款', lib.total.value, 6)
+  check('联动 · 起点前台可见数', lib.total.value, BASE)
 
   const probe = await publicGameRepository.createGame({
     title: 'Visibility Probe',
@@ -190,41 +266,41 @@ export async function runLibraryAssertions(lib: GameLibraryAPI): Promise<Asserti
   })
   await settle(lib)
 
-  check('探针（草稿）· 前台列表看不到', lib.total.value, 6)
+  check('探针（草稿）· 前台列表看不到', lib.total.value, BASE)
   check('探针（草稿）· 详情页取不到', lib.getGameById(probe.id), undefined)
-  check('探针（草稿）· Hero 的收录数不含它', lib.catalogSize.value, 6)
+  check('探针（草稿）· Hero 的收录数不含它', lib.catalogSize.value, BASE)
   check('探针（草稿）· 作者不进「可用作者」', lib.availableAuthors.value.includes('Probe Author'), false)
   check('探针（草稿）· 年份不进「可用年份」', lib.availableYears.value.includes(2030), false)
 
   await publicGameRepository.publishGame(probe.id)
   await settle(lib)
-  check('探针（已上线）· 前台可见 7 款', lib.total.value, 7)
+  check('探针（已上线）· 前台可见数 +1', lib.total.value, BASE + 1)
   check('探针（已上线）· 详情页能取到', Boolean(lib.getGameById(probe.id)), true)
   check('探针（已上线）· 作者进入「可用作者」', lib.availableAuthors.value.includes('Probe Author'), true)
   check('探针（已上线）· 年份进入「可用年份」', lib.availableYears.value.includes(2030), true)
 
   await publicGameRepository.unpublishGame(probe.id)
   await settle(lib)
-  check('探针（已下线）· 前台列表看不到', lib.total.value, 6)
+  check('探针（已下线）· 前台列表看不到', lib.total.value, BASE)
   check('探针（已下线）· 详情页取不到（前台完全隐藏）', lib.getGameById(probe.id), undefined)
 
   await publicGameRepository.updateGame(probe.id, { status: 'published', archived: true })
   await settle(lib)
-  check('探针（已归档但已上线）· 前台列表看不到', lib.total.value, 6)
+  check('探针（已归档但已上线）· 前台列表看不到', lib.total.value, BASE)
   check('探针（已归档）· 详情页取不到', lib.getGameById(probe.id), undefined)
 
   await publicGameRepository.updateGame(probe.id, { archived: false })
   await settle(lib)
-  check('探针（取消归档）· 恢复可见', lib.total.value, 7)
+  check('探针（取消归档）· 恢复可见', lib.total.value, BASE + 1)
 
-  // 收尾：删掉探针，数据彻底复原（原有 6 条一个字段都没被动过）
+  // 收尾：删掉探针，数据彻底复原（原有条目一个字段都没被动过）
   await publicGameRepository.deleteGame(probe.id)
   await settle(lib)
-  check('收尾 · 前台恢复 6 款', lib.total.value, 6)
+  check('收尾 · 前台恢复原可见数', lib.total.value, BASE)
   check('收尾 · 探针已彻底移除', lib.getGameById(probe.id), undefined)
-  check('收尾 · 可用作者复原', lib.availableAuthors.value.length, 5)
-  check('收尾 · 可用年份复原', lib.availableYears.value.length, 4)
-  check('收尾 · 原有条目仍可正常取到', lib.getGameById('popgoes')?.title, 'POPGOES')
+  check('收尾 · 可用作者复原', lib.availableAuthors.value.length, uniqueAuthors)
+  check('收尾 · 可用年份复原', lib.availableYears.value.length, uniqueYears.length)
+  check('收尾 · 原有条目仍可正常取到', lib.getGameById(lookup.id)?.title, lookup.title)
 
   // 复原默认状态
   lib.setPageSize(12)

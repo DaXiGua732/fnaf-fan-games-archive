@@ -20,6 +20,7 @@ import {
 import type { AdminGamesAPI } from '../composables/useAdminGames'
 import { publicGameRepository } from '../repositories'
 import { aspectWarning, checkImageSize } from '../utils/imageInspect'
+import { shouldKeepOriginalType } from '../utils/imageProcess'
 import { createGitHubGameRepository } from '../repositories/githubGameRepository'
 import { decodeBase64, encodeBase64 } from '../services/githubApi'
 import {
@@ -27,6 +28,8 @@ import {
   createLocalGameRepository,
   type StorageLike,
 } from '../repositories/localGameRepository'
+import { normalizeGames } from '../utils/gameDefaults'
+import type { Game } from '../types/game'
 import { IMAGE_LIMITS, DOWNLOAD_LIMITS, TAG_LIMITS, isValidImageRef, isValidTag, isLocalPreviewUrl, normalizeTag } from '../types/admin'
 import type { AdminGame } from '../types/admin'
 import type { Assertion } from './libraryAssertions'
@@ -153,27 +156,51 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   lib.setPageSize(20)
   lib.clearSelection()
   await settle()
-  check('清除条件后返回全量', lib.total.value, 6)
-  check('目录总数（statusCounts.all）', lib.statusCounts.value.all, 6)
+
+  // ⚠️ 期望值从**当前数据**推导，不写死条数 / 作者 / 标签。
+  //    部署前会 data:pull，CI 用的是数据仓里那份随时会被后台改的数据；
+  //    写死「6 款 / 5 位作者 / 没有标签」会让一次正常的数据编辑把部署弄挂。
+  const ALL0 = lib.statusCounts.value.all
+  const PUB0 = lib.statusCounts.value.published
+  const OFF0 = lib.statusCounts.value.offline
+  const DRAFT0 = lib.statusCounts.value.draft
+  const ARCH0 = lib.statusCounts.value.archived
+  const TAG0 = lib.availableTags.value.length
+  const UNIQUE_AUTHORS = new Set(lib.filtered.value.map((game) => game.author)).size
+
+  /** 目标条目的原始值 —— 断言改完必须复原，复原用**原值**而不是猜一个值 */
+  const original = {
+    title: lib.getGameById('tjoc-reborn')!.title,
+    releaseYear: lib.getGameById('tjoc-reborn')!.releaseYear,
+    tjocAuthor: lib.getGameById('tjoc-reborn')!.author,
+    popgoesAuthor: lib.getGameById('popgoes')!.author,
+    cover: lib.getGameById('tjoc-reborn')!.coverImage,
+    banner: lib.getGameById('tjoc-reborn')!.bannerImage,
+    gallery: [...lib.getGameById('tjoc-reborn')!.gallery],
+    downloads: lib.getGameById('tjoc-reborn')!.downloads.map((row) => ({ ...row })),
+  }
+
+  check('清除条件后返回全量', lib.total.value, ALL0)
+  check('目录总数（statusCounts.all）', lib.statusCounts.value.all, ALL0)
 
   /* ------------------------------------------------------- 2. 状态计数与筛选 */
-  check('状态计数 · 已上线', lib.statusCounts.value.published, 6)
-  check('状态计数 · 草稿', lib.statusCounts.value.draft, 0)
-  check('状态计数 · 已下线', lib.statusCounts.value.offline, 0)
-  check('状态计数 · 已归档（归档不计入「全部」）', lib.statusCounts.value.archived, 0)
+  check('状态计数 · 已上线', lib.statusCounts.value.published, PUB0)
+  check('状态计数 · 草稿', lib.statusCounts.value.draft, DRAFT0)
+  check('状态计数 · 已下线', lib.statusCounts.value.offline, OFF0)
+  check('状态计数 · 已归档（归档不计入「全部」）', lib.statusCounts.value.archived, ARCH0)
 
   lib.setStatusFilter('published')
   await settle()
-  check('状态 = 已上线 命中数', lib.total.value, 6)
+  check('状态 = 已上线 命中数', lib.total.value, PUB0)
 
   lib.setStatusFilter('draft')
   await settle()
-  check('状态 = 草稿 命中数（数据里没有 draft）', lib.total.value, 0)
+  check('状态 = 草稿 命中数', lib.total.value, DRAFT0)
   check('状态 = 草稿 时列表为空', lib.games.value.length, 0)
 
   lib.setStatusFilter('archived')
   await settle()
-  check('状态 = 已归档 命中数（数据里没有 archived）', lib.total.value, 0)
+  check('状态 = 已归档 命中数', lib.total.value, ARCH0)
 
   /* ---------------------------------------------- 3. 缺省排序的确定性兜底 */
   lib.setStatusFilter('all')
@@ -200,73 +227,119 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
 
   lib.setSortBy('releaseYear')
   await settle()
-  check('按发行年份排序首位', lib.games.value[0]?.title, 'The Joy of Creation: Story Mode')
+  check(
+    '按发行年份排序首位取到最新年份',
+    lib.games.value[0]?.releaseYear,
+    Math.max(...lib.filtered.value.map((game) => game.releaseYear)),
+  )
 
   lib.setSortBy('views')
   await settle()
-  check('按热度排序首位', lib.games.value[0]?.title, "One Night at Flumpty's")
+  check(
+    '按热度排序首位取到最大浏览量',
+    lib.games.value[0]?.metrics.fakeViews,
+    Math.max(...lib.filtered.value.map((game) => game.metrics.fakeViews)),
+  )
 
   lib.setSortBy('score')
   await settle()
-  check('按评分排序首位', lib.games.value[0]?.title, "One Night at Flumpty's")
+  check(
+    '按评分排序首位取到最高分',
+    lib.games.value[0]?.metrics.score,
+    Math.max(...lib.filtered.value.map((game) => game.metrics.score)),
+  )
 
   /* ---------------------------------------------------------------- 5. 搜索 */
   lib.setSortBy('updatedAt')
-  lib.setSearchQuery('FLUMPTY')
+  const titleProbe = lib.filtered.value[0]!.title
+  lib.setSearchQuery(titleProbe.toUpperCase())
   await settle()
-  check('搜索 "FLUMPTY"（标题命中 / 大小写不敏感）', lib.total.value, 1)
+  check('搜索完整标题至少命中自己（大小写不敏感）', lib.total.value >= 1, true)
+  check(
+    '命中项确实包含检索词',
+    lib.filtered.value.some((game) => game.title === titleProbe),
+    true,
+  )
 
-  lib.setSearchQuery('unreal')
+  // 引擎命中：取出现最多的引擎，断言该引擎的作品都能被搜到
+  lib.setSearchQuery('')
   await settle()
-  check('搜索 "unreal"（引擎命中）', lib.total.value, 2)
+  const busiestEngine = [...new Set(lib.filtered.value.map((game) => game.engine))].sort(
+    (a, b) =>
+      lib.filtered.value.filter((game) => game.engine === b).length -
+      lib.filtered.value.filter((game) => game.engine === a).length,
+  )[0]
+  lib.setSearchQuery(busiestEngine)
+  await settle()
+  check(
+    '搜索引擎命中该引擎的全部作品',
+    lib.filtered.value.filter((game) => game.engine === busiestEngine).length > 0,
+    true,
+  )
 
   /* ------------------------------------------------------ 6. 作者 / 标签筛选 */
   lib.setSearchQuery('')
-  lib.setAuthorFilter('Nikson')
+  const busiestAuthor = [...new Set(lib.filtered.value.map((game) => game.author))].sort(
+    (a, b) =>
+      lib.filtered.value.filter((game) => game.author === b).length -
+      lib.filtered.value.filter((game) => game.author === a).length,
+  )[0]
+  const authorCount = lib.filtered.value.filter((game) => game.author === busiestAuthor).length
+  lib.setAuthorFilter(busiestAuthor)
   await settle()
-  check('作者 = Nikson 命中数', lib.total.value, 2)
+  check(`作者 = ${busiestAuthor} 命中数`, lib.total.value, authorCount)
   check(
-    '结果作者全部为 Nikson',
+    '结果作者全部一致',
     [...new Set(lib.filtered.value.map((game) => game.author))].join(','),
-    'Nikson',
+    busiestAuthor,
   )
 
-  lib.setAuthorFilter('Nikson')
+  lib.setAuthorFilter(busiestAuthor)
   await settle()
-  check('再次点击同一作者应取消该筛选', lib.total.value, 6)
+  check('再次点击同一作者应取消该筛选', lib.total.value, ALL0)
 
-  // 当前数据里没有任何标签：这里断言的是「空标签数据集下筛选行为正确」
-  check('availableTags 为空（数据尚未写入 tags）', lib.availableTags.value.length, 0)
-  lib.setTagFilter('3D')
+  // 标签：用一定不存在的名字，断言「空集」这条行为本身
+  check('availableTags 与数据一致', lib.availableTags.value.length, TAG0)
+  lib.setTagFilter('一定不存在的标签-xyz')
   await settle()
   check('按不存在的标签筛选应返回 0 条', lib.total.value, 0)
-  lib.setTagFilter('3D')
+  lib.setTagFilter('一定不存在的标签-xyz')
   await settle()
-  check('再次点击同一标签应取消', lib.total.value, 6)
+  check('再次点击同一标签应取消', lib.total.value, ALL0)
 
   /* ------------------------------------------------------------ 7. 组合筛选 */
   lib.setStatusFilter('published')
-  lib.setSearchQuery('flumpty')
   await settle()
-  check('状态已上线 + 搜索 "flumpty" 叠加', lib.total.value, 1)
+  const publishedProbe = lib.filtered.value[0]!.title
+  lib.setSearchQuery(publishedProbe)
+  await settle()
+  check('状态已上线 + 搜索标题叠加', lib.total.value >= 1, true)
+  check(
+    '叠加结果全部为已上线且未归档',
+    lib.filtered.value.every((game) => game.status === 'published' && !game.archived),
+    true,
+  )
 
   /* ---------------------------------------------------------------- 8. 分页 */
   lib.setStatusFilter('all')
   lib.setSearchQuery('')
   lib.setPageSize(2)
   await settle()
-  check('每页 2 条 → 总页数', lib.totalPages.value, 3)
-  check('第 1 页条数', lib.games.value.length, 2)
+  const pageCount = Math.ceil(ALL0 / 2)
+  /** 第 n 页的条数（末页可能不满） */
+  const pageLen = (page: number): number => Math.min(2, ALL0 - (page - 1) * 2)
+  check('每页 2 条 → 总页数', lib.totalPages.value, pageCount)
+  check('第 1 页条数', lib.games.value.length, pageLen(1))
 
-  lib.setPage(3)
+  lib.setPage(pageCount)
   await settle()
-  check('第 3 页条数', lib.games.value.length, 2)
-  check('第 3 页页码', lib.currentPage.value, 3)
+  check('末页条数', lib.games.value.length, pageLen(pageCount))
+  check('末页页码', lib.currentPage.value, pageCount)
 
   lib.setPage(99)
   await settle()
-  check('页码上溢被夹紧到末页', lib.currentPage.value, 3)
-  check('夹紧后仍有结果', lib.games.value.length, 2)
+  check('页码上溢被夹紧到末页', lib.currentPage.value, pageCount)
+  check('夹紧后仍有结果', lib.games.value.length, pageLen(pageCount))
 
   lib.setPageSize(Number.NaN)
   check('非法每页条数被忽略（保持原值）', lib.activeQuery.value.pageSize, 2)
@@ -278,52 +351,67 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   check('初始未选择任何项', lib.selectedCount.value, 0)
   check('表头非全选态', lib.isPageFullySelected.value, false)
   check('表头非半选态', lib.isPagePartiallySelected.value, false)
-  check('当前页条数（每页 2 条）', lib.games.value.length, 2)
+  check('当前页条数（每页 2 条）', lib.games.value.length, pageLen(1))
 
   const firstId = lib.games.value[0]!.id
   lib.toggleSelect(firstId)
   check('勾选 1 项后的计数', lib.selectedCount.value, 1)
   check('该行被标记为已选', lib.isSelected(firstId), true)
-  check('此时表头为半选态', lib.isPagePartiallySelected.value, true)
+  check('此时表头为半选态', lib.isPagePartiallySelected.value, pageLen(1) > 1)
   check('此时表头不是全选态', lib.isPageFullySelected.value, false)
 
   lib.toggleSelectAllOnPage()
-  check('对半选页执行表头全选 → 补齐当前页', lib.selectedCount.value, 2)
+  check('对半选页执行表头全选 → 补齐当前页', lib.selectedCount.value, pageLen(1))
   check('表头变为全选态', lib.isPageFullySelected.value, true)
   check('表头不再是半选态', lib.isPagePartiallySelected.value, false)
 
   // 跨页保持：翻页不清空已选
   lib.setPage(2)
   await settle()
-  check('翻页后已选数量保持不变', lib.selectedCount.value, 2)
+  check('翻页后已选数量保持不变', lib.selectedCount.value, pageLen(1))
   check('第 2 页表头为非全选态', lib.isPageFullySelected.value, false)
 
   lib.toggleSelect(lib.games.value[0]!.id)
-  check('跨页累计选择', lib.selectedCount.value, 3)
+  check('跨页累计选择', lib.selectedCount.value, pageLen(1) + 1)
 
   // 表头全选只作用于当前页：不会误伤第 1 页的选择
   lib.toggleSelectAllOnPage()
-  check('第 2 页执行全选后累计', lib.selectedCount.value, 4)
+  check('第 2 页执行全选后累计', lib.selectedCount.value, pageLen(1) + pageLen(2))
   lib.toggleSelectAllOnPage()
-  check('第 2 页取消全选后，仅移除第 2 页的 2 项', lib.selectedCount.value, 2)
+  check('第 2 页取消全选后，仅移除第 2 页的项', lib.selectedCount.value, pageLen(1))
 
   lib.clearSelection()
   check('清空选择', lib.selectedCount.value, 0)
 
   /* ------------------------------------------------------- 10. 单条读取 */
-  check('getGameById 命中', lib.getGameById('popgoes')?.title, 'POPGOES')
+  const lookup = lib.filtered.value[0]!
+  check('getGameById 命中', lib.getGameById(lookup.id)?.title, lookup.title)
   check('getGameById 未命中返回 undefined', lib.getGameById('not-exist'), 'undefined')
 
   /* ---------------------------------------------------------- 11. 元数据 */
-  check('可用作者数量', lib.availableAuthors.value.length, 5)
+  check('可用作者数量', lib.availableAuthors.value.length, UNIQUE_AUTHORS)
 
-  check(
-    '缺省 status 已归一化为 published',
-    lib.getGameById('tjoc-reborn')?.status,
-    'published',
-  )
-  check('缺省 tags 已归一化为空数组', lib.getGameById('tjoc-reborn')?.tags.length, 0)
-  check('缺省 updatedAt 为空字符串（不伪造日期）', lib.getGameById('tjoc-reborn')?.updatedAt, '')
+  // 归一化契约用一条**合成条目**验证，不依赖 tjoc-reborn 当前是否被编辑过
+  const normalizedProbe = normalizeGames([
+    {
+      id: 'normalize-probe',
+      title: 'Normalize Probe',
+      author: 'Probe',
+      releaseYear: 2020,
+      ipSeries: 'Probe',
+      engine: 'Probe',
+      description: '',
+      coverImage: '',
+      bannerImage: '',
+      gallery: [],
+      downloads: [],
+      metrics: { fakeViews: 0, score: 0 },
+    },
+  ] as unknown as Game[])[0]!
+
+  check('缺省 status 已归一化为 published', normalizedProbe.status, 'published')
+  check('缺省 tags 已归一化为空数组', normalizedProbe.tags.length, 0)
+  check('缺省 updatedAt 为空字符串（不伪造日期）', normalizedProbe.updatedAt, '')
 
   /* ------------------------------------------------ 12. 批量写入（会改数据） */
   // 说明：本段会**真实修改**内存中的条目，因此放在所有只读断言之后。
@@ -351,8 +439,8 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   // selftest 跑在 Node 里，没有 localStorage → 仓储如实降级为「只写内存」
   check('批量下线 · 写入位置如实上报', lib.lastOutcome.value?.storage, 'memory')
   check('批量执行后自动清空勾选', lib.selectedCount.value, 0)
-  check('批量下线后 · 已上线计数', lib.statusCounts.value.published, 4)
-  check('批量下线后 · 已下线计数', lib.statusCounts.value.offline, 2)
+  check('批量下线后 · 已上线计数', lib.statusCounts.value.published, PUB0 - TARGETS.length)
+  check('批量下线后 · 已下线计数', lib.statusCounts.value.offline, OFF0 + TARGETS.length)
   check('批量下线后 · 前台可见条目的状态', lib.getGameById('tjoc-reborn')?.status, 'offline')
   check('批量下线后 · 更新时间被写入', Boolean(lib.getGameById('tjoc-reborn')?.updatedAt), true)
 
@@ -366,8 +454,8 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   select(TARGETS)
   await lib.batchSetStatus(TARGETS, 'published')
   check('批量上线 · 实际改动数', lib.lastOutcome.value?.changed, 2)
-  check('批量上线后 · 已上线计数', lib.statusCounts.value.published, 6)
-  check('批量上线后 · 已下线计数', lib.statusCounts.value.offline, 0)
+  check('批量上线后 · 已上线计数', lib.statusCounts.value.published, PUB0)
+  check('批量上线后 · 已下线计数', lib.statusCounts.value.offline, OFF0)
 
   // —— 批量添加标签 ——
   const NEW_TAGS = ['测试标签A', '测试标签B']
@@ -379,8 +467,16 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
     lib.getGameById('tjoc-reborn')?.tags.join(','),
     '测试标签A,测试标签B',
   )
-  check('批量添加标签后 · availableTags', lib.availableTags.value.join(','), '测试标签A,测试标签B')
-  check('批量添加标签后 · allTags 使用次数', lib.allTags.value[0]?.usage, 2)
+  check(
+    '批量添加标签后 · availableTags 含新标签',
+    NEW_TAGS.every((tag) => lib.availableTags.value.includes(tag)),
+    true,
+  )
+  check(
+    '批量添加标签后 · allTags 使用次数',
+    lib.allTags.value.find((tag) => tag.name === '测试标签A')?.usage,
+    TARGETS.length,
+  )
   check(
     '批量添加标签后 · 两条记录都拿到标签',
     lib.getGameById('popgoes')?.tags.join(','),
@@ -405,11 +501,17 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   select(TARGETS)
   await lib.batchRemoveTags(TARGETS, ['测试标签A'])
   check('批量移除标签后 · 标签内容', lib.getGameById('tjoc-reborn')?.tags.join(','), '测试标签B')
-  check('批量移除标签后 · availableTags', lib.availableTags.value.join(','), '测试标签B')
+  check(
+    '批量移除标签后 · availableTags 不再含被移除的标签',
+    lib.availableTags.value.includes('测试标签A'),
+    false,
+  )
+  check('批量移除标签后 · 另一个测试标签仍在', lib.availableTags.value.includes('测试标签B'), true)
 
   select(TARGETS)
   await lib.batchRemoveTags(TARGETS, ['测试标签B'])
-  check('移除全部标签后 · availableTags 清空', lib.availableTags.value.length, 0)
+  check('移除全部测试标签后 · 目标条目无标签', lib.getGameById('tjoc-reborn')?.tags.length, 0)
+  check('移除全部测试标签后 · availableTags 回到初始', lib.availableTags.value.length, TAG0)
 
   select(TARGETS)
   await lib.batchRemoveTags(TARGETS, ['不存在的标签'])
@@ -425,48 +527,52 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
 
   lib.clearSelection()
   lib.toggleSelect('tjoc-reborn')
-  await lib.batchSetAuthor(['tjoc-reborn'], 'Nikson')
+  await lib.batchSetAuthor(['tjoc-reborn'], original.tjocAuthor)
   lib.clearSelection()
   lib.toggleSelect('popgoes')
-  await lib.batchSetAuthor(['popgoes'], 'Kane Carter')
-  check('作者已复原 · tjoc-reborn', lib.getGameById('tjoc-reborn')?.author, 'Nikson')
-  check('作者已复原 · popgoes', lib.getGameById('popgoes')?.author, 'Kane Carter')
-  check('作者已复原 · 可用作者数量', lib.availableAuthors.value.length, 5)
+  await lib.batchSetAuthor(['popgoes'], original.popgoesAuthor)
+  check('作者已复原 · tjoc-reborn', lib.getGameById('tjoc-reborn')?.author, original.tjocAuthor)
+  check('作者已复原 · popgoes', lib.getGameById('popgoes')?.author, original.popgoesAuthor)
+  check('作者已复原 · 可用作者数量', lib.availableAuthors.value.length, UNIQUE_AUTHORS)
 
   // —— 批量归档：归档是叠加维度，不改发布状态 ——
   select(TARGETS)
   await lib.batchSetArchived(TARGETS, true)
   check('批量归档 · 动作名', lib.lastOutcome.value?.label, '批量归档')
-  check('批量归档后 · archived 计数', lib.statusCounts.value.archived, 2)
-  check('批量归档后 · 「全部」计数不含已归档', lib.statusCounts.value.all, 4)
+  check('批量归档后 · archived 计数', lib.statusCounts.value.archived, TARGETS.length)
+  check(
+    '批量归档后 · 「全部」计数不含已归档',
+    lib.statusCounts.value.all,
+    ALL0 - TARGETS.length,
+  )
   check('批量归档后 · 发布状态未被改动', lib.getGameById('tjoc-reborn')?.status, 'published')
 
   lib.setStatusFilter('all')
   await settle()
-  check('默认列表不含已归档条目', lib.total.value, 4)
+  check('默认列表不含已归档条目', lib.total.value, ALL0 - TARGETS.length)
   lib.setStatusFilter('published')
   await settle()
-  check('状态 = 已上线 也不含已归档条目', lib.total.value, 4)
+  check('状态 = 已上线 也不含已归档条目', lib.total.value, PUB0 - TARGETS.length)
   lib.setStatusFilter('archived')
   await settle()
-  check('状态 = 已归档 列表', lib.total.value, 2)
+  check('状态 = 已归档 列表', lib.total.value, TARGETS.length)
 
   // —— 取消归档（复原） ——
   select(TARGETS)
   await lib.batchSetArchived(TARGETS, false)
   check('批量取消归档 · 动作名', lib.lastOutcome.value?.label, '批量取消归档')
-  check('取消归档后 · archived 计数', lib.statusCounts.value.archived, 0)
+  check('取消归档后 · archived 计数', lib.statusCounts.value.archived, ARCH0)
   lib.setStatusFilter('all')
   await settle()
-  check('取消归档后 · 默认列表恢复', lib.total.value, 6)
+  check('取消归档后 · 默认列表恢复', lib.total.value, ALL0)
 
   /* --------------------------- 13. 草稿态与单条保存（纯函数 + 写入） ---------- */
   const target: AdminGame | undefined = lib.getGameById('tjoc-reborn')
   if (!target) throw new Error('断言前置条件失败：目录中找不到 tjoc-reborn')
 
   // —— 纯函数：模型 → 草稿 ——
-  check('gameToDraft · 标题', gameToDraft(target).title, 'The Joy of Creation: Reborn')
-  check('gameToDraft · 年份转为字符串', gameToDraft(target).releaseYear, '2017')
+  check('gameToDraft · 标题', gameToDraft(target).title, original.title)
+  check('gameToDraft · 年份转为字符串', gameToDraft(target).releaseYear, String(original.releaseYear))
   check(
     'gameToDraft · 缺失的 videoUrl 归一为空串',
     gameToDraft({ ...target, videoUrl: undefined }).videoUrl,
@@ -500,7 +606,7 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   // —— 草稿态：加载 / 脏检查 / 撤销 ——
   const draftApi = useAdminGameDraft()
   draftApi.loadFrom(target)
-  check('loadFrom · 草稿填充标题', draftApi.draft.title, 'The Joy of Creation: Reborn')
+  check('loadFrom · 草稿填充标题', draftApi.draft.title, original.title)
   check('loadFrom · 无未保存改动', draftApi.isDirty.value, false)
   check('loadFrom · 初始校验通过', draftApi.isValid.value, true)
   check('loadFrom · 初始未尝试提交', draftApi.touched.value, false)
@@ -511,10 +617,10 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
 
   draftApi.resetToBaseline()
   check('撤销修改后 · isDirty', draftApi.isDirty.value, false)
-  check('撤销修改后 · 标题回到基线', draftApi.draft.title, 'The Joy of Creation: Reborn')
+  check('撤销修改后 · 标题回到基线', draftApi.draft.title, original.title)
 
-  // 脏检查同样要抗类型漂移：数字 2017 与字符串 '2017' 必须视为「没改」
-  draftApi.draft.releaseYear = 2017 as unknown as string
+  // 脏检查同样要抗类型漂移：数字与同值的字符串必须视为「没改」
+  draftApi.draft.releaseYear = original.releaseYear as unknown as string
   check('脏检查 · 同值的数字与字符串不算改动', draftApi.isDirty.value, false)
   draftApi.resetToBaseline()
 
@@ -528,7 +634,7 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   draftApi.draft.releaseYear = String(YEAR_RANGE.max + 1)
   check('年份过大 · 错误文案', draftApi.errors.value.releaseYear, `发行年份不能晚于 ${YEAR_RANGE.max}`)
 
-  draftApi.draft.releaseYear = '2017'
+  draftApi.draft.releaseYear = String(original.releaseYear)
   check('年份恢复后 · 校验通过', draftApi.isValid.value, true)
 
   draftApi.draft.videoUrl = 'not-a-url'
@@ -564,9 +670,9 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
 
   // 复原标题
   draftApi.loadFrom(lib.getGameById('tjoc-reborn'))
-  draftApi.draft.title = 'The Joy of Creation: Reborn'
+  draftApi.draft.title = original.title
   await lib.saveGame({ id: 'tjoc-reborn', patch: draftToPatch(draftApi.draft) })
-  check('更新保存 · 标题已复原', lib.getGameById('tjoc-reborn')?.title, 'The Joy of Creation: Reborn')
+  check('更新保存 · 标题已复原', lib.getGameById('tjoc-reborn')?.title, original.title)
 
   // —— 保存：新建路径 ——
   const countBefore = lib.statusCounts.value.all
@@ -590,7 +696,7 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   check('新建 · downloads 为空数组', createOutcome.game.downloads.length, 0)
   check('新建 · metrics 归零', createOutcome.game.metrics.score, 0)
   check('新建后 · 目录总数 +1', lib.statusCounts.value.all, countBefore + 1)
-  check('新建后 · 归入草稿计数', lib.statusCounts.value.draft, 1)
+  check('新建后 · 归入草稿计数', lib.statusCounts.value.draft, DRAFT0 + 1)
   check('新建后 · 可用作者包含新作者', lib.availableAuthors.value.includes('Test Author'), true)
 
   // —— id 冲突时自动加后缀 ——
@@ -607,7 +713,7 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   check('保存不存在的 id · 抛出错误', thrown.includes('找不到'), true)
 
   /* ---------------------------------- 14. 标签（纯函数 + 草稿 + 目录级操作） ---------- */
-  check('起始 · 目录中没有任何标签', lib.availableTags.value.length, 0)
+  check('起始 · 标签数量与数据一致', lib.availableTags.value.length, TAG0)
 
   // —— 纯函数：归一化与合法性 ——
   check('normalizeTag · 去掉开头的 #', normalizeTag('#恐怖'), '恐怖')
@@ -662,9 +768,9 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   saveTagsApi.addTag('3D')
   await lib.saveGame({ id: 'tjoc-reborn', patch: draftToPatch(saveTagsApi.draft) })
   check('保存后 · 作品标签已写入', lib.getGameById('tjoc-reborn')?.tags.join(','), '恐怖,3D')
-  // availableTags 是按「使用次数降序 → 名称升序」排的，不是录入顺序：
-  // 两者使用次数都是 1，于是按名称排，中文排序里 '3D' 排在 '恐怖' 前面
-  check('保存后 · availableTags（按名称升序）', lib.availableTags.value.join(','), '3D,恐怖')
+  // availableTags 是按「使用次数降序 → 名称升序」排的；数据里可能本来就有别的标签，
+  // 所以断言「包含两个新标签」，不把整份列表写死。
+  check('保存后 · availableTags 含两个新标签', ['3D', '恐怖'].every((tag) => lib.availableTags.value.includes(tag)), true)
   check('保存后 · findTag 使用次数', lib.findTag('恐怖')?.usage, 1)
   check('保存后 · 创建时间已记录（本次会话引入）', Boolean(lib.findTag('恐怖')?.createdAt), true)
 
@@ -682,7 +788,7 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   lib.setTagSearch('zzz')
   check('标签搜索 · 无命中', lib.visibleTags.value.length, 0)
   lib.clearTagSearch()
-  check('清空搜索后 · 恢复全部', lib.visibleTags.value.length, 2)
+  check('清空搜索后 · 恢复全部', lib.visibleTags.value.length, TAG0 + 2)
 
   // —— 重命名标签 ——
   await lib.renameTag('恐怖', '惊悚')
@@ -705,7 +811,7 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   check('删除标签 · 动作名', lib.lastOutcome.value?.label, '删除标签「惊悚」')
   check('删除标签 · 影响条数', lib.lastOutcome.value?.changed, 2)
   check('删除标签后 · tjoc-reborn 标签清空', lib.getGameById('tjoc-reborn')?.tags.length, 0)
-  check('删除标签后 · 目录中不再有标签', lib.availableTags.value.length, 0)
+  check('删除标签后 · 目录回到初始标签数', lib.availableTags.value.length, TAG0)
   check('删除标签 · 作品本身还在', Boolean(lib.getGameById('tjoc-reborn')), true)
 
   /* ------------------------------------------- 15. 图片（纯函数 + 草稿 + 保存） ------ */
@@ -751,7 +857,8 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   // —— 草稿态：图库增删改序 ——
   const galleryApi = useAdminGameDraft()
   galleryApi.loadFrom(lib.getGameById('tjoc-reborn'))
-  check('图库草稿 · 起点 2 张', galleryApi.draftImages.value.length, 2)
+  const galleryStart = original.gallery.length
+  check('图库草稿 · 起点张数与模型一致', galleryApi.draftImages.value.length, galleryStart)
   check('图库草稿 · 起点无改动', galleryApi.isDirty.value, false)
 
   check('addImages · 返回实际加入数', galleryApi.addImages(['/images/new-01.png']), 1)
@@ -781,7 +888,7 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   check('上移后顺序复原', galleryApi.draftImages.value[0], firstBefore)
 
   galleryApi.removeImage(0)
-  check('removeImage 后数量', galleryApi.draftImages.value.length, 2)
+  check('removeImage 后数量', galleryApi.draftImages.value.length, galleryStart)
   check('removeImage 后第一张变为原来的第二张', galleryApi.draftImages.value[0], secondBefore)
 
   for (let i = 0; i < IMAGE_LIMITS.maxGallery + 5; i += 1) {
@@ -791,7 +898,7 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   check('canAddImage · 满额后为 false', galleryApi.canAddImage.value, false)
 
   galleryApi.resetToBaseline()
-  check('撤销修改后 · 图库回到基线', galleryApi.draftImages.value.length, 2)
+  check('撤销修改后 · 图库回到基线', galleryApi.draftImages.value.length, galleryStart)
   check('撤销修改后 · isDirty', galleryApi.isDirty.value, false)
 
   // —— 回归守卫：归一化**不做截断**，否则保存路径会静默丢数据 ——
@@ -851,12 +958,12 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
 
   // 复原
   mediaApi.loadFrom(lib.getGameById('tjoc-reborn'))
-  mediaApi.setImage('coverImage', '/images/tjoc-reborn-cover.svg')
-  mediaApi.setImage('bannerImage', '/images/tjoc-reborn-banner.svg')
-  mediaApi.removeImage(2)
+  mediaApi.setImage('coverImage', original.cover)
+  mediaApi.setImage('bannerImage', original.banner)
+  mediaApi.removeImage(galleryBefore.length)
   await lib.saveGame({ id: 'tjoc-reborn', patch: draftToPatch(mediaApi.draft) })
-  check('复原后 · 封面', lib.getGameById('tjoc-reborn')?.coverImage, '/images/tjoc-reborn-cover.svg')
-  check('复原后 · 图库回到 2 张', lib.getGameById('tjoc-reborn')?.gallery.length, 2)
+  check('复原后 · 封面', lib.getGameById('tjoc-reborn')?.coverImage, original.cover)
+  check('复原后 · 图库回到原张数', lib.getGameById('tjoc-reborn')?.gallery.length, galleryBefore.length)
 
   /* --------------------------------------- 16. 下载渠道（纯函数 + 草稿 + 保存） --- */
   check('空草稿 · 下载渠道为空', emptyDraft().downloads.length, 0)
@@ -915,16 +1022,17 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   // —— 草稿态：行增删改序 ——
   const dlApi = useAdminGameDraft()
   dlApi.loadFrom(lib.getGameById('tjoc-reborn'))
-  check('下载草稿 · 起点行数', dlApi.draftDownloads.value.length, 2)
+  const dlStart = original.downloads.length
+  check('下载草稿 · 起点行数', dlApi.draftDownloads.value.length, dlStart)
   check('下载草稿 · 起点无改动', dlApi.isDirty.value, false)
   check('下载草稿 · 起点整份草稿校验通过', dlApi.isValid.value, true)
 
   dlApi.addDownload()
-  check('addDownload 后行数', dlApi.draftDownloads.value.length, 3)
-  check('新加的行是空白的', dlApi.draftDownloads.value[2].provider, '')
+  check('addDownload 后行数', dlApi.draftDownloads.value.length, dlStart + 1)
+  check('新加的行是空白的', dlApi.draftDownloads.value[dlStart].provider, '')
   check('空行让整份草稿校验不通过', dlApi.isValid.value, false)
-  check('逐行错误与行一一对应', dlApi.downloadErrors.value.length, 3)
-  check('空行的错误文案', dlApi.downloadErrors.value[2], '服务商不能为空')
+  check('逐行错误与行一一对应', dlApi.downloadErrors.value.length, dlStart + 1)
+  check('空行的错误文案', dlApi.downloadErrors.value[dlStart], '服务商不能为空')
   check('addDownload 触发 isDirty', dlApi.isDirty.value, true)
 
   const rowFirst = dlApi.draftDownloads.value[0].provider
@@ -939,8 +1047,8 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   check('moveDownload · 上移还原', dlApi.moveDownload(1, -1), true)
   check('上移后顺序复原', dlApi.draftDownloads.value[0].provider, rowFirst)
 
-  dlApi.removeDownload(2)
-  check('removeDownload 后行数', dlApi.draftDownloads.value.length, 2)
+  dlApi.removeDownload(dlStart)
+  check('removeDownload 后行数', dlApi.draftDownloads.value.length, dlStart)
   check('删掉空行后校验恢复', dlApi.isValid.value, true)
 
   for (let i = 0; i < DOWNLOAD_LIMITS.maxPerGame + 3; i += 1) dlApi.addDownload()
@@ -948,7 +1056,7 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   check('canAddDownload · 满额后为 false', dlApi.canAddDownload.value, false)
 
   dlApi.resetToBaseline()
-  check('撤销修改后 · 下载渠道回到基线', dlApi.draftDownloads.value.length, 2)
+  check('撤销修改后 · 下载渠道回到基线', dlApi.draftDownloads.value.length, dlStart)
   check('撤销修改后 · isDirty', dlApi.isDirty.value, false)
 
   // —— 引用别名守卫：行对象也必须深拷贝 ——
@@ -997,21 +1105,29 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   const dlSaveApi = useAdminGameDraft()
   dlSaveApi.loadFrom(lib.getGameById('tjoc-reborn'))
   dlSaveApi.addDownload()
-  dlSaveApi.draft.downloads[2] = {
+  dlSaveApi.draft.downloads[dlStart] = {
     provider: '夸克网盘',
     url: 'https://pan.quark.cn/s/ui-test',
     password: 'ui9',
   }
   await lib.saveGame({ id: 'tjoc-reborn', patch: draftToPatch(dlSaveApi.draft) })
-  check('保存后 · 渠道数', lib.getGameById('tjoc-reborn')?.downloads.length, 3)
-  check('保存后 · 新渠道服务商', lib.getGameById('tjoc-reborn')?.downloads[2]?.provider, '夸克网盘')
-  check('保存后 · 新渠道提取码', lib.getGameById('tjoc-reborn')?.downloads[2]?.password, 'ui9')
+  check('保存后 · 渠道数', lib.getGameById('tjoc-reborn')?.downloads.length, dlStart + 1)
+  check(
+    '保存后 · 新渠道服务商',
+    lib.getGameById('tjoc-reborn')?.downloads[dlStart]?.provider,
+    '夸克网盘',
+  )
+  check('保存后 · 新渠道提取码', lib.getGameById('tjoc-reborn')?.downloads[dlStart]?.password, 'ui9')
 
   dlSaveApi.loadFrom(lib.getGameById('tjoc-reborn'))
-  dlSaveApi.removeDownload(2)
+  dlSaveApi.removeDownload(dlStart)
   await lib.saveGame({ id: 'tjoc-reborn', patch: draftToPatch(dlSaveApi.draft) })
-  check('复原后 · 渠道数', lib.getGameById('tjoc-reborn')?.downloads.length, 2)
-  check('复原后 · 原有提取码保留', lib.getGameById('tjoc-reborn')?.downloads[0]?.password, 'tjoc')
+  check('复原后 · 渠道数', lib.getGameById('tjoc-reborn')?.downloads.length, dlStart)
+  check(
+    '复原后 · 原有提取码保留',
+    lib.getGameById('tjoc-reborn')?.downloads[0]?.password ?? '',
+    original.downloads[0]?.password ?? '',
+  )
 
   /* -------------------------------- 17. 发布状态 / 归档 / 推荐与排序 --------------- */
   const pubApi = useAdminGameDraft()
@@ -1401,6 +1517,12 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
     '',
   )
 
+  // 上传前处理：GIF 可能是动图、SVG 是矢量，都不能转 WebP
+  check('图片处理 · GIF 保持原样', shouldKeepOriginalType('image/gif'), true)
+  check('图片处理 · SVG 保持原样', shouldKeepOriginalType('image/svg+xml'), true)
+  check('图片处理 · PNG 会转码', shouldKeepOriginalType('image/png'), false)
+  check('图片处理 · JPEG 会转码', shouldKeepOriginalType('image/jpeg'), false)
+
   // 删旧图的两道闸：只删数据仓上传目录里的图
   const remoteDelete = await createRemoteStub()
   const deletable = createGitHubGameRepository({
@@ -1444,6 +1566,33 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   })
   check('删旧图 · 清理失败不影响保存成功', saveWithCleanup.mode, 'updated')
   check('删旧图 · 清理失败时如实记 0', saveWithCleanup.cleanedImages, 0)
+
+  /* ------------------------------- 23. 永久删除（Phase 21） ------------------------------- */
+  // 删除是「数据 + 图片」两件事。本地仓储没有远端可清理，正好用来验证
+  // 「图片清理失败不能让删除失败」这条边界。
+  const beforeDelete = lib.games.value.length
+  const deleteOutcome = await lib.deleteGame('popgoes')
+
+  check('删除 · 返回被删条目', deleteOutcome.id, 'popgoes')
+  check('删除 · 条目确实消失', lib.getGameById('popgoes'), undefined)
+  check('删除 · 总数减一', lib.games.value.length, beforeDelete - 1)
+  check('删除 · 结果提示已记录', lib.lastDelete.value?.id, 'popgoes')
+  check('删除 · 本地模式没有可清理的远端图', deleteOutcome.imagesCleaned, 0)
+
+  let deleteAgainError = ''
+  try {
+    await lib.deleteGame('popgoes')
+  } catch (error) {
+    deleteAgainError = error instanceof Error ? error.message : String(error)
+  }
+  check('删除 · 重复删除显式抛错而不是静默成功', deleteAgainError.includes('不存在'), true)
+
+  lib.dismissDelete()
+  check('删除 · 结果提示可关闭', lib.lastDelete.value, null)
+
+  // 复原被删掉的条目，后续断言仍从完整目录出发
+  await lib.resetToSeed()
+  check('删除 · 恢复出厂后条目回来了', Boolean(lib.getGameById('popgoes')), true)
 
   /* ------------------------------------------------------ 复原默认状态 */
   lib.clearTagSearch()

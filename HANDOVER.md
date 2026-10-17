@@ -17,15 +17,20 @@
 - 代码仓：`DaXiGua732/fnaf-fan-games-archive`（Public，只有站长有写权限）
 - 数据仓：`DaXiGua732/fnaf-fan-games-data`（Public，管理员有写权限；`db.json` + `images/`）
 
-## 2. 当前状态快照（2026-09-30）
+## 2. 当前状态快照（2026-10-17）
 
 | 项 | 状态 |
 | --- | --- |
-| 计划书 20 个阶段 | ✅ **全部完成**（0–19，Phase 20 测试由贯穿全程的门禁体系覆盖） |
-| 线上部署 | ✅ 已部署并**用真实浏览器验证通过**（前台数据渲染 + 后台门禁生效） |
-| 代码仓提交 | ✅ `f1e7b0d`（后台 Phase 1–19，62 files / +13701）+ `9053f82`（API 应用的断言修复） |
-| **⚠️ 本地与远端分叉** | **待收敛**：本地多 2 个提交（`690d0ee` docs + `fb23d2d` fix），远端多 1 个内容相同的 API 提交。**在用户自己的终端执行**：`git pull --rebase origin main && git push origin main` |
-| 已知缺口 | 图库内「删除 / 排序」的 **UI 层**断言（组件已实现）；本地仓的写入路径在生产上不可达（见 §7） |
+| 计划书 20 个阶段 | ✅ **全部完成**（0–20，Phase 20 测试由贯穿全程的门禁体系覆盖） |
+| 线上部署 | ✅ 已部署并用真实浏览器验证；**数据仓的改动不会自动触发构建**，现由每小时定时构建兜底 |
+| 后台能力 | ✅ 增删改查 / 批量 / 标签 / 图片上传（自动 WebP 压缩）/ 预览 / 永久删除 / 操作署名 |
+| 代码仓提交 | ⚠️ 本地领先 `origin/main`（含后台功能、交接文档、删除与压缩功能），**需要用户在自己终端 `git push origin main`** |
+| 测试基线 | ✅ typecheck + **selftest 450** + **smoke 16** + **UI 点击 69 步** + build 全绿 |
+| 已知缺口 | 浏览量仍是静态基数；Giscus 未启用（缺 app 安装）；数据仓未加其他协作者 |
+
+> ⚠️ **断言已改成从数据推导期望值**：`selftest` 会在 `data:pull` 之后跑，
+> 所以不允许再写死「6 款」「5 位作者」「封面一定是某个路径」。新增断言时先问一句：
+> 「后台改一条正常的数据，这条断言会不会挂？」会挂就说明它编码了数据内容。
 
 ## 3. 架构：数据流（最核心的一张图）
 
@@ -50,11 +55,14 @@
 npm run dev            # 本地开发（读 src/data/db.json —— 可能是旧快照，见下）
 npm run data:pull      # 从数据仓同步 db.json 到本地（部署前自动执行；本地开发需手动）
 npm run verify         # 全部门禁：typecheck + selftest + smoke + build（提交/推送前必跑）
+npm run test:ui        # 浏览器点击测试（先另开终端 npm run dev；需要系统 Chrome）
 npm run smoke          # 只跑 SSR 冒烟（16 条路由）
-npm run selftest       # 只跑断言集（433 项，含静态守卫）
+npm run selftest       # 只跑断言集（450 项，含静态守卫）
 ```
 
 - **部署**：推 `main` 即自动构建发布（`.github/workflows/deploy.yml`，构建前自动 `data:pull`）
+- **数据更新后的上线时机**：数据仓提交不触发代码仓 workflow；`deploy.yml` 有每小时一次的
+  定时构建兜底。要立刻生效：Actions → Deploy to GitHub Pages → Run workflow
 - **回滚**：对数据仓做 `git revert`（数据仓历史就是完整审计日志）；代码回滚同理
 
 ## 5. 关键设计决策与"为什么"（每条都在 README 有详细章节）
@@ -105,7 +113,8 @@ npm run selftest       # 只跑断言集（433 项，含静态守卫）
 按"再踩一次的代价"排序，完整版见 `.workbuddy/memory/MEMORY.md`：
 
 1. **CI 上的 selftest 用的是「数据仓里被编辑过的数据」**（deploy 会先 `data:pull`）——
-   本地全绿 ≠ CI 全绿。凡是**前提隐含在数据里**的断言都会假失败
+   本地全绿 ≠ CI 全绿。凡是**前提隐含在数据里**的断言都会假失败。
+   现有断言已改成从数据推导期望值；新增断言必须继续守这条规则。
 2. **sessionStorage 不跟着 `window.open` 的新标签页走**（预览页拿到 null）——
    跨标签页传数据用 **localStorage**，且**读完即清**
 3. **`git push` 在这个环境推不了**（沙箱代理 502；清掉代理又直连超时）——
@@ -125,29 +134,29 @@ npm run selftest       # 只跑断言集（433 项，含静态守卫）
 
 | 项 | 说明 |
 | --- | --- |
-| 图库内「删除 / 排序」的 UI 断言 | 组件已实现（`AdminGalleryEditor`），缺 UI 层用例 |
-| 本地仓的写入路径在生产不可达 | 未登录进不了后台 → `publicGameRepository` 实际只承担前台只读。其写入 / 存档 / 重置能力暂留（断言覆盖着），Phase 19/20 曾标记可清理 |
-| 「删除游戏」未提供 | 数据会孤儿化其图片；当前 UI 刻意不暴露删除（下线用 `unpublishGame`） |
-| 图片的 WebP 转换 / 尺寸检查自动裁剪 | 计划书 Phase 17 建议项，按"无实际需求不引入复杂处理"暂缓 |
+| 浏览量 | `viewCounter.ts` 是适配器 + 静态基数，**未接任何后端**。接真实服务只需实现 `ViewProvider` 并在 `main.ts` 注册 |
+| 评论 | Giscus `enabled: false`、配置留空。启用需要建公开评论仓 + 安装 giscus App（网页操作，无法代劳） |
 | 多管理员 | 数据仓还没加协作者；加人命令见 `admin_phase13_persistence_decision.md` §15 |
+| 数据更新延迟 | 数据仓变更不触发代码仓构建，最长要等 1 小时的定时构建；急用则手动 Run workflow |
+| 图片处理 | 已做长边缩放 + WebP；**未做自动裁剪**（按比例留白是设计选择，不是缺陷） |
 
 ## 9. 质量门禁（改动之后必须全绿）
 
 ```
 npm run verify
-# = typecheck + selftest(433) + smoke(16) + build
+# = typecheck + selftest(450) + smoke(16) + build
 ```
 
 - `selftest`：深模块断言 + **静态守卫**（扫源码的三条红线）+ 仓储/持久化/上传契约
 - `smoke`：SSR 渲染 16 条路由（公开 6 + 后台 10），断言外壳分离与关键内容
-- `UI 点击测试`（`.tmp/ui-test.mjs`，非版本管理）：68 步真实浏览器点击，
-  覆盖计划书 §21 后台专项与 §22 前台回归
+- `UI 点击测试`（`scripts/ui-test.mjs`，**已纳入版本管理**，`npm run test:ui`）：
+  69 步真实浏览器点击，覆盖计划书 §21 后台专项与 §22 前台回归
 - **公开站逐字节基线**（`.tmp/public-baseline`）：公开站产物有任何变化都必须解释
 
 ## 10. 新会话怎么开始
 
 1. 读本文件 → 读 `README.md`（项目手册，最完整）
-2. `npm run verify` 确认全绿，`npm run dev` 起本地
+2. `npm run verify` 确认全绿，`npm run dev` 起本地；涉及交互行为时再跑 `npm run test:ui`
 3. 有疑问先查 `README.md` 对应章节，再查 `.workbuddy/memory/MEMORY.md` 的踩坑记录
 4. 改动之后：`npm run verify` 全绿 → 按阶段提交（**不要攒大批量**，见计划书 §23 的教训）
 5. 涉及数据仓 / 部署的操作，先读 `admin_phase13_persistence_decision.md`

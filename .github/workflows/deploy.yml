@@ -3,6 +3,15 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  # ⚠️ 数据仓的改动**不会**触发代码仓的 workflow：后台保存成功后，
+  #    线上必须等一次重新构建，否则前台永远是旧快照。
+  #    这条每小时一次的兜底重建就是「后台改完最终能上线」的保证；
+  #    要立刻生效：Actions → Deploy to GitHub Pages → Run workflow，
+  #    或向本仓发一个 repository_dispatch（event_type = data-updated）。
+  schedule:
+    - cron: '17 * * * *'
+  repository_dispatch:
+    types: [data-updated]
   workflow_dispatch:
 
 # Pages 部署需要 id-token 用于 OIDC（deploy-pages 用它在环境上换取部署权限）

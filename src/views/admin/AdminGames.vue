@@ -28,6 +28,8 @@ const {
   setPage,
   setPageSize,
   lastOutcome,
+  lastDelete,
+  dismissDelete,
   dataOk,
   dismissOutcome,
   storage,
@@ -89,6 +91,37 @@ const pageSizeValue = computed<string>({
       勾选后可对多款作品执行批量操作；点表格行内的「编辑」进入单条编辑页。
     </p>
 
+    <!-- ============ 删除结果 ============ -->
+    <div
+      v-if="lastDelete"
+      class="mt-8 border border-[#cccccc] border-l-4 border-l-[#ff0000] px-6 py-5"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p class="swiss-meta text-black/60">删除结果</p>
+          <p class="mt-2 font-sans text-sm font-bold">
+            已永久删除《{{ lastDelete.title }}》
+          </p>
+          <p class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
+            <template v-if="lastDelete.imagesCleaned > 0">
+              同时清理了 {{ lastDelete.imagesCleaned }} 张只被它引用的上传图片。
+            </template>
+            <template v-else>它没有专属的上传图片需要清理。</template>
+            {{ STORAGE_NOTICE[lastDelete.storage] }}
+          </p>
+        </div>
+        <button
+          type="button"
+          class="rounded-none border border-transparent px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-black/60 transition-colors duration-150 ease-out hover:text-[#ff0000]"
+          @click="dismissDelete"
+        >
+          知道了
+        </button>
+      </div>
+    </div>
+
     <!-- ============ 数据现状 ============ -->
     <div class="mt-8 border border-[#cccccc] border-l-4 border-l-black px-6 py-5">
       <p class="swiss-meta text-black/60">数据现状</p>
@@ -97,8 +130,9 @@ const pageSizeValue = computed<string>({
       <template v-if="storage === 'remote'">
         <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
           数据来自 <span class="font-bold text-black">数据仓</span>。你的改动会通过 GitHub API
-          <span class="font-bold text-black">提交到数据仓</span> —— 那是线上真实数据，
-          大约 1 分钟后前台会更新。提交历史就是完整的回滚手段。
+          <span class="font-bold text-black">提交到数据仓</span> —— 那是线上真实数据。
+          前台读的是构建期快照，需要下一次构建才会更新
+          （自动构建每小时一次，也可以在 GitHub 上手动触发）；提交历史就是完整的回滚手段。
         </p>
         <p class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
           多人同时编辑时，提交若撞车会自动重读最新内容再重放你的改动，无需手工处理。

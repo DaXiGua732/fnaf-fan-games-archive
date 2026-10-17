@@ -50,6 +50,8 @@ const notice = ref('')
 const uploading = ref(false)
 /** 刚上传成功（用于说明「Pages 还没跟上」这件事，避免被当成上传失败） */
 const uploadedJustNow = ref(false)
+/** 这一次上传实际做了哪些处理（缩放 / 转 WebP），没处理时为空串 */
+const uploadNote = ref('')
 /** 比例偏离的提示（不拦截） */
 const ratioNotice = ref('')
 /** 上一次上传失败的文件 —— 提供「重试」，不用让用户重新选一遍 */
@@ -83,6 +85,7 @@ const slot = computed(() => (props.field === 'coverImage' ? 'cover' : 'banner'))
 async function handleFile(file: File): Promise<void> {
   ratioNotice.value = ''
   failedFile.value = null
+  uploadNote.value = ''
 
   if (!file.type.startsWith('image/')) {
     notice.value = '只接受图片文件'
@@ -124,7 +127,9 @@ async function handleFile(file: File): Promise<void> {
   uploadedJustNow.value = false
   try {
     releaseObjectUrl()
-    value.value = await uploadImage(file, { gameId: props.gameId, slot: slot.value })
+    const uploaded = await uploadImage(file, { gameId: props.gameId, slot: slot.value })
+    value.value = uploaded.url
+    uploadNote.value = uploaded.note
     uploadedJustNow.value = true
   } catch (error) {
     notice.value = error instanceof Error ? error.message : '上传失败'
@@ -167,12 +172,14 @@ function onUrlInput(event: Event): void {
   if (createdObjectUrl && next !== createdObjectUrl) releaseObjectUrl()
   value.value = next
   notice.value = ''
+  uploadNote.value = ''
 }
 
 function clear(): void {
   releaseObjectUrl()
   clearImage(props.field)
   notice.value = ''
+  uploadNote.value = ''
 }
 
 const URL_INPUT =
@@ -199,6 +206,10 @@ const URL_INPUT =
 
     <p v-else-if="uploadedJustNow" class="swiss-meta mt-2 text-black/60" role="status">
       已上传到数据仓 —— Pages 大约 1 分钟后才会提供这张图，期间预览可能显示不出来
+    </p>
+
+    <p v-if="uploadNote && !uploading" class="swiss-meta mt-2 text-black/60">
+      已自动处理：{{ uploadNote }}
     </p>
 
     <p v-else-if="isLocal" class="swiss-meta mt-2 font-bold text-[#ff0000]">
@@ -237,7 +248,7 @@ const URL_INPUT =
       <p class="swiss-meta mt-2 text-black/45">
         {{
           storage === 'remote'
-            ? '文件会上传到数据仓，返回的完整地址写进本条作品 —— 保存后前台即可使用'
+            ? '文件会上传到数据仓，返回的完整地址写进本条作品 —— 保存后前台即可使用；过大的图会自动缩小并转成 WebP（GIF 保持原样）'
             : '未登录：文件只做本地预览、不会上传（刷新即失效）'
         }}
       </p>

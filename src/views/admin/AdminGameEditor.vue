@@ -37,7 +37,7 @@ import type { StorageKind } from '../../types/admin'
 const props = defineProps<{ id?: string }>()
 
 const router = useRouter()
-const { getGameById, saveGame, availableAuthors, dataOk } = useAdminGames()
+const { getGameById, saveGame, deleteGame, availableAuthors, dataOk } = useAdminGames()
 
 // 用 provide 版本：标签录入等子组件要拿到**同一个**草稿实例
 const {
@@ -164,6 +164,50 @@ async function confirmLeave(): Promise<void> {
 
 function cancelLeave(): void {
   pendingLeavePath.value = ''
+}
+
+/* ---------------------------------------------------------------------------
+   永久删除
+   ---------------------------------------------------------------------------
+   不可逆动作，所以要求**手工输入作品 id** 才能执行 —— 「点两次按钮」挡不住手滑，
+   输入一串自己刚看到的标识才会让人真的意识到删的是哪一条。
+   确认区是页内展开的，不用 window.confirm（可能被静默拦截，见 README §9.6）。
+   --------------------------------------------------------------------------- */
+const confirmingDelete = ref(false)
+const deleteConfirmText = ref('')
+const deleting = ref(false)
+const deleteError = ref('')
+
+const canConfirmDelete = computed(
+  () => Boolean(props.id) && deleteConfirmText.value.trim() === props.id,
+)
+
+function openDelete(): void {
+  confirmingDelete.value = true
+  deleteConfirmText.value = ''
+  deleteError.value = ''
+}
+
+function cancelDelete(): void {
+  confirmingDelete.value = false
+  deleteConfirmText.value = ''
+  deleteError.value = ''
+}
+
+async function confirmDelete(): Promise<void> {
+  if (!props.id || !canConfirmDelete.value || deleting.value) return
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await deleteGame(props.id)
+    // 条目已经不存在了，离开拦截不再有意义
+    allowLeave = true
+    await router.replace({ name: 'admin-games' })
+  } catch (error) {
+    deleteError.value = error instanceof Error ? error.message : '删除失败'
+  } finally {
+    deleting.value = false
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -384,8 +428,8 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
         「已上线」要求有封面、Banner 与至少一个下载渠道
       </span>
       —— 草稿不受这些限制，内容没凑齐时先留在草稿即可。
-      保存目前只写在这台设备的浏览器里（Phase 12），刷新不丢、但不是线上正式数据；
-      写回代码仓库 / 线上要等 Phase 13 / 14 敲定远程方案之后。
+      登录后保存会通过 GitHub API 提交到数据仓；前台读的是构建期快照，
+      需要下一次构建才会更新（自动构建每小时一次，也可以手动触发）。
     </p>
 
     <!-- ============ 保存结果 ============ -->
@@ -615,5 +659,59 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
         </AdminEditorSection>
       </aside>
     </div>
+
+    <!-- ============ 危险操作：永久删除 ============ -->
+    <section
+      v-if="!isNew && game"
+      class="mt-16 border border-[#ff0000] px-6 py-6"
+      aria-labelledby="danger-zone-title"
+    >
+      <p class="swiss-meta text-[#ff0000]">危险操作</p>
+      <h2 id="danger-zone-title" class="mt-2 font-sans text-lg font-bold">永久删除这条作品</h2>
+
+      <p class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
+        删除会从数据仓移除 <span class="font-bold text-black">{{ game.id }}</span>，
+        并清理只被它引用的上传图片。这一步在后台无法撤销 —— 真要找回，
+        只能去数据仓的 git 历史里 revert。
+      </p>
+      <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
+        如果只是不想让它在线上出现，用右栏「发布设置 → 下线」即可；下线不删数据，随时能恢复。
+      </p>
+
+      <div v-if="!confirmingDelete" class="mt-5">
+        <button type="button" :class="ACTION_DANGER" @click="openDelete">删除这条作品</button>
+      </div>
+
+      <div v-else class="mt-5 border-t border-[#ff0000] pt-5" role="alert" aria-live="assertive">
+        <p class="max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
+          请输入作品 id <span class="font-bold text-black">{{ game.id }}</span> 以确认：
+        </p>
+        <div class="mt-3 flex flex-wrap items-stretch gap-3">
+          <input
+            v-model="deleteConfirmText"
+            type="text"
+            autocomplete="off"
+            :placeholder="game.id"
+            :class="[INPUT_CLASS, 'max-w-sm']"
+            :aria-label="`输入 ${game.id} 以确认删除`"
+          />
+          <button
+            type="button"
+            :class="ACTION_DANGER"
+            :disabled="!canConfirmDelete || deleting"
+            @click="confirmDelete"
+          >
+            {{ deleting ? '正在删除……' : '确认永久删除' }}
+          </button>
+          <button type="button" :class="ACTION_SECONDARY" :disabled="deleting" @click="cancelDelete">
+            取消
+          </button>
+        </div>
+
+        <p v-if="deleteError" class="mt-3 max-w-[78ch] font-sans text-xs text-[#ff0000]" role="alert">
+          {{ deleteError }}
+        </p>
+      </div>
+    </section>
   </div>
 </template>

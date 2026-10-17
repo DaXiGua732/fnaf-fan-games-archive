@@ -29,28 +29,25 @@ Five Nights at Freddy's **同人游戏资源导航站**。纯前端静态站，�
 
 另外：**改完必须跑 `npm run verify`**，四道关卡全绿才算完成（见 §2）。
 
-### 0.1 后台管理系统（进行中）
+### 0.1 后台管理系统（已完成）
 
-项目正在按 [`admin_backend_development_plan.md`](./admin_backend_development_plan.md) 的
-Phase 0–20 逐阶段加装后台。**必须一个阶段一个阶段做，每阶段结束停下等用户确认**。
+后台已按 [`admin_backend_development_plan.md`](./admin_backend_development_plan.md) 的
+Phase 0–20 全部落地，并已在线上实际使用。**后续改动仍按「一次一个阶段、每阶段停下确认」的协议走。**
 
 | 文档 | 作用 |
 | --- | --- |
 | `admin_backend_development_plan.md` | 计划书：20 个阶段的定义、执行协议（规则 1–6）、回复格式 |
 | `admin_phase0_design_freeze.md` | 设计冻结：审计结论、架构决策、数据模型增量方案、路由与文件规划 |
 
-已完成：**Phase 0（审计与设计冻结）、Phase 1（Admin Layout）、Phase 2（游戏管理列表）、
-Phase 3（批量操作）、Phase 4（编辑页骨架）、Phase 5（基础字段编辑）、Phase 6（标签管理）、
-Phase 7（图片管理 UI）、Phase 8（下载资源管理）、Phase 9（发布状态系统）、
-Phase 10（前台与后台状态联动）、Phase 11（Repository Layer）、Phase 12（本地仓储持久化）、
-Phase 13（持久化方案决策）、Phase 15（认证门禁 + `GitHubGameRepository`）、
-Phase 16（图片上传到数据仓）**。
+已完成：**Phase 0–20 全部**。其中 Phase 14（数据库设计）不适用 —— `db.json` 就是库；
+Phase 20（测试）由贯穿全程的门禁体系覆盖：`typecheck + selftest + smoke + UI 点击测试 + build`。
 
-> **后台现在能改线上数据、也能传图了**：登录后读写数据仓的 `db.json`，
+> **后台能改线上数据、能传图、能预览、能永久删除作品**：登录后读写数据仓的 `db.json`，
 > 图片上传到数据仓的 `images/`，保存 = 一次提交，git 历史即回滚手段。
 > 未登录时后台不可达（登录门禁）。
-> 下一步按计划书是 Phase 17（图片处理：类型 / 大小 / 尺寸校验、上传进度、删除旧图）。
-> （Phase 14 数据库设计不适用：`db.json` 就是库。）
+>
+> ⚠️ **数据仓的改动不会触发代码仓的 workflow**。线上由每小时一次的定时构建兜底；
+> 需要立刻生效时，在 GitHub Actions 里手动运行 `Deploy to GitHub Pages`。
 
 后台路由（Hash 形态，全部挂在 `AdminLayout` 下）：
 
@@ -60,7 +57,8 @@ Phase 16（图片上传到数据仓）**。
 | `/#/admin/login` | `AdminLogin.vue` | ✅ **唯一豁免认证的后台路由**（Phase 15） |
 | `/#/admin/games` | `AdminGames.vue` | ✅ Phase 2 / 3 |
 | `/#/admin/games/new` | `AdminGameEditor.vue` | ✅ 全部区块（P5–P9） |
-| `/#/admin/games/:id/edit` | `AdminGameEditor.vue` | ✅ 全部区块（P5–P9） |
+| `/#/admin/games/:id/edit` | `AdminGameEditor.vue` | ✅ 全部区块（P5–P9）+ 永久删除 |
+| `/#/admin/preview` | `AdminGamePreview.vue` | ✅ 未保存草稿的预览（Phase 18） |
 | `/#/admin/tags` | `AdminTags.vue` | ✅ 搜索 / 重命名 / 删除（Phase 6） |
 | `/#/admin/authors` 等 | 尚未创建 | 延伸 |
 | `/#/admin/*`（兜底） | `AdminNotFound.vue` | ✅ |
@@ -68,9 +66,9 @@ Phase 16（图片上传到数据仓）**。
 **进入后台的入口**：公开站 Header 的导航项「后台管理」（`Layout.vue` 的 `NAV_ITEMS`），
 一次改动同时覆盖桌面导航、移动端菜单与页脚站点导航三处。
 
-> ⚠️ 这个入口目前**没有权限校验** —— 任何访客都能进后台。计划书 Phase 15 才接认证，
-> 在那之前**不要把带真实数据的版本公开部署**。`NAV_ITEMS` 里 `dev: true` 的两项
-> （调试台 / 样式规范）才是上线前该移除的，后台入口不是。
+> 入口对所有访客可见，但进入后立刻被登录门禁拦到登录页（Phase 15）。
+> 真正保护数据的是**令牌权限**（细粒度 PAT 只授权数据仓），不是隐藏入口。
+> `NAV_ITEMS` 里 `dev: true` 的两项（调试台 / 样式规范）才是上线前该决定是否保留的。
 
 ### 前台可见性（Phase 10 起生效）
 
@@ -134,6 +132,8 @@ npm run data:pull      # 从数据仓拉 db.json 覆盖到 src/data/db.json
 ```
 
 - **部署**：`deploy.yml` 在构建前自动执行这一步 ✓
+- **线上生效时机**：数据仓的提交**不会**触发代码仓的 workflow。`deploy.yml` 有每小时一次的
+  定时构建兜底，也可以在 Actions 里手动 Run workflow（需要立刻生效时用这个）。
 - **本地开发**：需要手动跑一次 —— 否则你看到的是上一次同步的快照
   （这也是「后台改了、图片也传了，本地点开却还是旧的」的原因）
 
@@ -158,11 +158,11 @@ images/games/<作品slug>/<位置>-<时间戳>.<扩展名>
 
 | 决策 | 理由 |
 | --- | --- |
-| 文件名带**时间戳** | 图片是公开地址、会被浏览器与 CDN 缓存。沿用固定名覆盖上传会让人一直看到旧图；换名即换地址，缓存自然失效（代价是旧文件留在仓库里 —— 「删除旧图」是 Phase 17） |
+| 文件名带**时间戳** | 图片是公开地址、会被浏览器与 CDN 缓存。沿用固定名覆盖上传会让人一直看到旧图；换名即换地址，缓存自然失效（旧文件由「保存成功后的孤儿清理」负责删除） |
 | 按**作品 slug** 分目录 | 让人在仓库里翻找图片时看得懂。新作品还没有 id，就用标题的 slug 顶上 |
 | 上传期间**禁用入口** | 否则重复拖放会传上去好几份 |
 | 本地模式**明确抛错** | 而不是返回一个假地址 —— 后者会让用户以为图片已经上传成功了 |
-| 只做**长度/类型/大小**的基础校验 | 尺寸检查、上传进度、删旧图是 Phase 17，不在没有需求时提前做 |
+| 上传前**自动压缩** | 长边超过对应位置的上限就等比缩小，非 GIF/SVG 一律转 WebP（quality 0.88）；转完反而更大时保留原图。压缩在 composable 层完成，仓储仍然只负责「把给的字节原样存进去」 |
 
 > ⚠️ **`putFile` 与 `putBinaryFile` 是两个函数**：文本要走 UTF-8 → base64，
 > 图片的字节必须**原样** base64 上送。把 JPEG 字节当文本处理会直接损坏文件。
@@ -416,7 +416,8 @@ UI 于是如实说「只写入了内存」。**写失败绝不假装成功。**
 ### 测试覆盖对照（Phase 20）
 
 计划书 §21（后台专项）/ §22（前台回归）逐项对照。`selftest` = 纯函数与深模块断言，
-`UI` = 浏览器点击测试（68 步），`冒烟` = SSR 渲染 16 条路由，`字节对比` = 公开站产物逐字节基线。
+`UI` = `npm run test:ui`（69 步真实浏览器点击），`冒烟` = SSR 渲染 16 条路由，
+`字节对比` = 公开站产物逐字节基线。
 
 **§21 后台专项**
 
@@ -429,9 +430,11 @@ UI 于是如实说「只写入了内存」。**写失败绝不假装成功。**
 | 编辑：**预览** | — | ✅ | 新标签页渲染真实前台详情页（Phase 18） |
 | 状态：draft / published / offline | ✅ | ✅ | 前台可见性联动（Phase 10） |
 | 图片：上传 / 替换 / 尺寸不合格 / 失败重试 | ✅ | ✅ | Phase 16 / 17 |
-| 图片：删除（图库内移除） | — | — | 组件已实现，UI 断言是**当前唯一的缺口** |
-| 图片：排序（上移 / 下移） | — | — | 同上 |
+| 图片：删除（图库内移除） | ✅ | ✅ | 删除后由保存路径清理孤儿图 |
+| 图片：排序（上移 / 下移） | ✅ | ✅ | |
+| 图片：上传前压缩（WebP / 降采样） | ✅ | ✅ | 上传后扩展名为 `.webp`（Phase 17） |
 | 下载：新增 / 删除 / 修改 / 错误 URL / 空 URL / 提取码为空 | ✅ | ✅ | Phase 8 |
+| 作品：永久删除 | ✅ | ✅ | 输入 id 二次确认，删除后清理专属图片 |
 
 **§21 之外（Phase 15–19 新增的能力）**：登录门禁 / 无效令牌报错 / 数据源三态 /
 图片上传到数据仓 / 预览 / 删旧图的三道闸 / 操作署名 —— 全部有断言与 UI 用例。
@@ -657,23 +660,24 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 `npm run smoke` 只验证「路由能渲染出 DOM」，验证不了「点下去会发生什么」。
 勾选、批量执行、二次确认、保存、未保存拦截、标签增删 —— 这些只能靠真实浏览器点。
 
-脚本在 `.tmp/ui-test.mjs`（`.tmp/` 已 gitignore，**不纳入版本管理**，也不进 package.json）。
+脚本在 `scripts/ui-test.mjs`（**已纳入版本管理**），`playwright` 在 `devDependencies` 里。
 它用 Playwright 驱动**系统已安装的 Chrome**（`channel: 'chrome'`），因此**不需要下载 Chromium**。
+脚本从自身位置推导项目根目录，所以从任何 cwd 启动都可以。
 
 ```bash
-# 1. 装 playwright 到隔离工作区（不进项目依赖）
-cd "C:/Users/wangjinling/.workbuddy/binaries/node/workspace" && npm install playwright --ignore-scripts
+# 1. 另开一个终端起 dev server
+npm run dev
 
-# 2. 跑（对 dev server，需要 npm run dev 起在 5173）
-node .tmp/ui-test.mjs
+# 2. 跑（默认 http://localhost:5173）
+npm run test:ui
 
 # 3. 跑（对生产构建预览，需要 npm run build && npm run preview -- --port 4173）
-BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 node .tmp/ui-test.mjs
+BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 ```
 
 > ⚠️ **三个必须知道的坑**（写这个脚本时全踩过）：
-> 1. **ESM 的裸导入不认 `NODE_PATH`**。playwright 装在隔离目录时，必须用
->    `createRequire('file:///<workspace>/package.json')` 显式解析，否则 `ERR_MODULE_NOT_FOUND`。
+> 1. **脚本必须自己定位项目根目录**（`import.meta.url`），不要依赖 cwd ——
+>    从 `scripts/` 或仓库根启动时，读 `src/data/db.json` 和写截图目录的相对路径基准不同。
 > 2. **`innerText` 会反映 CSS 的 `text-transform`**。卡片标题带 `uppercase`、
 >    `.swiss-meta`（`Compliance` 徽章）也带 `uppercase`，所以 `innerText` 拿到的全是**大写**。
 >    所有文本断言必须大小写不敏感 —— 否则会得到「页面明明渲染了却说缺内容」的假失败。
@@ -695,8 +699,10 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 node .tmp/ui-test.mjs
 │   └── images/*.svg                # 占位图，由 npm run assets 生成
 ├── scripts/
 │   ├── gen-placeholders.mjs        # 占位图生成器
+│   ├── pull-data.mjs               # 从数据仓同步 db.json（部署前自动）
 │   ├── selftest.mts                # 命令行入口：深模块自检
-│   └── smoke.ts                    # 命令行入口：SSR 冒烟
+│   ├── smoke.ts                    # 命令行入口：SSR 冒烟
+│   └── ui-test.mjs                 # 命令行入口：浏览器点击测试（需 dev server + Chrome）
 ├── src/
 │   ├── components/                 # 公开站可复用 UI 组件
 │   │   ├── Button.vue              # 基础按钮（solid/outline/ghost × md/lg）
@@ -722,8 +728,11 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 node .tmp/ui-test.mjs
 │   │       └── AdminGameTable.vue  # 后台游戏列表（含勾选）
 │   ├── composables/
 │   │   ├── useGameLibrary.ts       # ★ 前台深模块：搜索/交叉过滤/排序/分页（只读单例）
-│   │   ├── useAdminGames.ts        # ★ 后台深模块：状态/筛选/排序/分页/勾选/写入/标签级操作
+│   │   ├── useAdminGames.ts        # ★ 后台深模块：状态/筛选/排序/分页/勾选/写入/删除/标签级操作
 │   │   ├── useAdminGameDraft.ts    # ★ 编辑器草稿态（**工厂**，非单例）+ 纯函数校验/转换 + provide/inject
+│   │   ├── useAdminAuth.ts         # 令牌登录状态
+│   │   ├── useGamePreview.ts       # 草稿 → 预览页的跨标签页传递
+│   │   ├── useSearchField.ts       # 搜索框绑定（避免受控输入回写光标）
 │   │   └── useViewCounter.ts       # 浏览量（remote / static 双模式）
 │   ├── config/giscus.ts            # Giscus 配置 + 启用步骤说明
 │   ├── data/
@@ -731,7 +740,8 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 node .tmp/ui-test.mjs
 │   ├── repositories/               # ★ 数据访问层（Phase 11）
 │   │   ├── gameRepository.ts       # 接口契约：后台只允许通过它读写数据
 │   │   ├── localGameRepository.ts  # 本地实现（localStorage，刷新不丢）· 唯一读 db.json 的地方
-│   │   ├── remoteGameRepository.ts # 远程实现占位（Phase 13 / 14 接入，调用即抛错）
+│   │   ├── githubGameRepository.ts # 远程实现（数据仓 db.json + images/，含 409 重放与删图闸）
+│   │   ├── dataRepo.ts             # 数据仓坐标与 Pages 基址
 │   │   └── index.ts                # ★ 当前生效的仓储 —— 唯一的切换点
 │   ├── dev/
 │   │   ├── libraryAssertions.ts    # ★ 前台断言集（浏览器与命令行共用）
@@ -751,7 +761,10 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 node .tmp/ui-test.mjs
 │   │   ├── asset.ts                # ★ assetUrl()：拼接 BASE_URL
 │   │   ├── clipboard.ts            # copyText()：两级回退的剪贴板写入
 │   │   ├── datetime.ts             # ★ formatTimestamp()：按查看者本地时区渲染
-│   │   └── gameDefaults.ts         # ★ normalizeGame()：补齐可选字段的缺省值
+│   │   ├── gameDefaults.ts         # ★ normalizeGame()：补齐可选字段的缺省值
+│   │   ├── gameFactory.ts          # ★ 新建 / 打补丁 / slugify / 深拷贝
+│   │   ├── imageInspect.ts         # 尺寸校验与比例提示（纯函数 + 浏览器读数）
+│   │   └── imageProcess.ts         # 上传前缩放 + 转 WebP（GIF/SVG 保持原样）
 │   └── views/
 │       ├── Home.vue                # 首页：Hero + 筛选 + 网格 + 分页
 │       ├── GameDetail.vue          # 详情页：标题 + Banner + 数据表格 + 下载 + 评论
@@ -759,8 +772,10 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 node .tmp/ui-test.mjs
 │       ├── DebugLibrary.vue        # 调试台（/debug，上线前可移除）
 │       ├── StyleSpecimen.vue       # 视觉规范验收页（/style，上线前可移除）
 │       └── admin/                  # 后台视图
+│           ├── AdminLogin.vue      # /admin/login：令牌登录（唯一豁免认证的后台路由）
 │           ├── AdminGames.vue      # /admin/games：游戏管理列表
-│           ├── AdminGameEditor.vue # /admin/games/new 与 /:id/edit：编辑页
+│           ├── AdminGameEditor.vue # /admin/games/new 与 /:id/edit：编辑页（含永久删除）
+│           ├── AdminGamePreview.vue # /admin/preview：未保存草稿的预览
 │           ├── AdminTags.vue       # /admin/tags：标签管理
 │           └── AdminNotFound.vue   # 后台 404（防止输错的后台地址掉回公开站外壳）
 ├── tailwind.config.js              # ★ 覆盖式配置：违规工具类直接不生成

@@ -92,6 +92,8 @@ async function trackFiles(files: FileList | null | undefined): Promise<void> {
 
     const accepted: string[] = []
     let skipped = Array.from(files).length - usable.length
+    /** 这一批里被压缩过的张数（用于如实汇报，而不是笼统说「已上传」） */
+    let compressed = 0
 
     try {
       for (const file of usable) {
@@ -120,7 +122,9 @@ async function trackFiles(files: FileList | null | undefined): Promise<void> {
 
         uploadProgress.value = { ...uploadProgress.value, done: uploadProgress.value.done + 1 }
         try {
-          accepted.push(await uploadImage(file, { gameId: props.gameId, slot: 'gallery' }))
+          const uploaded = await uploadImage(file, { gameId: props.gameId, slot: 'gallery' })
+          accepted.push(uploaded.url)
+          if (uploaded.compression) compressed += 1
           room -= 1
         } catch (error) {
           skipped += 1
@@ -135,10 +139,11 @@ async function trackFiles(files: FileList | null | undefined): Promise<void> {
 
     const added = addImages(accepted)
     if (failedFiles.value.length === 0) {
+      const squeezed = compressed > 0 ? `，其中 ${compressed} 张已自动压缩为 WebP` : ''
       notice.value =
         skipped > 0
-          ? `已上传 ${added} 张，跳过 ${skipped} 张（非图片 / 超 ${Math.round(IMAGE_LIMITS.maxFileBytes / 1024 / 1024)}MB / 尺寸不合格 / 超出上限）`
-          : `已上传 ${added} 张到数据仓`
+          ? `已上传 ${added} 张${squeezed}，跳过 ${skipped} 张（非图片 / 超 ${Math.round(IMAGE_LIMITS.maxFileBytes / 1024 / 1024)}MB / 尺寸不合格 / 超出上限）`
+          : `已上传 ${added} 张到数据仓${squeezed}`
     }
     return
   }

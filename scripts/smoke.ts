@@ -41,6 +41,38 @@ function anyGameTitle(index = 0): string {
   return db.games[index]?.title ?? ''
 }
 
+/**
+ * 冒烟用的数据探针。
+ *
+ * ⚠️ 部署前会 `data:pull`，所以这里读到的可能是**站长刚编辑过**的数据。
+ * 页面内容断言要跟着数据走：取「前台可见」的作品当探针，
+ * 而不是假设某个标题 / 作者 / 下载渠道永远存在。
+ */
+interface SmokeGame {
+  id: string
+  title: string
+  author: string
+  engine: string
+  status?: string
+  archived?: boolean
+  tags?: string[]
+  gallery?: string[]
+  downloads?: { provider: string }[]
+}
+
+const SMOKE_GAMES: SmokeGame[] = (
+  JSON.parse(readFileSync(join(process.cwd(), 'src/data/db.json'), 'utf8')) as {
+    games: SmokeGame[]
+  }
+).games
+
+const VISIBLE_GAMES = SMOKE_GAMES.filter(
+  (game) => (game.status ?? 'published') === 'published' && !game.archived,
+)
+
+/** 详情页 / 编辑页的探针：优先 tjoc-reborn，被下线了就退到第一款可见作品 */
+const DETAIL_GAME = VISIBLE_GAMES.find((game) => game.id === 'tjoc-reborn') ?? SMOKE_GAMES[0]!
+
 interface SmokeCase {
   path: string
   name: string
@@ -144,20 +176,27 @@ const CASES: SmokeCase[] = [
     path: '/',
     name: '首页',
     shell: 'public',
-    expect: ['FNAF Fan Games', '游戏库', '关键词搜索', 'The Joy of Creation: Reborn', 'POPGOES'],
+    // 卡片标题从数据里取（前两款可见作品），不写死具体游戏
+    expect: [
+      'FNAF Fan Games',
+      '游戏库',
+      '关键词搜索',
+      ...VISIBLE_GAMES.slice(0, 2).map((game) => game.title),
+    ],
   },
   {
-    path: '/game/tjoc-reborn',
+    path: `/game/${DETAIL_GAME.id}`,
     name: '详情页（命中）',
     shell: 'public',
     expect: [
-      'The Joy of Creation: Reborn',
-      'Unreal Engine 4',
+      DETAIL_GAME.title,
+      DETAIL_GAME.engine,
       '作品简介',
       '作品信息',
       '资源下载',
-      '提取码',
-      '123云盘下载',
+      ...(DETAIL_GAME.downloads?.length
+        ? ['提取码', `${DETAIL_GAME.downloads[0].provider}下载`]
+        : []),
       '浏览',
       '评论区',
       '评论功能待接入',
@@ -302,38 +341,37 @@ const CASES: SmokeCase[] = [
     ],
   },
   {
-    path: '/admin/games/tjoc-reborn/edit',
+    path: `/admin/games/${DETAIL_GAME.id}/edit`,
     name: '后台·编辑游戏',
     shell: 'admin',
     // 后台页面必须带令牌，否则会被登录门禁拦到登录页
     token: true,
     expect: [
       '编辑游戏',
-      'tjoc-reborn',
-      'The Joy of Creation: Reborn',
+      DETAIL_GAME.id,
+      DETAIL_GAME.title,
       '返回列表',
       '保存',
       '发布',
       '基本信息',
       // 已加载进输入框的真实数据
-      'Nikson',
-      'Unreal Engine 4',
-      // 标签区块（Phase 6 已接入）
-      '本条作品还没有标签',
-      // 图片区块（Phase 7 已接入）：该作品有封面 + 2 张图库
+      DETAIL_GAME.author,
+      DETAIL_GAME.engine,
+      // 标签区块（Phase 6）：有标签就显示标签，没有就显示空状态
+      ...(DETAIL_GAME.tags?.length ? [DETAIL_GAME.tags[0]] : ['本条作品还没有标签']),
+      // 图片区块（Phase 7）：有图库就显示序号与排序按钮
       '封面与宣传图',
       'Banner 宣传图',
       '图库',
-      'NO.01',
-      '上移',
-      '下移',
-      '查看',
-      // 下载区块（Phase 8 已接入）：该作品有 123云盘 + 百度网盘
+      ...(DETAIL_GAME.gallery?.length
+        ? ['NO.01', '上移', '下移', '查看']
+        : ['图库还是空的']),
+      // 下载区块（Phase 8）
       '下载资源',
-      '123云盘',
-      '百度网盘',
-      '提取码',
-      // 发布设置与推荐排序（Phase 9 已接入）
+      ...(DETAIL_GAME.downloads?.length
+        ? [DETAIL_GAME.downloads[0].provider, '提取码']
+        : ['还没有下载渠道']),
+      // 发布设置与推荐排序（Phase 9）
       '发布设置',
       '推荐与排序',
       '未归档',
@@ -353,8 +391,6 @@ const CASES: SmokeCase[] = [
       '使用数量',
       '创建时间',
       '操作',
-      // db.json 里没有任何标签 → 空状态
-      '还没有任何标签',
       // 标签没有独立存储这件事必须写在页面上
       'Phase 14',
     ],

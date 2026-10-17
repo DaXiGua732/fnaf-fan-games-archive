@@ -11,6 +11,7 @@
     "assets": "node scripts/gen-placeholders.mjs",
     "selftest": "esbuild scripts/selftest.mts --bundle --platform=node --format=esm --external:vue --outfile=.tmp/selftest.mjs --log-level=warning && node .tmp/selftest.mjs",
     "smoke": "vite build --config vite.smoke.config.ts --logLevel warn && node .tmp/smoke-build/smoke.js",
+    "test:ui": "node scripts/ui-test.mjs",
     "verify": "npm run typecheck && npm run selftest && npm run smoke && npm run build",
     "preview": "vite preview"
   },
@@ -19,14 +20,15 @@
     "vue-router": "^4.5.0"
   },
   "optionalDependencies": {
-    "@esbuild/win32-x64": "0.25.12",
     "@esbuild/linux-x64": "0.25.12",
-    "@rollup/rollup-win32-x64-msvc": "4.63.5",
-    "@rollup/rollup-linux-x64-gnu": "4.63.5"
+    "@esbuild/win32-x64": "0.25.12",
+    "@rollup/rollup-linux-x64-gnu": "4.63.5",
+    "@rollup/rollup-win32-x64-msvc": "4.63.5"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",
     "autoprefixer": "^10.4.20",
+    "playwright": "^1.64.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2",
