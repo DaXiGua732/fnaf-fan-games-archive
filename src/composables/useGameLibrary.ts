@@ -169,8 +169,16 @@ const availableSeries = computed(() =>
   [...new Set(VISIBLE.value.map((g) => g.ipSeries))].sort((a, b) => a.localeCompare(b, 'zh')),
 )
 
-/** 目录总条目数 —— **只算前台可见的**（首页 Hero 的「收录作品」用它） */
+/** 目录总条目数 —— **只算前台可见的**（首页「当前可浏览」用它） */
 const catalogSize = computed(() => VISIBLE.value.length)
+
+/**
+ * 数据里的**全部条目**（含下线 / 草稿 / 归档）。
+ *
+ * 首页的「收录作品」用它：后台显示的收录数就是它。
+ * 只显示可见数会让人误以为「后台 7 条、首页少了」—— 其实少掉的是没有对外的条目。
+ */
+const totalSize = computed(() => publicGameRepository.games.value.length)
 
 /* ---------------------------------------------------------------------------
    供 UI 读取的当前筛选状态（反映用户「意图」，即时更新，不受延迟影响）
@@ -260,8 +268,10 @@ function getGameById(id: string): Game | undefined {
    --------------------------------------------------------------------------- */
 export interface GameLibraryAPI {
   // —— 状态 ——
-  /** 目录总条目数（**只算前台可见的**，供首页统计信息使用） */
+  /** 前台可见条目数（已上线且未归档） */
   catalogSize: typeof catalogSize
+  /** 数据里的全部条目数（含下线 / 草稿 / 归档） */
+  totalSize: typeof totalSize
   /** 过滤、排序、分页后的最终展示数据 */
   games: typeof games
   /** 过滤 + 排序后但未分页的完整结果（调试 / 计数用） */
@@ -294,6 +304,7 @@ export interface GameLibraryAPI {
 export function useGameLibrary(): GameLibraryAPI {
   return {
     catalogSize,
+    totalSize,
     games,
     filtered,
     isLoading,

@@ -7,6 +7,7 @@ import { useGameLibrary } from '../composables/useGameLibrary'
 /* 首页：探索与筛选。所有数据加工都在深模块内，本页只负责渲染。 */
 const {
   catalogSize,
+  totalSize,
   games,
   isLoading,
   total,
@@ -51,7 +52,13 @@ const SKELETON_KEYS = [1, 2, 3, 4, 5, 6]
         >
           <div>
             <dt class="swiss-meta text-white/70">收录作品</dt>
-            <dd class="mt-2 font-sans text-3xl font-bold leading-none">{{ catalogSize }}</dd>
+            <dd class="mt-2 font-sans text-3xl font-bold leading-none">{{ totalSize }}</dd>
+            <p
+              v-if="totalSize !== catalogSize"
+              class="mt-2 font-sans text-[11px] leading-relaxed text-white/60"
+            >
+              其中 {{ catalogSize }} 款当前可浏览
+            </p>
           </div>
           <div>
             <dt class="swiss-meta text-white/70">创作者</dt>

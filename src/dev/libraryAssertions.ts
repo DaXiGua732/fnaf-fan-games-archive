@@ -255,6 +255,7 @@ export async function runLibraryAssertions(lib: GameLibraryAPI): Promise<Asserti
   lib.setPageSize(12)
   await settle(lib)
   check('联动 · 起点前台可见数', lib.total.value, BASE)
+  const TOTAL_BASE = lib.totalSize.value
 
   const probe = await publicGameRepository.createGame({
     title: 'Visibility Probe',
@@ -269,6 +270,7 @@ export async function runLibraryAssertions(lib: GameLibraryAPI): Promise<Asserti
   check('探针（草稿）· 前台列表看不到', lib.total.value, BASE)
   check('探针（草稿）· 详情页取不到', lib.getGameById(probe.id), undefined)
   check('探针（草稿）· Hero 的收录数不含它', lib.catalogSize.value, BASE)
+  check('探针（草稿）· 收录总数含它', lib.totalSize.value, TOTAL_BASE + 1)
   check('探针（草稿）· 作者不进「可用作者」', lib.availableAuthors.value.includes('Probe Author'), false)
   check('探针（草稿）· 年份不进「可用年份」', lib.availableYears.value.includes(2030), false)
 
@@ -297,6 +299,7 @@ export async function runLibraryAssertions(lib: GameLibraryAPI): Promise<Asserti
   await publicGameRepository.deleteGame(probe.id)
   await settle(lib)
   check('收尾 · 前台恢复原可见数', lib.total.value, BASE)
+  check('收尾 · 收录总数复原', lib.totalSize.value, TOTAL_BASE)
   check('收尾 · 探针已彻底移除', lib.getGameById(probe.id), undefined)
   check('收尾 · 可用作者复原', lib.availableAuthors.value.length, uniqueAuthors)
   check('收尾 · 可用年份复原', lib.availableYears.value.length, uniqueYears.length)

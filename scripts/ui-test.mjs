@@ -1047,6 +1047,25 @@ await step('列表 · 行内快捷上线 / 下线', async () => {
   )
 })
 
+await step('列表 · 删除入口要求输入 id，取消不会删数据', async () => {
+  await btn('删除这条').click()
+  await page.waitForTimeout(300)
+  await need('永久删除《UI Test Sample Saved》')
+
+  await page.fill('#admin-row-delete-confirm', 'wrong-id')
+  await btn('确认永久删除').click()
+  await page.waitForTimeout(300)
+  await need('请输入完整 id')
+
+  await btn('取消').click()
+  await page.waitForTimeout(300)
+  await needNot('永久删除《UI Test Sample Saved》')
+  assert(
+    (await page.locator('tbody tr').first().innerText()).includes('UI Test Sample Saved'),
+    '取消删除后条目应仍在',
+  )
+})
+
 await step('永久删除 · 必须输入 id 才能确认，删除后回到列表且条目消失', async () => {
   await go('/admin/games', '收录作品')
   await chip('全部').click()

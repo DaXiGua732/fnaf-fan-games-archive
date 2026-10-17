@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAdminGames } from '../../composables/useAdminGames'
 import type { AdminGame } from '../../types/admin'
@@ -24,6 +24,8 @@ const {
   isPagePartiallySelected,
   toggleSelectAllOnPage,
   batchSetStatus,
+  deleteGame,
+  dismissDelete,
 } = useAdminGames()
 
 /**
@@ -49,6 +51,64 @@ function toggleLabel(game: AdminGame): string {
   return game.status === 'published' ? '下线这条' : '上线这条'
 }
 
+/* ---------------------------------------------------------------------------
+   行内永久删除
+   ---------------------------------------------------------------------------
+   删除不是「第三种状态」—— 它会把条目从 db.json 里移除，删完就不存在了。
+   所以确认方式不是选一个状态，而是**输入作品 id**：和编辑页危险区同一条规则，
+   避免误点一下就把线上数据删掉。
+   --------------------------------------------------------------------------- */
+const deleteTarget = ref<AdminGame | null>(null)
+const deleteConfirm = ref('')
+const deleteError = ref('')
+const deleting = ref(false)
+/** 删除成功后就地留一条确认，避免「面板一关，不知道删没删」 */
+const deleteDone = ref<{ title: string; imagesCleaned: number } | null>(null)
+
+function requestDelete(game: AdminGame): void {
+  deleteTarget.value = game
+  deleteConfirm.value = ''
+  deleteError.value = ''
+  deleteDone.value = null
+  // 确认条在表格下方：点完行内按钮后把它滚进视野，避免「点了没反应」的错觉
+  void nextTick(() => {
+    if (typeof document === 'undefined') return
+    document.getElementById('admin-delete-panel')?.scrollIntoView({ block: 'center' })
+  })
+}
+
+function cancelDelete(): void {
+  if (deleting.value) return
+  deleteTarget.value = null
+  deleteConfirm.value = ''
+  deleteError.value = ''
+}
+
+async function confirmDelete(): Promise<void> {
+  const target = deleteTarget.value
+  if (!target || deleting.value) return
+
+  if (deleteConfirm.value.trim() !== target.id) {
+    deleteError.value = `请输入完整 id：${target.id}`
+    return
+  }
+
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    const outcome = await deleteGame(target.id)
+    deleteDone.value = { title: outcome.title, imagesCleaned: outcome.imagesCleaned }
+    deleteTarget.value = null
+    deleteConfirm.value = ''
+    // 结果已在下方就地展示，收起页面顶部的全局提示条，避免同一条结果出现两次
+    dismissDelete()
+  } catch (error) {
+    deleteError.value = error instanceof Error ? error.message : '删除失败，请重试。'
+  } finally {
+    deleting.value = false
+  }
+}
+
 /** 表头定义。列宽集中在这里，保证 thead 与 tbody 的列数不会各自漂移 */
 const COLUMNS: { label: string; width: string }[] = [
   { label: '封面', width: 'w-[112px]' },
@@ -67,8 +127,9 @@ const CHECKBOX_CLASS =
 </script>
 
 <template>
-  <div class="overflow-x-auto border border-black">
-    <table class="w-full min-w-[980px] border-collapse text-left">
+  <div>
+    <div class="overflow-x-auto border border-black">
+      <table class="w-full min-w-[980px] border-collapse text-left">
       <thead>
         <tr class="border-b border-black">
           <th class="w-12 border-r border-[#cccccc] px-4 py-4 align-middle">
@@ -198,6 +259,15 @@ const CHECKBOX_CLASS =
               >
                 {{ busyId === game.id ? '处理中…' : toggleLabel(game) }}
               </button>
+
+              <button
+                type="button"
+                class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-black/35 transition-colors duration-150 ease-out hover:text-[#ff0000]"
+                title="从数据仓永久删除（不可撤销）"
+                @click="requestDelete(game)"
+              >
+                删除这条
+              </button>
             </div>
           </td>
         </tr>
@@ -212,6 +282,94 @@ const CHECKBOX_CLASS =
           </td>
         </tr>
       </tbody>
-    </table>
+      </table>
+    </div>
+
+    <!-- ============ 永久删除确认（页内，不用原生弹窗） ============ -->
+    <div
+      v-if="deleteTarget"
+      id="admin-delete-panel"
+      class="mt-4 border border-[#ff0000] px-6 py-5"
+      role="region"
+      aria-label="永久删除确认"
+    >
+      <p class="swiss-meta font-bold text-[#ff0000]">
+        永久删除《{{ deleteTarget.title }}》
+      </p>
+      <p class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
+        会从数据仓的 <span class="font-bold text-black">db.json</span>
+        中移除这条作品，并清理只被它引用的上传图片。删除后条目不存在，无法通过筛选找回；
+        前台要等下一次构建后才会消失（最长约 1 小时，也可手动触发构建）。
+      </p>
+
+      <label
+        class="mt-5 block font-sans text-xs leading-relaxed text-black/70"
+        for="admin-row-delete-confirm"
+      >
+        输入作品 id
+        <span class="font-bold tracking-[0.12em] text-black">{{ deleteTarget.id }}</span>
+        以确认
+      </label>
+      <input
+        id="admin-row-delete-confirm"
+        v-model="deleteConfirm"
+        type="text"
+        autocomplete="off"
+        :placeholder="deleteTarget.id"
+        class="mt-2 w-full max-w-[520px] rounded-none border border-black bg-white px-4 py-3 font-sans text-sm transition-colors duration-150 ease-out placeholder:text-black/30 focus:border-[#ff0000] focus:outline-none"
+        :disabled="deleting"
+        @keyup.enter="confirmDelete"
+      />
+
+      <p v-if="deleteError" class="mt-3 font-sans text-xs font-bold text-[#ff0000]" role="alert">
+        {{ deleteError }}
+      </p>
+
+      <div class="mt-5 flex flex-wrap gap-3">
+        <button
+          type="button"
+          class="rounded-none border border-[#ff0000] bg-white px-5 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-[#ff0000] transition-colors duration-150 ease-out hover:bg-[#ff0000] hover:text-white disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30"
+          :disabled="deleting || !deleteConfirm.trim()"
+          @click="confirmDelete"
+        >
+          {{ deleting ? '删除中…' : '确认永久删除' }}
+        </button>
+        <button
+          type="button"
+          class="rounded-none border border-black bg-white px-5 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30"
+          :disabled="deleting"
+          @click="cancelDelete"
+        >
+          取消
+        </button>
+      </div>
+    </div>
+    <!-- ============ 删除成功（就地确认） ============ -->
+    <div
+      v-if="deleteDone && !deleteTarget"
+      class="mt-4 border border-[#cccccc] border-l-4 border-l-[#ff0000] px-6 py-4"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p class="font-sans text-sm font-bold">已永久删除《{{ deleteDone.title }}》</p>
+          <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/65">
+            <template v-if="deleteDone.imagesCleaned > 0">
+              同时清理了 {{ deleteDone.imagesCleaned }} 张只被它引用的上传图片。
+            </template>
+            <template v-else>它没有专属的上传图片需要清理。</template>
+            数据仓已提交；前台要等下一次构建后才会消失。
+          </p>
+        </div>
+        <button
+          type="button"
+          class="rounded-none border border-transparent px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-black/55 transition-colors duration-150 ease-out hover:text-[#ff0000]"
+          @click="deleteDone = null"
+        >
+          知道了
+        </button>
+      </div>
+    </div>
   </div>
 </template>
