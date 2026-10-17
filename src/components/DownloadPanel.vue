@@ -63,7 +63,14 @@ function isFailed(index: number): boolean {
       点击「复制」写入剪贴板；若浏览器限制了剪贴板权限，直接点击提取码即可全选后手动复制。
     </p>
 
-    <ul class="border-t border-black">
+    <p
+      v-if="downloads.length === 0"
+      class="border border-[#cccccc] px-5 py-10 font-sans text-sm text-black/55"
+    >
+      暂未提供下载渠道。
+    </p>
+
+    <ul v-else class="border-t border-black">
       <li
         v-for="(link, index) in downloads"
         :key="`${link.provider}-${index}`"

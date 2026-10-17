@@ -314,6 +314,23 @@ await step('公开站 · 点卡片进入详情页', async () => {
   await shot('03-detail')
 })
 
+await step('详情页 · 截图灯箱支持键盘切换与关闭', async () => {
+  const thumbs = page.getByRole('button', { name: /查看第 \d+ 张截图的大图/ })
+  const count = await thumbs.count()
+  assert(count >= 2, `详情页应至少渲染 2 张截图，实际 ${count}`)
+
+  await thumbs.first().click()
+  await page.getByText(new RegExp(`截图 1 / ${count}`)).waitFor({ timeout: 5000 })
+
+  await page.keyboard.press('ArrowRight')
+  await page.getByText(new RegExp(`截图 2 / ${count}`)).waitFor({ timeout: 5000 })
+
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(250)
+  assert((await page.getByRole('dialog').count()) === 0, '按 Esc 后灯箱应关闭')
+  await shot('03b-lightbox')
+})
+
 await step('前台导航有「后台管理」入口，点击即可进后台', async () => {
   await go('/', '游戏库')
   const entry = page.getByRole('link', { name: '后台管理', exact: true }).first()
@@ -390,7 +407,8 @@ await step('Phase 2 · 排序切「游戏名称」→ 首行是标题最小的�
   // ⚠️ 断言**排序规则**而不是某个写死的标题。
   //    原先写死「Dayshift at Freddy」，站长把那条作品的标题一改，这里就假失败了。
   //    正确做法：首行应等于当前列表里标题最小的那一个（用同一份数据自行推导）。
-  const cells = await page.locator('table tbody tr td:nth-child(2)').allInnerTexts()
+  // 名称列的第 3 个 td；标题现在是通往编辑页的链接，取链接文本才是纯标题
+  const cells = await page.locator('table tbody tr td:nth-child(3) a').allInnerTexts()
   const titles = cells.map((text) => text.replace(/\s+/g, ' ').trim())
   const ascending = [...titles].sort((a, b) => a.localeCompare(b, 'en'))
   assert(titles.length > 1, '列表里至少应有两条作品才谈得上排序')
@@ -994,7 +1012,45 @@ await step('新建的作品默认是草稿（不默认对外可见）', async ()
   await shot('20-new-is-draft')
 })
 
+await step('编辑器 · Ctrl+S 直接保存当前草稿', async () => {
+  await go('/admin/games/ui-test-sample/edit', '基本信息')
+  await page.fill('#f-title', 'UI Test Sample Saved')
+  await page.waitForTimeout(250)
+  await page.keyboard.press('Control+s')
+  await page.waitForTimeout(1000)
+  await need('保存结果')
+  await need('已更新')
+  await need('UI Test Sample Saved')
+})
+
+await step('列表 · 行内快捷上线 / 下线', async () => {
+  await go('/admin/games', '收录作品')
+  // 过滤器是模块级单例状态，会跨路由保留；先切回「全部」再测行内快捷操作
+  await chip('全部').click()
+  await page.waitForTimeout(300)
+  await page.fill('#admin-search', 'UI Test Sample')
+  await page.waitForTimeout(500)
+
+  await btn('上线这条').click()
+  await page.waitForTimeout(900)
+  await need('实际改动 1 项')
+  assert(
+    (await page.locator('tbody tr').first().innerText()).includes('已上线'),
+    '快捷上线后该行状态应为已上线',
+  )
+
+  await btn('下线这条').click()
+  await page.waitForTimeout(900)
+  assert(
+    (await page.locator('tbody tr').first().innerText()).includes('已下线'),
+    '快捷下线后该行状态应为已下线',
+  )
+})
+
 await step('永久删除 · 必须输入 id 才能确认，删除后回到列表且条目消失', async () => {
+  await go('/admin/games', '收录作品')
+  await chip('全部').click()
+  await page.waitForTimeout(300)
   await page.fill('#admin-search', 'UI Test Sample')
   await page.waitForTimeout(500)
   await page.getByRole('link', { name: '编辑', exact: true }).first().click()
@@ -1194,7 +1250,7 @@ await step('Phase 18 · 预览新标签页渲染出未保存的草稿，编辑�
 
   const [previewPage] = await Promise.all([
     context.waitForEvent('page'),
-    page.getByRole('button', { name: '预览' }).click(),
+    page.getByRole('button', { name: '预览', exact: true }).click(),
   ])
   await previewPage.waitForLoadState('domcontentloaded')
   await previewPage.getByText('预览 · 未保存', { exact: false }).first().waitFor({ timeout: 10000 })

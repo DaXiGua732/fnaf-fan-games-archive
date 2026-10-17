@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, useRouter } from 'vue-router'
 import AdminDataState from '../../components/admin/AdminDataState.vue'
 import AdminDownloadEditor from '../../components/admin/AdminDownloadEditor.vue'
@@ -8,6 +8,7 @@ import AdminFeatureSettings from '../../components/admin/AdminFeatureSettings.vu
 import AdminField from '../../components/admin/AdminField.vue'
 import AdminGalleryEditor from '../../components/admin/AdminGalleryEditor.vue'
 import AdminImageSlot from '../../components/admin/AdminImageSlot.vue'
+import AdminPublishOverview from '../../components/admin/AdminPublishOverview.vue'
 import AdminPublishSettings from '../../components/admin/AdminPublishSettings.vue'
 import AdminTagEditor from '../../components/admin/AdminTagEditor.vue'
 import {
@@ -300,6 +301,43 @@ const featureChanged = computed(() =>
 )
 
 /* ---------------------------------------------------------------------------
+   分区导航（参考创作中心的左侧/顶部章节导航）
+   ---------------------------------------------------------------------------
+   长表单最烦的是「改完封面想回去改标题」要滚很久。这里把区块收成一条
+   吸顶的索引，点一下直接跳过去，并在有未保存改动的区块上点一个红点。
+   --------------------------------------------------------------------------- */
+const SECTIONS = computed(() => [
+  { id: 'section-basic', label: '基本信息', changed: basicChanged.value },
+  { id: 'section-media', label: '封面与宣传图', changed: mediaChanged.value },
+  { id: 'section-gallery', label: '图库', changed: changedFields.value.includes('gallery') },
+  { id: 'section-downloads', label: '下载资源', changed: changedFields.value.includes('downloads') },
+  { id: 'section-tags', label: '标签', changed: changedFields.value.includes('tags') },
+  { id: 'section-publish', label: '发布设置', changed: publishChanged.value },
+  { id: 'section-feature', label: '推荐与排序', changed: featureChanged.value },
+])
+
+/** 页内跳转：不用 `href="#id"` —— Hash 路由下那会被当成路由跳转 */
+function jumpTo(id: string): void {
+  if (typeof document === 'undefined') return
+  document.getElementById(id)?.scrollIntoView({ block: 'start' })
+}
+
+/**
+ * Ctrl / Cmd + S 保存。
+ * 只在「有改动且可保存」时生效 —— 否则每按一次就产生一个空提交。
+ * 输入框里也照常生效：这正是快捷键的意义（不用先点空白处再按）。
+ */
+function onKeydown(event: KeyboardEvent): void {
+  if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 's') return
+  event.preventDefault()
+  if (saving.value || !isDirty.value || !canSave.value) return
+  void onSave()
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+
+/* ---------------------------------------------------------------------------
    样式
    --------------------------------------------------------------------------- */
 const INPUT_CLASS =
@@ -345,7 +383,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
 
   <!-- ==================== 编辑器 ==================== -->
   <div v-else class="py-12 md:py-16">
-    <!-- ============ 页头 + 动作条 ============ -->
+    <!-- ============ 页头 ============ -->
     <div class="flex flex-wrap items-end justify-between gap-6 border-b border-black pb-6">
       <div>
         <p class="swiss-meta mb-4 text-black/60">01 — Games / {{ isNew ? 'New' : 'Edit' }}</p>
@@ -353,53 +391,76 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
           {{ isNew ? '新增游戏' : '编辑游戏' }}
         </h1>
         <p class="swiss-meta mt-3 text-black/50">{{ subheading }}</p>
-        <p v-if="isDirty" class="swiss-meta mt-2 font-bold text-[#ff0000]" aria-live="polite">
-          未保存的修改 · {{ changedFields.length }} 个字段
+      </div>
+
+      <RouterLink :to="{ name: 'admin-games' }" :class="ACTION_SECONDARY">返回列表</RouterLink>
+    </div>
+
+    <!-- ============ 吸顶操作条 + 分区导航 ============ -->
+    <div class="sticky top-14 z-40 -mt-px border-b border-black bg-white py-3">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <p
+          class="swiss-meta"
+          :class="isDirty ? 'font-bold text-[#ff0000]' : 'text-black/45'"
+          aria-live="polite"
+        >
+          <template v-if="saving">正在保存……</template>
+          <template v-else-if="isDirty">未保存的修改 · {{ changedFields.length }} 个字段</template>
+          <template v-else>没有未保存的修改</template>
         </p>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            :class="ACTION_SECONDARY"
+            :disabled="!isDirty || saving"
+            @click="resetToBaseline"
+          >
+            撤销修改
+          </button>
+
+          <button type="button" :class="ACTION_SECONDARY" :disabled="saving" @click="onPreview">
+            预览
+          </button>
+
+          <button
+            type="button"
+            :class="ACTION_PRIMARY"
+            :disabled="!isDirty || saving"
+            title="Ctrl / Cmd + S"
+            @click="onSave"
+          >
+            {{ saving ? '保存中…' : '保存' }}
+          </button>
+
+          <!-- 「发布」= 把状态切到已上线再保存，等价于「选已上线 + 保存」的快捷方式 -->
+          <button
+            type="button"
+            :class="ACTION_SECONDARY"
+            :disabled="saving || (draft.status === 'published' && !isDirty)"
+            @click="onPublish"
+          >
+            发布
+          </button>
+        </div>
       </div>
 
-      <div class="flex flex-wrap items-center gap-3">
-        <RouterLink :to="{ name: 'admin-games' }" :class="ACTION_SECONDARY">返回列表</RouterLink>
-
+      <nav class="mt-3 flex items-center gap-1 overflow-x-auto" aria-label="编辑分区">
         <button
+          v-for="section in SECTIONS"
+          :key="section.id"
           type="button"
-          :class="ACTION_SECONDARY"
-          :disabled="!isDirty"
-          @click="resetToBaseline"
+          class="shrink-0 border border-transparent px-3 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.12em] text-black/60 transition-colors duration-150 ease-out hover:text-[#ff0000]"
+          @click="jumpTo(section.id)"
         >
-          撤销修改
+          {{ section.label }}
+          <span v-if="section.changed" class="ml-1 text-[#ff0000]" aria-label="有未保存修改">·</span>
         </button>
 
-        <button
-          type="button"
-          :class="ACTION_PRIMARY"
-          :disabled="!isDirty || saving"
-          @click="onSave"
-        >
-          {{ saving ? '保存中…' : '保存' }}
-        </button>
-
-        <!-- 「发布」= 把状态切到已上线再保存，等价于「选已上线 + 保存」的快捷方式 -->
-        <button
-          type="button"
-          :class="ACTION_SECONDARY"
-          :disabled="saving || (draft.status === 'published' && !isDirty)"
-          @click="onPublish"
-        >
-          发布
-        </button>
-
-        <!-- 「预览」开新标签页渲染真实前台详情页。**不需要已保存**：
-             改到一半也能看 —— 这正是预览存在的意义。 -->
-        <button
-          type="button"
-          :class="ACTION_SECONDARY"
-          :disabled="saving"
-          @click="onPreview"
-        >
-          预览
-        </button>
-      </div>
+        <span class="ml-auto hidden shrink-0 pl-4 swiss-meta text-black/30 md:block">
+          Ctrl / &#8984; + S 保存
+        </span>
+      </nav>
     </div>
 
     <!-- ============ 离开确认（页内，不用原生弹窗） ============ -->
@@ -411,7 +472,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
     >
       <p class="swiss-meta font-bold text-[#ff0000]">这个作品有未保存的修改</p>
       <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
-        离开后这些修改会丢失，且无法恢复 —— 当前还没有持久化层，改动只存在于内存中。
+        离开后这些修改会丢失，且无法恢复 —— 它们还没有保存到数据仓。
       </p>
       <div class="mt-5 flex flex-wrap gap-3">
         <button type="button" :class="ACTION_DANGER" @click="confirmLeave">
@@ -423,13 +484,9 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
 
     <!-- ============ 阶段说明 ============ -->
     <p class="mt-8 max-w-[78ch] font-sans text-xs leading-relaxed text-black/60">
-      所有区块都已接入。「保存」按表单当前内容落库，「发布」等于把状态切到「已上线」再保存。
-      <span class="font-bold text-black">
-        「已上线」要求有封面、Banner 与至少一个下载渠道
-      </span>
-      —— 草稿不受这些限制，内容没凑齐时先留在草稿即可。
-      登录后保存会通过 GitHub API 提交到数据仓；前台读的是构建期快照，
-      需要下一次构建才会更新（自动构建每小时一次，也可以手动触发）。
+      保存会通过 GitHub API 提交到数据仓，前台要等下一次构建（自动每小时一次，可手动触发）。
+      <span class="font-bold text-black">「已上线」要求封面、Banner 与至少一个下载渠道</span>
+      —— 内容没凑齐时先留在草稿。
     </p>
 
     <!-- ============ 保存结果 ============ -->
@@ -486,7 +543,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
       <!-- ---------- 左栏 ---------- -->
       <div class="flex flex-col gap-12">
         <!-- 基本信息（Phase 5 已接入） -->
-        <AdminEditorSection title="基本信息" :changed="basicChanged">
+        <AdminEditorSection title="基本信息" anchor="section-basic" :changed="basicChanged">
           <div class="grid gap-6 md:grid-cols-2">
             <AdminField label="游戏名称" control-id="f-title" required :error="shownErrors.title">
               <input
@@ -609,7 +666,11 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
         </AdminEditorSection>
 
         <!-- 封面与宣传图（Phase 7 已接入） -->
-        <AdminEditorSection title="封面与宣传图" :changed="mediaChanged">
+        <AdminEditorSection
+          title="封面与宣传图"
+          anchor="section-media"
+          :changed="mediaChanged"
+        >
           <div class="flex flex-col gap-10">
             <AdminImageSlot
               field="coverImage"
@@ -633,28 +694,51 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
         </AdminEditorSection>
 
         <!-- 图库（Phase 7 已接入） -->
-        <AdminEditorSection title="图库" :changed="changedFields.includes('gallery')">
+        <AdminEditorSection
+          title="图库"
+          anchor="section-gallery"
+          :changed="changedFields.includes('gallery')"
+        >
           <AdminGalleryEditor :game-id="imageOwnerId" />
         </AdminEditorSection>
 
         <!-- 下载资源（Phase 8 已接入） -->
-        <AdminEditorSection title="下载资源" :changed="changedFields.includes('downloads')">
+        <AdminEditorSection
+          title="下载资源"
+          anchor="section-downloads"
+          :changed="changedFields.includes('downloads')"
+        >
           <AdminDownloadEditor />
+        </AdminEditorSection>
+
+        <!-- 标签（Phase 6 已接入）—— 贴近内容区，符合「先写内容、再设发布」的顺序 -->
+        <AdminEditorSection
+          title="标签"
+          anchor="section-tags"
+          :changed="changedFields.includes('tags')"
+        >
+          <AdminTagEditor />
         </AdminEditorSection>
       </div>
 
       <!-- ---------- 右栏 ---------- -->
-      <aside class="flex flex-col gap-12">
-        <!-- 标签（Phase 6 已接入） -->
-        <AdminEditorSection title="标签" :changed="changedFields.includes('tags')">
-          <AdminTagEditor />
-        </AdminEditorSection>
+      <aside class="flex flex-col gap-8">
+        <!-- 发布概览：封面 / 状态 / 上线清单 / 上次保存（参考创作中心的发布面板） -->
+        <AdminPublishOverview :game="game" :is-new="isNew" @preview="onPreview" />
 
-        <AdminEditorSection title="发布设置" :changed="publishChanged">
+        <AdminEditorSection
+          title="发布设置"
+          anchor="section-publish"
+          :changed="publishChanged"
+        >
           <AdminPublishSettings />
         </AdminEditorSection>
 
-        <AdminEditorSection title="推荐与排序" :changed="featureChanged">
+        <AdminEditorSection
+          title="推荐与排序"
+          anchor="section-feature"
+          :changed="featureChanged"
+        >
           <AdminFeatureSettings />
         </AdminEditorSection>
       </aside>

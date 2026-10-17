@@ -122,9 +122,27 @@ const pageSizeValue = computed<string>({
       </div>
     </div>
 
-    <!-- ============ 数据现状 ============ -->
-    <div class="mt-8 border border-[#cccccc] border-l-4 border-l-black px-6 py-5">
-      <p class="swiss-meta text-black/60">数据现状</p>
+    <!-- ============ 数据现状（默认收起，别让一段说明挡住列表） ============ -->
+    <details class="mt-8 border border-[#cccccc] border-l-4 border-l-black">
+      <summary
+        class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-6 py-4 [&::-webkit-details-marker]:hidden"
+      >
+        <p class="swiss-meta text-black/60">
+          数据现状 ·
+          <span class="font-bold text-black">
+            {{
+              storage === 'remote'
+                ? '数据仓（改动会提交到数据仓）'
+                : storage === 'local'
+                  ? '本机浏览器（不写线上）'
+                  : '仅内存（刷新即丢）'
+            }}
+          </span>
+        </p>
+        <span class="swiss-meta text-black/35">展开 / 收起说明</span>
+      </summary>
+
+      <div class="border-t border-[#cccccc] px-6 py-5">
 
       <!-- 三种写入位置各说各的实话，不能笼统写「已保存」 -->
       <template v-if="storage === 'remote'">
@@ -192,10 +210,11 @@ const pageSizeValue = computed<string>({
           </button>
         </div>
       </div>
-    </div>
+      </div>
+    </details>
 
     <!-- ============ 工具栏 ============ -->
-    <div class="mt-12">
+    <div class="mt-8">
       <AdminToolbar />
     </div>
 

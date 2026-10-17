@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAdminGames } from '../../composables/useAdminGames'
+import type { AdminGame } from '../../types/admin'
 import { assetUrl } from '../../utils/asset'
 import { formatTimestamp } from '../../utils/datetime'
 import AdminStatusTag from './AdminStatusTag.vue'
@@ -21,18 +23,40 @@ const {
   isPageFullySelected,
   isPagePartiallySelected,
   toggleSelectAllOnPage,
+  batchSetStatus,
 } = useAdminGames()
+
+/**
+ * 行内快捷上下线（参考创作中心列表的可见性快捷操作）。
+ *
+ * 走的是批量写入的同一条路径，所以结果条会如实报「实际改动 1 项」；
+ * 命名刻意加上「这条」，避免和批量条的「上线 / 下线」按钮重名 ——
+ * 重名会让自动化测试与屏幕阅读器都分不清点的是哪一个。
+ */
+const busyId = ref('')
+
+async function toggleVisibility(game: AdminGame): Promise<void> {
+  if (busyId.value) return
+  busyId.value = game.id
+  try {
+    await batchSetStatus([game.id], game.status === 'published' ? 'offline' : 'published')
+  } finally {
+    busyId.value = ''
+  }
+}
+
+function toggleLabel(game: AdminGame): string {
+  return game.status === 'published' ? '下线这条' : '上线这条'
+}
 
 /** 表头定义。列宽集中在这里，保证 thead 与 tbody 的列数不会各自漂移 */
 const COLUMNS: { label: string; width: string }[] = [
-  { label: '封面', width: 'w-[88px]' },
-  { label: '游戏名称', width: 'min-w-[220px]' },
-  { label: '作者', width: 'w-[130px]' },
-  { label: '系列', width: 'w-[150px]' },
-  { label: '标签', width: 'w-[180px]' },
-  { label: '状态', width: 'w-[120px]' },
-  { label: '更新时间', width: 'w-[150px]' },
-  { label: '操作', width: 'w-[130px]' },
+  { label: '封面', width: 'w-[112px]' },
+  { label: '游戏名称', width: 'min-w-[260px]' },
+  { label: '标签', width: 'w-[150px]' },
+  { label: '状态', width: 'w-[110px]' },
+  { label: '更新时间', width: 'w-[140px]' },
+  { label: '操作', width: 'w-[150px]' },
 ]
 
 /** 选择列 + 数据列，供空状态单元格的 colspan 使用 */
@@ -44,7 +68,7 @@ const CHECKBOX_CLASS =
 
 <template>
   <div class="overflow-x-auto border border-black">
-    <table class="w-full min-w-[1080px] border-collapse text-left">
+    <table class="w-full min-w-[980px] border-collapse text-left">
       <thead>
         <tr class="border-b border-black">
           <th class="w-12 border-r border-[#cccccc] px-4 py-4 align-middle">
@@ -91,26 +115,24 @@ const CHECKBOX_CLASS =
             <img
               :src="assetUrl(game.coverImage)"
               :alt="`${game.title} 封面`"
-              class="h-10 w-16 border border-black object-cover"
+              class="h-12 w-20 border border-black bg-[#f9f9f9] object-cover md:h-14 md:w-24"
               loading="lazy"
               decoding="async"
             />
           </td>
 
-          <!-- 游戏名称 -->
+          <!-- 游戏名称 —— 点标题直接进编辑页；作者 / 系列收进第二行，少两列 -->
           <td class="border-r border-[#cccccc] px-4 py-3 align-middle">
-            <p class="font-sans text-sm font-bold">{{ game.title }}</p>
-            <p class="swiss-meta mt-1 text-black/35">{{ game.id }}</p>
-          </td>
-
-          <!-- 作者 -->
-          <td class="border-r border-[#cccccc] px-4 py-3 align-middle">
-            <span class="font-sans text-xs">{{ game.author }}</span>
-          </td>
-
-          <!-- 系列 -->
-          <td class="border-r border-[#cccccc] px-4 py-3 align-middle">
-            <span class="font-sans text-xs">{{ game.ipSeries }}</span>
+            <RouterLink
+              :to="{ name: 'admin-game-edit', params: { id: game.id } }"
+              class="font-sans text-sm font-bold transition-colors duration-150 ease-out hover:text-[#ff0000]"
+            >
+              {{ game.title }}
+            </RouterLink>
+            <p class="mt-1 font-sans text-[11px] text-black/50">
+              {{ game.author }} · {{ game.ipSeries }}
+            </p>
+            <p class="swiss-meta mt-1 text-black/30">{{ game.id }}</p>
           </td>
 
           <!-- 标签 -->
@@ -147,6 +169,13 @@ const CHECKBOX_CLASS =
           <td class="px-4 py-3 align-middle">
             <div class="flex flex-col items-start gap-2">
               <RouterLink
+                :to="{ name: 'admin-game-edit', params: { id: game.id } }"
+                class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:text-[#ff0000]"
+              >
+                编辑
+              </RouterLink>
+
+              <RouterLink
                 :to="{ name: 'game', params: { id: game.id } }"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -155,12 +184,20 @@ const CHECKBOX_CLASS =
                 预览 &#8599;
               </RouterLink>
 
-              <RouterLink
-                :to="{ name: 'admin-game-edit', params: { id: game.id } }"
-                class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:text-[#ff0000]"
+              <button
+                type="button"
+                class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:text-black/30"
+                :class="
+                  game.status === 'published'
+                    ? 'text-[#ff0000] hover:text-black'
+                    : 'text-black/60 hover:text-[#ff0000]'
+                "
+                :disabled="Boolean(busyId)"
+                :title="`立即${toggleLabel(game)}（会提交到数据仓）`"
+                @click="toggleVisibility(game)"
               >
-                编辑
-              </RouterLink>
+                {{ busyId === game.id ? '处理中…' : toggleLabel(game) }}
+              </button>
             </div>
           </td>
         </tr>

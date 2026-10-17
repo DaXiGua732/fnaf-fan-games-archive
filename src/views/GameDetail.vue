@@ -1,40 +1,54 @@
 <script setup lang="ts">
-import { computed, inject, watchEffect } from 'vue'
+import { computed, inject, ref, watchEffect } from 'vue'
 import { RouterLink } from 'vue-router'
 import Button from '../components/Button.vue'
 import CommentSection from '../components/CommentSection.vue'
 import DownloadPanel from '../components/DownloadPanel.vue'
+import GalleryLightbox from '../components/GalleryLightbox.vue'
 import { useGameLibrary } from '../composables/useGameLibrary'
 import { PREVIEW_GAME_KEY } from '../composables/useGamePreview'
 import { useViewCounter } from '../composables/useViewCounter'
 import { assetUrl } from '../utils/asset'
 
-/* 游戏详情页。id 由路由 /game/:id 以 props 形式注入（router 中 props: true）。 */
+/**
+ * 游戏详情页（参考 itch.io 的信息组织）
+ *
+ * 结构：
+ *   Hero      标题 / 作者 / 短描述 / 主 CTA + 宣传图
+ *   两栏      左：简介 + 截图 + 视频；右：封面 / 作品信息 / 标签 / 下载入口
+ *   下载      独立区块，锚点可直达
+ *   评论      页面底部
+ *
+ * 这不是「像 itch.io 那样圆角卡片」—— 视觉仍然全部遵守 Swiss：
+ * 1px 边框、零圆角、零阴影、文本左对齐、悬停只改颜色。
+ */
 const props = defineProps<{ id: string }>()
 
 const { getGameById } = useGameLibrary()
 
 /**
- * 预览分支（Phase 18）。
- *
- * 后台的「预览」路由会注入一条**未保存的草稿** —— 这时本页渲染的就是它，
- * 而不是资源库里那条已发布的数据。
- *
- * 关键在于：预览**复用本组件本身**，而不是另写一个"像前台"的预览页。
- * 另写一份的话，预览跟真实前台迟早会分叉 —— 那预览就失去意义了。
- * 没有注入时（也就是全部公开访问）这里恒为 null，行为与从前一模一样。
+ * 预览分支（Phase 18）：后台注入未保存草稿时渲染它。
+ * 复用本组件而不是另写预览页 —— 两份「像前台」的页面迟早会分叉。
  */
 const previewSource = inject(PREVIEW_GAME_KEY, null)
 const previewGame = computed(() => previewSource?.value ?? null)
-
 const game = computed(() => previewGame.value ?? getGameById(props.id))
 
-const banner = computed(() => (game.value ? assetUrl(game.value.bannerImage) : ''))
+const banner = computed(() => (game.value?.bannerImage ? assetUrl(game.value.bannerImage) : ''))
+const cover = computed(() => (game.value?.coverImage ? assetUrl(game.value.coverImage) : ''))
+const heroImage = computed(() => banner.value || cover.value)
+const heroLabel = computed(() => (banner.value ? '宣传图' : '封面'))
+
+const gallery = computed(() => game.value?.gallery ?? [])
+const tags = computed(() => game.value?.tags ?? [])
+const shortDescription = computed(() => game.value?.shortDescription ?? '')
+const hasVideo = computed(() => Boolean(game.value?.videoUrl))
+
+/** 截图查看器：null = 关闭，数字 = 当前下标 */
+const galleryOpen = ref<number | null>(null)
 
 /**
- * 浏览量统计。
- * 当前为「静态基数」模式（未接入后端），显示的仍是 db.json 里的 metrics.fakeViews。
- * 接入后端后在 main.ts 里 registerViewProvider() 即可自动切换，本页无需改动。
+ * 浏览量统计。当前为静态基数模式；接入后端后 registerViewProvider() 即可切换。
  */
 const {
   count: viewCount,
@@ -45,23 +59,38 @@ const {
   () => game.value?.metrics.fakeViews ?? 0,
 )
 
-/** 侧边栏数据表格的行定义 */
+const viewLabel = computed(() => {
+  if (viewsLoading.value) return '载入中…'
+  const count = (viewCount.value ?? 0).toLocaleString('en-US')
+  return viewSource.value === 'static' ? `${count} · 静态基数` : count
+})
+
+/** 侧栏「作品信息」的行定义 */
 const facts = computed(() => {
   const item = game.value
   if (!item) return []
-  return [
+  const rows: { label: string; value: string }[] = [
     { label: '作者', value: item.author },
     { label: '年份', value: String(item.releaseYear) },
     { label: 'IP 系列', value: item.ipSeries },
     { label: '引擎', value: item.engine },
-    { label: '下载渠道', value: `${item.downloads.length} 个` },
     { label: '评分', value: `${item.metrics.score.toFixed(1)} / 5.0` },
+    { label: '浏览', value: viewLabel.value },
+    { label: '下载渠道', value: `${item.downloads.length} 个` },
   ]
+  if (item.platforms?.length) {
+    rows.push({ label: '平台', value: item.platforms.join(' / ') })
+  }
+  return rows
 })
 
-const hasVideo = computed(() => Boolean(game.value?.videoUrl))
+/** 页内跳转：Hash 路由下不能用 href="#downloads" */
+function scrollToDownloads(): void {
+  if (typeof document === 'undefined') return
+  document.getElementById('downloads')?.scrollIntoView({ block: 'start' })
+}
 
-// 标签页标题跟随游戏名（SSR 环境没有 document，必须守卫）
+// 标签页标题跟随游戏名（SSR 没有 document，必须守卫）
 watchEffect(() => {
   if (typeof document === 'undefined') return
   const item = game.value
@@ -72,9 +101,9 @@ watchEffect(() => {
 <template>
   <!-- ==================== 命中 ==================== -->
   <div v-if="game">
-    <!-- 大字标题区 -->
+    <!-- ============ Hero：标题 + 主 CTA + 宣传图 ============ -->
     <section class="border-b border-black">
-      <div class="mx-auto max-w-[1280px] px-6 py-16 md:px-12 md:py-20">
+      <div class="mx-auto max-w-[1280px] px-6 py-10 md:px-12 md:py-14">
         <RouterLink
           to="/"
           class="inline-flex items-center gap-3 font-sans text-[11px] font-bold uppercase tracking-[0.16em] text-black/60 transition-colors duration-150 ease-out hover:text-[#ff0000]"
@@ -83,79 +112,179 @@ watchEffect(() => {
           <span>返回游戏库</span>
         </RouterLink>
 
-        <p class="swiss-meta mt-12 text-black/60">
-          {{ game.releaseYear }} · {{ game.author }} · {{ game.ipSeries }}
-        </p>
-        <h1
-          class="mt-6 font-sans text-4xl font-bold uppercase leading-[0.95] tracking-[-0.03em] md:text-6xl lg:text-7xl"
-        >
-          {{ game.title }}
-        </h1>
+        <div class="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-end lg:gap-14">
+          <div>
+            <p class="swiss-meta text-black/60">
+              {{ game.releaseYear }} · {{ game.ipSeries }}
+            </p>
+            <h1
+              class="mt-5 font-sans text-4xl font-bold uppercase leading-[0.95] tracking-[-0.03em] md:text-6xl"
+            >
+              {{ game.title }}
+            </h1>
+            <p class="mt-5 font-sans text-sm text-black/60">
+              by <span class="font-bold text-black">{{ game.author }}</span>
+            </p>
 
-        <p class="swiss-meta mt-10 text-black/60" aria-live="polite">
-          <span v-if="viewsLoading">浏览统计载入中…</span>
-          <span v-else>
-            浏览 {{ (viewCount ?? 0).toLocaleString('en-US') }}
-            <span v-if="viewSource === 'static'" class="ml-2 text-black/35">静态基数</span>
-          </span>
-        </p>
+            <p
+              v-if="shortDescription"
+              class="mt-6 max-w-[58ch] font-sans text-base leading-relaxed text-black/75"
+            >
+              {{ shortDescription }}
+            </p>
+
+            <div class="mt-8 flex flex-wrap items-center gap-3">
+              <Button variant="solid" size="lg" @click="scrollToDownloads">查看下载渠道</Button>
+              <Button
+                v-if="hasVideo"
+                variant="outline"
+                size="lg"
+                :href="game.videoUrl"
+                target="_blank"
+              >
+                观看视频
+              </Button>
+            </div>
+
+            <p class="swiss-meta mt-8 text-black/45" aria-live="polite">
+              浏览 {{ viewLabel }}
+            </p>
+          </div>
+
+          <!-- 宣传图（没有 banner 时退回封面） -->
+          <figure v-if="heroImage" class="border border-black">
+            <img
+              :src="heroImage"
+              :alt="`${game.title} ${heroLabel}`"
+              class="aspect-[21/9] w-full bg-[#f9f9f9] object-contain"
+              loading="eager"
+              decoding="async"
+            />
+            <figcaption class="border-t border-black px-4 py-3 swiss-meta text-black/55">
+              {{ heroLabel }} — {{ game.title }}
+            </figcaption>
+          </figure>
+        </div>
       </div>
     </section>
 
-    <!-- Banner / 多媒体区（占满内容宽度） -->
+    <!-- ============ 简介 + 截图 + 侧栏 ============ -->
     <section class="border-b border-black">
       <div class="mx-auto max-w-[1280px] px-6 py-12 md:px-12 md:py-16">
-        <figure>
-          <img
-            :src="banner"
-            :alt="`${game.title} 宣传图`"
-            class="w-full border border-black"
-            loading="eager"
-            decoding="async"
-          />
-          <figcaption class="swiss-meta mt-4 text-black/60">
-            宣传图 — {{ game.title }}
-          </figcaption>
-        </figure>
-      </div>
-    </section>
-
-    <!-- 简介 + 数据表格侧边栏 -->
-    <section class="border-b border-black">
-      <div class="mx-auto max-w-[1280px] px-6 py-16 md:px-12 md:py-24">
-        <div class="grid gap-16 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-20">
-          <!-- 左：简介 -->
+        <div class="grid gap-12 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-16">
+          <!-- 左：内容 -->
           <div>
-            <p class="swiss-meta mb-8">01 — 作品简介</p>
-            <p class="max-w-[68ch] font-sans text-base leading-loose">{{ game.description }}</p>
+            <p class="swiss-meta mb-6 text-black/60">01 — 作品简介</p>
+            <p class="max-w-[68ch] whitespace-pre-line font-sans text-base leading-loose">
+              {{ game.description }}
+            </p>
 
-            <div v-if="hasVideo" class="mt-14">
-              <p class="swiss-meta mb-6 text-black/60">实况 / 预告</p>
+            <!-- 截图：点击开大图（itch.io 同款浏览方式） -->
+            <div v-if="gallery.length" class="mt-14">
+              <div class="flex flex-wrap items-end justify-between gap-4 border-b border-black pb-4">
+                <h2 class="font-sans text-xl font-bold uppercase tracking-tight">截图</h2>
+                <p class="swiss-meta text-black/55">{{ gallery.length }} 张 · 点击查看大图</p>
+              </div>
+
+              <ul class="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3">
+                <li v-for="(image, index) in gallery" :key="`${image}-${index}`">
+                  <button
+                    type="button"
+                    class="group block w-full border border-[#cccccc] text-left transition-colors duration-150 ease-out hover:border-black"
+                    :aria-label="`查看第 ${index + 1} 张截图的大图`"
+                    @click="galleryOpen = index"
+                  >
+                    <img
+                      :src="assetUrl(image)"
+                      :alt="`${game.title} 截图 ${index + 1}`"
+                      class="aspect-video w-full bg-[#f9f9f9] object-contain"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <span class="flex items-center justify-between gap-3 border-t border-[#cccccc] px-3 py-2">
+                      <span class="swiss-meta text-black/50">
+                        NO.{{ String(index + 1).padStart(2, '0') }}
+                      </span>
+                      <span
+                        class="swiss-meta text-black/35 transition-colors duration-150 ease-out group-hover:text-[#ff0000]"
+                      >
+                        查看大图
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <!-- 视频 -->
+            <div v-if="hasVideo" class="mt-12 border-t border-[#cccccc] pt-8">
+              <p class="swiss-meta mb-4 text-black/55">实况 / 预告</p>
               <Button variant="outline" :href="game.videoUrl" target="_blank">观看视频</Button>
             </div>
           </div>
 
-          <!-- 右：数据表格（网格线分割） -->
-          <aside>
-            <p class="swiss-meta mb-8">02 — 作品信息</p>
-            <table class="w-full border-collapse border border-black text-left">
-              <tbody>
-                <tr
-                  v-for="fact in facts"
-                  :key="fact.label"
-                  class="border-b border-[#cccccc]"
-                >
-                  <th
-                    class="swiss-meta w-[42%] border-r border-[#cccccc] px-4 py-4 align-top font-normal text-black/60"
-                  >
-                    {{ fact.label }}
-                  </th>
-                  <td class="px-4 py-4 font-sans text-sm font-bold">{{ fact.value }}</td>
-                </tr>
-              </tbody>
-            </table>
+          <!-- 右：封面 / 信息 / 标签 / 下载入口 -->
+          <aside class="flex flex-col gap-8">
+            <figure v-if="cover" class="border border-black">
+              <img
+                :src="cover"
+                :alt="`${game.title} 封面`"
+                class="aspect-video w-full bg-[#f9f9f9] object-contain"
+                loading="lazy"
+                decoding="async"
+              />
+              <figcaption class="border-t border-black px-4 py-3 swiss-meta text-black/55">
+                封面
+              </figcaption>
+            </figure>
 
-            <p class="mt-6 font-sans text-xs leading-relaxed text-black/50">
+            <div>
+              <p class="swiss-meta mb-4 text-black/55">02 — 作品信息</p>
+              <table class="w-full border-collapse border border-black text-left">
+                <tbody>
+                  <tr
+                    v-for="fact in facts"
+                    :key="fact.label"
+                    class="border-b border-[#cccccc] last:border-b-0"
+                  >
+                    <th
+                      class="swiss-meta w-[36%] border-r border-[#cccccc] px-4 py-3 align-top font-normal text-black/60"
+                    >
+                      {{ fact.label }}
+                    </th>
+                    <td class="px-4 py-3 font-sans text-sm font-bold">{{ fact.value }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div v-if="tags.length">
+              <p class="swiss-meta mb-4 text-black/55">标签</p>
+              <ul class="flex flex-wrap gap-2">
+                <li
+                  v-for="tag in tags"
+                  :key="tag"
+                  class="border border-[#cccccc] px-3 py-1.5 font-sans text-[11px] uppercase tracking-[0.08em]"
+                >
+                  {{ tag }}
+                </li>
+              </ul>
+            </div>
+
+            <div class="border border-black px-5 py-5">
+              <p class="swiss-meta text-black/55">资源下载</p>
+              <p class="mt-3 font-sans text-sm font-bold">
+                {{ game.downloads.length }} 个渠道
+              </p>
+              <p class="mt-2 max-w-[38ch] font-sans text-xs leading-relaxed text-black/60">
+                全部指向第三方网盘，本站不存储、不分发任何游戏文件。
+              </p>
+              <Button variant="solid" block class="mt-5" @click="scrollToDownloads">
+                前往下载
+              </Button>
+            </div>
+
+            <p class="font-sans text-xs leading-relaxed text-black/50">
               评分与浏览量为社区维护的参考值，非官方数据。浏览量为静态基数时表示尚未接入后端统计服务。
             </p>
           </aside>
@@ -163,21 +292,23 @@ watchEffect(() => {
       </div>
     </section>
 
-    <!-- 下载核心区 -->
-    <section class="border-b border-black">
-      <div class="mx-auto max-w-[1280px] px-6 py-16 md:px-12 md:py-24">
-        <p class="swiss-meta mb-8">03 — 资源下载</p>
+    <!-- ============ 下载核心区 ============ -->
+    <section id="downloads" class="scroll-mt-24 border-b border-black">
+      <div class="mx-auto max-w-[1280px] px-6 py-12 md:px-12 md:py-16">
+        <p class="swiss-meta mb-6 text-black/60">03 — 资源下载</p>
         <DownloadPanel :downloads="game.downloads" />
       </div>
     </section>
 
-    <!-- 评论区（页面底部） -->
+    <!-- ============ 评论区 ============ -->
     <section>
-      <div class="mx-auto max-w-[1280px] px-6 py-16 md:px-12 md:py-24">
-        <p class="swiss-meta mb-8">04 — 讨论</p>
+      <div class="mx-auto max-w-[1280px] px-6 py-12 md:px-12 md:py-16">
+        <p class="swiss-meta mb-6 text-black/60">04 — 讨论</p>
         <CommentSection :term="game.id" />
       </div>
     </section>
+
+    <GalleryLightbox v-model="galleryOpen" :images="gallery" :title="game.title" />
   </div>
 
   <!-- ==================== 未命中 ==================== -->

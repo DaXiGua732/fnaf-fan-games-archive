@@ -47,17 +47,17 @@ async function onLogout(): Promise<void> {
 
     <!-- ============ 后台 Header ============ -->
     <header class="sticky top-0 z-50 border-b border-black bg-white">
-      <div class="mx-auto flex max-w-[1280px] items-center justify-between gap-6 px-6 py-4 md:px-12">
+      <div class="mx-auto flex h-14 max-w-[1280px] items-center justify-between gap-4 px-4 md:gap-6 md:px-12">
         <RouterLink
           to="/admin/games"
-          class="flex items-baseline font-sans text-sm font-bold uppercase tracking-[0.24em] transition-colors duration-150 ease-out hover:text-[#ff0000]"
+          class="flex items-baseline font-sans text-xs font-bold uppercase tracking-[0.24em] transition-colors duration-150 ease-out hover:text-[#ff0000] md:text-sm"
         >
           <span>FNAF</span>
           <span class="px-1 text-[#ff0000]">/</span>
           <span>Admin</span>
         </RouterLink>
 
-        <div class="flex items-center gap-6">
+        <div class="flex items-center gap-4 md:gap-6">
           <!-- 认证状态（Phase 15）：未登录时明确说清，登录后显示账号与登出 -->
           <template v-if="isAuthenticated">
             <p class="swiss-meta hidden text-black/45 sm:block">
@@ -81,7 +81,7 @@ async function onLogout(): Promise<void> {
 
           <RouterLink
             to="/"
-            class="group inline-flex items-baseline gap-3 border-b-2 border-b-transparent py-1 font-sans text-xs font-bold uppercase tracking-[0.16em] transition-colors duration-150 ease-out hover:border-b-[#ff0000] hover:text-[#ff0000]"
+            class="group hidden items-baseline gap-3 border-b-2 border-b-transparent py-1 font-sans text-xs font-bold uppercase tracking-[0.16em] transition-colors duration-150 ease-out hover:border-b-[#ff0000] hover:text-[#ff0000] sm:inline-flex"
           >
             <span>返回站点</span>
             <span class="u-arrow" aria-hidden="true">&#8594;</span>

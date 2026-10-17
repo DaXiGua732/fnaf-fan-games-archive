@@ -17,13 +17,18 @@ withDefaults(
     changed?: boolean
     /** 传了就是「待接入」，值形如 'Phase 8' */
     pending?: string
+    /** 锚点 id —— 供页内分区导航跳转 */
+    anchor?: string
   }>(),
-  { changed: false, pending: '' },
+  { changed: false, pending: '', anchor: '' },
 )
 </script>
 
 <template>
-  <section :class="pending ? 'border border-[#cccccc]' : 'border border-black'">
+  <section
+    :id="anchor || undefined"
+    :class="[pending ? 'border border-[#cccccc]' : 'border border-black', anchor ? 'scroll-mt-40' : '']"
+  >
     <header
       class="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4"
       :class="pending ? 'border-[#cccccc]' : 'border-black'"
