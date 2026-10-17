@@ -129,6 +129,8 @@ export interface GameDraft {
   ipSeries: string
   engine: string
   videoUrl: string
+  /** 详情页 Hero 的一句话简介（选填，显示在标题下方） */
+  shortDescription: string
   description: string
   /** 排序权重。数字字段也存成字符串 —— 表单中间态允许空 / 输入到一半 */
   sortOrder: string
@@ -158,6 +160,7 @@ export type DraftTextField =
   | 'ipSeries'
   | 'engine'
   | 'videoUrl'
+  | 'shortDescription'
   | 'description'
   | 'sortOrder'
   | 'coverImage'
@@ -170,6 +173,7 @@ export const DRAFT_TEXT_FIELDS: DraftTextField[] = [
   'ipSeries',
   'engine',
   'videoUrl',
+  'shortDescription',
   'description',
   'sortOrder',
   'coverImage',

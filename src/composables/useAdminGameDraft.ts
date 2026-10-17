@@ -51,7 +51,7 @@ const CURRENT_YEAR = new Date().getFullYear()
 export const YEAR_RANGE = { min: YEAR_MIN, max: CURRENT_YEAR + YEAR_MAX_OFFSET }
 
 /** 各字段的长度上限 */
-export const DRAFT_LIMITS = { title: 120, author: 80, ipSeries: 60, engine: 60, description: 2000 }
+export const DRAFT_LIMITS = { title: 120, author: 80, ipSeries: 60, engine: 60, shortDescription: 120, description: 2000 }
 
 /** 空白草稿（新增模式的起点） */
 export function emptyDraft(): GameDraft {
@@ -62,6 +62,7 @@ export function emptyDraft(): GameDraft {
     ipSeries: '',
     engine: '',
     videoUrl: '',
+    shortDescription: '',
     description: '',
     sortOrder: '',
     tags: [],
@@ -172,6 +173,7 @@ export function gameToDraft(game: AdminGame): GameDraft {
     ipSeries: game.ipSeries,
     engine: game.engine,
     videoUrl: game.videoUrl ?? '',
+    shortDescription: game.shortDescription ?? '',
     description: game.description,
     // 数组字段必须是副本：直接引用会让「编辑草稿」和「基线」共享同一份数据
     tags: [...game.tags],
@@ -205,6 +207,7 @@ export function draftToPatch(draft: GameDraft): Partial<AdminGame> {
     engine: d.engine.trim(),
     // 留空表示「没有视频」，写成 undefined 以便保存时清掉旧值
     videoUrl: d.videoUrl.trim() || undefined,
+    shortDescription: d.shortDescription.trim(),
     description: d.description.trim(),
     tags: readTags(draft),
     coverImage: d.coverImage.trim(),
@@ -275,6 +278,11 @@ export function validateDraft(draft: GameDraft): DraftErrors {
   const videoUrl = d.videoUrl.trim()
   if (videoUrl && !/^https?:\/\/\S+$/i.test(videoUrl)) {
     errors.videoUrl = '视频地址必须是 http:// 或 https:// 开头的完整链接'
+  }
+
+  const shortDescription = d.shortDescription.trim()
+  if (shortDescription.length > DRAFT_LIMITS.shortDescription) {
+    errors.shortDescription = `一句话简介不能超过 ${DRAFT_LIMITS.shortDescription} 个字符`
   }
 
   const description = d.description.trim()

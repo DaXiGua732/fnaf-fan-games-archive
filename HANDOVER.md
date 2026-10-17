@@ -26,7 +26,7 @@
 | 后台能力 | ✅ 增删改查 / 批量 / 标签 / 图片上传（自动 WebP 压缩）/ 预览 / 永久删除 / 操作署名 |
 | 交互层 | ✅ 编辑器吸顶操作条 + 分区锚点 + 发布概览 + Ctrl/Cmd+S；列表行内快捷上下线；详情页截图灯箱 |
 | 代码仓提交 | ✅ 已推送（`8d7288b`：删除 / 压缩 / 构建兜底 / 断言去数据耦合 / UI 重构） |
-| 测试基线 | ✅ typecheck + **selftest 450** + **smoke 16** + **UI 点击 72 步** + build 全绿 |
+| 测试基线 | ✅ typecheck + **selftest 453** + **smoke 16** + **UI 点击 72 步** + build 全绿 |
 | 已知缺口 | 浏览量仍是静态基数；Giscus 未启用（缺 app 安装）；数据仓未加其他协作者 |
 
 > ⚠️ **断言已改成从数据推导期望值**：`selftest` 会在 `data:pull` 之后跑，
@@ -58,7 +58,7 @@ npm run data:pull      # 从数据仓同步 db.json 到本地（部署前自动�
 npm run verify         # 全部门禁：typecheck + selftest + smoke + build（提交/推送前必跑）
 npm run test:ui        # 浏览器点击测试（先另开终端 npm run dev；需要系统 Chrome）
 npm run smoke          # 只跑 SSR 冒烟（16 条路由）
-npm run selftest       # 只跑断言集（450 项，含静态守卫）
+npm run selftest       # 只跑断言集（453 项，含静态守卫）
 ```
 
 - **部署**：推 `main` 即自动构建发布（`.github/workflows/deploy.yml`，构建前自动 `data:pull`）
@@ -145,7 +145,7 @@ npm run selftest       # 只跑断言集（450 项，含静态守卫）
 
 ```
 npm run verify
-# = typecheck + selftest(450) + smoke(16) + build
+# = typecheck + selftest(453) + smoke(16) + build
 ```
 
 - `selftest`：深模块断言 + **静态守卫**（扫源码的三条红线）+ 仓储/持久化/上传契约

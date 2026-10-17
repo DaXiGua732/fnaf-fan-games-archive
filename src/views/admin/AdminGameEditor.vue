@@ -283,6 +283,7 @@ const BASIC_FIELDS: string[] = [
   'ipSeries',
   'engine',
   'videoUrl',
+  'shortDescription',
   'description',
 ]
 const basicChanged = computed(() => changedFields.value.some((field) => BASIC_FIELDS.includes(field)))
@@ -643,6 +644,24 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
                 placeholder="https://…"
                 :class="INPUT_CLASS"
                 :aria-invalid="Boolean(shownErrors.videoUrl)"
+              />
+            </AdminField>
+
+            <AdminField
+              label="一句话简介"
+              control-id="f-short"
+              class="md:col-span-2"
+              :error="shownErrors.shortDescription"
+              hint="显示在详情页标题下方，建议 40–80 字；留空则不显示"
+            >
+              <input
+                id="f-short"
+                v-model="draft.shortDescription"
+                type="text"
+                autocomplete="off"
+                placeholder="例如：以第一人称重述「被烧毁的宅邸」之夜。"
+                :class="INPUT_CLASS"
+                :aria-invalid="Boolean(shownErrors.shortDescription)"
               />
             </AdminField>
 

@@ -9,6 +9,7 @@
  */
 import { nextTick } from 'vue'
 import {
+  DRAFT_LIMITS,
   YEAR_RANGE,
   draftToPatch,
   emptyDraft,
@@ -573,6 +574,24 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   // —— 纯函数：模型 → 草稿 ——
   check('gameToDraft · 标题', gameToDraft(target).title, original.title)
   check('gameToDraft · 年份转为字符串', gameToDraft(target).releaseYear, String(original.releaseYear))
+  check(
+    'gameToDraft · 一句话简介跟随模型',
+    gameToDraft(target).shortDescription,
+    target.shortDescription ?? '',
+  )
+  check(
+    'draftToPatch · 一句话简介去空白',
+    draftToPatch({ ...emptyDraft(), shortDescription: '  一句话简介  ' }).shortDescription,
+    '一句话简介',
+  )
+  check(
+    '校验 · 一句话简介超长会报错',
+    validateDraft({
+      ...emptyDraft(),
+      shortDescription: 'x'.repeat(DRAFT_LIMITS.shortDescription + 1),
+    }).shortDescription,
+    `一句话简介不能超过 ${DRAFT_LIMITS.shortDescription} 个字符`,
+  )
   check(
     'gameToDraft · 缺失的 videoUrl 归一为空串',
     gameToDraft({ ...target, videoUrl: undefined }).videoUrl,

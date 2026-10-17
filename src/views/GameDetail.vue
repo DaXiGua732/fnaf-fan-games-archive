@@ -225,7 +225,7 @@ watchEffect(() => {
 
           <!-- 右：封面 / 信息 / 标签 / 下载入口 -->
           <aside class="flex flex-col gap-8">
-            <figure v-if="cover" class="border border-black">
+            <figure v-if="cover && banner" class="border border-black">
               <img
                 :src="cover"
                 :alt="`${game.title} 封面`"
