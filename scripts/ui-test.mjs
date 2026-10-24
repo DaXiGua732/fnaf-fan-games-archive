@@ -21,6 +21,7 @@
 import { mkdirSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { strToU8, zipSync } from 'fflate'
 import { chromium } from 'playwright'
 
 /** 项目根目录 —— 从脚本位置推导，不依赖启动时的 cwd */
@@ -1586,6 +1587,113 @@ await step('GameJolt 导入 · 抓取预览 → 填表 → 传图 → 保存草�
     await context.unroute('http://127.0.0.1:4317/**', helperHandler)
     await context.unroute('https://m.gjcdn.net/**', imageHandler)
     // 这一条会往假数据仓里多写一条；复原，避免影响后续任何计数断言
+    fakeDb = JSON.parse(JSON.stringify(localDb))
+    fakeSha = 'sha-1'
+  }
+})
+
+await step('GameJolt 导入 · 扩展 ZIP 拖入 → 预览 → 传图 → 保存草稿', async () => {
+  const fixture = {
+    sourceUrl: 'https://gamejolt.com/games/gamejolt-zip-test/999998',
+    gameJoltId: 999998,
+    title: 'GameJolt ZIP Import Test',
+    author: 'ZIP Tester',
+    releaseYear: 2022,
+    engine: 'Godot',
+    ipSeries: 'FNAF',
+    description: 'A test description imported from a capture ZIP.',
+    shortDescription: 'A test game imported from a capture ZIP.',
+    coverImage: 'https://m.gjcdn.net/zip/cover.png',
+    bannerImage: 'https://m.gjcdn.net/zip/banner.png',
+    gallery: ['https://m.gjcdn.net/zip/gallery-1.png', 'https://m.gjcdn.net/zip/gallery-2.png'],
+    videoUrl: '',
+    tags: ['zip-test'],
+    warnings: [],
+  }
+
+  const png = await makePng(1000, 600)
+  const manifest = {
+    format: 'fnaf-archive-gamejolt-capture',
+    version: 1,
+    sourceUrl: fixture.sourceUrl,
+    gameJoltId: fixture.gameJoltId,
+    title: fixture.title,
+    fetchedAt: '2026-10-24T12:34:56.000Z',
+    generator: 'test/1.0.0',
+    images: [
+      { url: fixture.coverImage, file: 'images/cover.png', role: 'cover', contentType: 'image/png' },
+      { url: fixture.bannerImage, file: 'images/banner.png', role: 'banner', contentType: 'image/png' },
+      {
+        url: fixture.gallery[0],
+        file: 'images/gallery-1.png',
+        role: 'gallery-1',
+        contentType: 'image/png',
+      },
+      {
+        url: fixture.gallery[1],
+        file: 'images/gallery-2.png',
+        role: 'gallery-2',
+        contentType: 'image/png',
+      },
+    ],
+  }
+
+  const zip = zipSync(
+    {
+      'manifest.json': strToU8(JSON.stringify(manifest)),
+      'capture.json': strToU8(JSON.stringify(fixture)),
+      'README.txt': strToU8('test capture'),
+      'images/cover.png': png,
+      'images/banner.png': png,
+      'images/gallery-1.png': png,
+      'images/gallery-2.png': png,
+    },
+    { level: 0 },
+  )
+
+  try {
+    await go('/admin/games/new', '从 GameJolt 导入')
+
+    await page.setInputFiles('#gamejolt-zip', {
+      name: 'gamejolt-capture.zip',
+      mimeType: 'application/zip',
+      buffer: Buffer.from(zip),
+    })
+
+    await page.getByText(fixture.title, { exact: false }).first().waitFor({ timeout: 10000 })
+    await need('GameJolt #999998')
+    await need('来源：扩展 ZIP')
+    await need('已读取：gamejolt-capture.zip')
+
+    await btn('填入表单并上传图片').click()
+    await page.getByText('导入结果', { exact: false }).first().waitFor({ timeout: 20000 })
+    await page.waitForTimeout(800)
+
+    assert((await page.inputValue('#f-title')) === fixture.title, 'ZIP 标题没有填进草稿')
+    assert((await page.inputValue('#f-author')) === fixture.author, 'ZIP 作者没有填进草稿')
+    assert((await page.inputValue('#f-year')) === '2022', 'ZIP 年份没有填进草稿')
+    assert((await page.inputValue('#f-engine')) === 'Godot', 'ZIP 引擎没有填进草稿')
+
+    // 1 封面 + 1 Banner + 2 截图 = 4 张；图片来自 ZIP，不再请求 CDN
+    await need('已填入表单并上传 4 张图片')
+    const cover = await page.inputValue('#f-cover-url')
+    assert(
+      cover.includes('/images/games/gamejolt-zip-import-test/cover-'),
+      `ZIP 封面没有上传到按标题生成的目录：${cover}`,
+    )
+    assert(cover.endsWith('.webp'), `ZIP 图片上传前应转成 WebP：${cover}`)
+
+    await btn('保存').click()
+    await page.getByText('保存结果', { exact: false }).first().waitFor({ timeout: 10000 })
+    await page.waitForTimeout(500)
+
+    const created = fakeDb.games.find((game) => game.id === 'gamejolt-zip-import-test')
+    assert(Boolean(created), '数据仓里没有新建的 ZIP 导入条目')
+    assert(created.status === 'draft', `ZIP 导入后应是草稿，实际 ${created.status}`)
+    assert(created.downloads.length === 0, 'ZIP 导入不应碰下载渠道')
+    assert(created.gallery.length === 2, `ZIP 图库应有 2 张，实际 ${created.gallery.length}`)
+    await shot('44-gamejolt-zip-import')
+  } finally {
     fakeDb = JSON.parse(JSON.stringify(localDb))
     fakeSha = 'sha-1'
   }

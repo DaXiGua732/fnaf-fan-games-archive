@@ -7,11 +7,11 @@
  *   /site-api/web/discover/games/<id>              → 标题 / 作者 / 简介 / 图片元数据
  *   /site-api/web/discover/games/overview/<id>     → 截图、视频、下载数等
  *
- * 【为什么需要本地助手】
- *   这两个接口不返回可跨域读取的 CORS 头，浏览器直接 fetch 会被拦下。
- *   助手跑在 127.0.0.1，由它去请求 GameJolt，再把 JSON 交给后台页面。
- *   它**不代理图片** —— GameJolt 的 m.gjcdn.net 本身带 `Access-Control-Allow-Origin: *`，
- *   图片由浏览器直接下载更省事，也少一条要维护的转发路径。
+ * 【调用方不同，请求头也不同】
+ *   - Node 助手（helper.mjs）：需要显式带 UA / Referer 才不容易被 Cloudflare 拦；
+ *   - 浏览器扩展：content script 运行在 gamejolt.com 页面里，请求本身就是同源的，
+ *     UA / Referer 由浏览器自动带，而且它们属于 forbidden header，不能手写。
+ *   所以这里允许调用方传入 `headers`；扩展传 BROWSER_REQUEST_HEADERS。
  *
  * 【接口是内部的】
  *   这不是官方公开 API，GameJolt 随时可能改字段。转换层对缺失字段一律降级，
@@ -36,6 +36,15 @@ const REQUEST_HEADERS = {
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
 }
 
+/**
+ * 浏览器里能安全设置的请求头。
+ * 不要加 referer / user-agent —— 它们是 forbidden header，浏览器会丢弃或直接报错。
+ */
+const BROWSER_REQUEST_HEADERS = {
+  accept: 'application/json, text/plain, */*',
+  'accept-language': 'en-US,en;q=0.9,zh-CN;q=0.8',
+}
+
 class GameJoltFetchError extends Error {
   constructor(message, status = 502) {
     super(message)
@@ -44,14 +53,14 @@ class GameJoltFetchError extends Error {
   }
 }
 
-async function requestJson(url, fetchImpl, timeoutMs) {
+async function requestJson(url, fetchImpl, timeoutMs, headers) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   let response
   try {
     response = await fetchImpl(url, {
-      headers: REQUEST_HEADERS,
+      headers,
       redirect: 'follow',
       signal: controller.signal,
     })
@@ -86,15 +95,16 @@ async function requestJson(url, fetchImpl, timeoutMs) {
  * 抓取并转换一条 GameJolt 作品。
  *
  * @param {string} input 作品页链接或裸 ID
- * @param {{ fetchImpl?: typeof fetch, timeoutMs?: number }} options
+ * @param {{ fetchImpl?: typeof fetch, timeoutMs?: number, headers?: Record<string, string> }} options
  */
 export async function fetchGameJoltGame(input, options = {}) {
   const parsed = parseGameJoltInput(input)
   const fetchImpl = options.fetchImpl ?? globalThis.fetch
   const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS
+  const headers = options.headers ?? REQUEST_HEADERS
 
   if (typeof fetchImpl !== 'function') {
-    throw new GameJoltFetchError('当前 Node 没有可用的 fetch，请升级到 Node 18 或更高版本。', 500)
+    throw new GameJoltFetchError('当前环境没有可用的 fetch。', 500)
   }
 
   const detailUrl = `${GAMEJOLT_BASE}/site-api/web/discover/games/${parsed.id}`
@@ -102,8 +112,8 @@ export async function fetchGameJoltGame(input, options = {}) {
 
   const warnings = []
   const [detailResult, overviewResult] = await Promise.allSettled([
-    requestJson(detailUrl, fetchImpl, timeoutMs),
-    requestJson(overviewUrl, fetchImpl, timeoutMs),
+    requestJson(detailUrl, fetchImpl, timeoutMs, headers),
+    requestJson(overviewUrl, fetchImpl, timeoutMs, headers),
   ])
 
   if (detailResult.status === 'rejected') throw detailResult.reason
@@ -120,4 +130,4 @@ export async function fetchGameJoltGame(input, options = {}) {
   return normalizeGameJoltData(detailResult.value, overview, parsed, warnings)
 }
 
-export { GameJoltFetchError, GameJoltInputError }
+export { BROWSER_REQUEST_HEADERS, GameJoltFetchError, GameJoltInputError }

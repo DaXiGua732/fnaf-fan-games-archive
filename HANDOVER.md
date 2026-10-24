@@ -23,10 +23,10 @@
 | --- | --- |
 | 计划书 20 个阶段 | ✅ **全部完成**（0–20，Phase 20 测试由贯穿全程的门禁体系覆盖） |
 | 线上部署 | ✅ 已部署并用真实浏览器验证；**数据仓的改动不会自动触发构建**，现由每小时定时构建兜底 |
-| 后台能力 | ✅ 增删改查 / 批量 / 标签与作者合并管理 / 图片上传（自动 WebP 压缩）/ 预览 / 永久删除 / 操作署名 / **GameJolt 半自动导入** |
+| 后台能力 | ✅ 增删改查 / 批量 / 标签与作者合并管理 / 图片上传（自动 WebP 压缩）/ 预览 / 永久删除 / 操作署名 / **GameJolt 扩展 ZIP 导入 + 本机助手备用** |
 | 交互层 | ✅ 编辑器吸顶操作条 + 分区锚点 + 发布概览 + Ctrl/Cmd+S；列表行内快捷上下线 / 永久删除；详情页截图灯箱 |
-| 代码仓提交 | ✅ 已推送（最新提交见 `git log -1`；删除 / 压缩 / 构建兜底 / 断言去数据耦合 / UI 重构 / 一句话简介） |
-| 测试基线 | ✅ typecheck + **test:gamejolt 14** + **selftest 481** + **smoke 14** + **UI 点击 75 步** + build 全绿 |
+| 代码仓提交 | ✅ 已推送（最新提交见 `git log -1`；删除 / 压缩 / 构建兜底 / 断言去数据耦合 / UI 重构 / 一句话简介 / GameJolt 导入） |
+| 测试基线 | ✅ typecheck + **test:gamejolt 22** + **build:extension** + **selftest 481** + **smoke 14** + **UI 点击 76 步** + build 全绿；扩展 E2E 另跑 |
 | 已知缺口 | 浏览量仍是静态基数；数据仓未加其他协作者；评论区已按产品决策移除 |
 
 > ⚠️ **断言已改成从数据推导期望值**：`selftest` 会在 `data:pull` 之后跑，
@@ -58,10 +58,12 @@
 ```bash
 npm run dev            # 本地开发（读 src/data/db.json —— 可能是旧快照，见下）
 npm run data:pull      # 从数据仓同步 db.json 到本地（部署前自动执行；本地开发需手动）
-npm run verify         # 全部门禁：typecheck + test:gamejolt + selftest + smoke + build（提交/推送前必跑）
+npm run verify         # 全部门禁：typecheck + test:gamejolt + build:extension + selftest + smoke + build
 npm run test:ui        # 浏览器点击测试（先另开终端 npm run dev；需要系统 Chrome）
-npm run test:gamejolt  # GameJolt 解析 / 网络层测试（14 项，注入 fetch 夹具，不出网）
-npm run gamejolt:helper # 后台「从 GameJolt 导入」所需的本机助手（127.0.0.1:4317）
+npm run test:gamejolt  # GameJolt 解析 / 网络层 / 扩展打包测试（22 项，不出网）
+npm run build:extension # 构建扩展到 extension/dist（Chrome/Edge 加载已解压）
+npm run test:extension # 扩展 E2E：同源抓取 → 图片 → ZIP 下载（需要系统 Chrome）
+npm run gamejolt:helper # 本机助手（127.0.0.1:4317，开发备用；运维主路径是扩展 ZIP）
 npm run smoke          # 只跑 SSR 冒烟（14 条路由）
 npm run selftest       # 只跑断言集（481 项，含静态守卫）
 ```
@@ -85,7 +87,7 @@ npm run selftest       # 只跑断言集（481 项，含静态守卫）
 | **预览复用 `GameDetail` 本身**（注入草稿） | 另写一个"像前台"的预览页迟早分叉，分叉后预览就在骗人 | README §预览功能 |
 | **不再提供评论区** | 产品决策：评论需要审核、滥用处理与独立的数据归属；没有这些能力时，一个空评论区只是在制造维护负担 | README §7.2 |
 | **标签与作者合并为一个页面** | 两者都是由作品数据派生的分类维度；分成两页只会让管理员在两张几乎相同的表格之间来回切换 | README §后台路由 |
-| **GameJolt 导入走本机助手，下载链接仍人工** | GameJolt 站内接口无 CORS 头，浏览器只能靠本机小代理拿 JSON；图片 CDN 本身开放跨域，可直接走现有上传链路。游戏资源与网盘链接是策展决定，自动化只做「信息搬运」 | README §7.3 |
+| **GameJolt 导入：扩展 ZIP 为主，本机助手为开发备用** | 扩展 content script 运行在 gamejolt.com 页面内，`/site-api` 是同源请求，运维不需要 Node / 终端；图片 CDN 开放跨域，可直接走现有上传链路。ZIP 是本地可审计的交换文件，后台仍负责归一化 / 校验 / 上传，扩展接触不到 GitHub 令牌。游戏资源与网盘链接是策展决定，自动化只做「信息搬运」 | README §7.3 |
 
 ## 6. 改动前必读的铁律
 
@@ -126,9 +128,9 @@ npm run selftest       # 只跑断言集（481 项，含静态守卫）
    现有断言已改成从数据推导期望值；新增断言必须继续守这条规则。
 2. **sessionStorage 不跟着 `window.open` 的新标签页走**（预览页拿到 null）——
    跨标签页传数据用 **localStorage**，且**读完即清**
-3. **`git push` 在这个环境推不了**（沙箱代理 502；清掉代理又直连超时）——
-   推送要用户在自己终端做；**小改动可用 Contents API 应用到远端**（带 sha 乐观锁），
-   但会产生分叉，之后 `git pull --rebase` 收敛
+3. **默认沙箱里 `git push` 连不上 github.com:443**（2026-10-24 实测）——
+   在允许网络的环境（用户终端 / 免沙箱执行）重试即可成功；仍失败时再用
+   Contents API（带 sha 乐观锁），但会产生分叉，之后 `git pull --rebase` 收敛
 4. **守卫不能从 `router/index.ts` 导出**（它创建带 hash history 的 router，Node 里没有
    `location`）—— 单独放 `src/router/authGuard.ts`
 5. **新冒烟用例（后台）必须 `token: true`** —— 漏了测的是登录页而非目标页
@@ -138,6 +140,10 @@ npm run selftest       # 只跑断言集（481 项，含静态守卫）
 9. **Vite 清空 dist 触发批量删除守卫** → 先 `git clean -fdxq dist` 再 `npm run build`
 10. **懒加载图片的检查要给足等待**，并用 `complete` 区分「仍在加载」与「真裂图」
     （407KB 的图 2.5s 不够）
+11. **MV3 的 content_scripts 不支持 ES module**：扩展源码必须用 esbuild 打成 IIFE，
+    加载 `extension/dist/`；同源抓取只成立在 content script（popup/background 是扩展 origin）
+12. **ZIP 是不可信输入**：只认格式/版本/GameJolt 来源，白名单条目 + 大小/条目数限制，
+    图片仍走 `createImageBitmap` 与尺寸校验；不要渲染包内 HTML/JS
 
 ## 8. 已知缺口与待办
 
@@ -149,26 +155,33 @@ npm run selftest       # 只跑断言集（481 项，含静态守卫）
 | 数据更新延迟 | 公开页挂载 / 切回时自动同步（通常几秒）；断网时退回构建期快照，最长等 1 小时的定时构建刷新快照 |
 | 图片处理 | 已做长边缩放 + WebP；**未做自动裁剪**（按比例留白是设计选择，不是缺陷） |
 | GameJolt 导入 | 依赖对方**内部站内接口**（`/site-api/web/discover/games/<id>`），改版即可能失效；失败会显式报错，不会写入半条数据。导入只填草稿，不碰下载渠道，仍需人工点保存 |
+| 扩展分发 | 目前是「加载已解压扩展」，更新要手动重载；要给非技术运维并自动更新，需把 `extension/dist/` 上架 Chrome Web Store / Edge Add-ons 的不公开条目 |
 
 ## 9. 质量门禁（改动之后必须全绿）
 
 ```
 npm run verify
-# = typecheck + test:gamejolt(14) + selftest(481) + smoke(14) + build
+# = typecheck + test:gamejolt(22) + build:extension + selftest(481) + smoke(14) + build
 ```
 
-- `test:gamejolt`：URL 解析 / 富文本 / 图片选型与尺寸升级 / 网络错误分支（`node --test`，夹具注入 fetch）
+- `test:gamejolt`：URL 解析 / 富文本 / 图片选型与尺寸升级 / 网络错误分支 / 扩展 ZIP 打包
+  （`node --test`，夹具注入 fetch，不出网）
+- `build:extension`：esbuild 把扩展 content script 打成 IIFE，产出 `extension/dist/`
 - `selftest`：深模块断言 + **静态守卫**（扫源码的三条红线）+ 仓储/持久化/上传契约
 - `smoke`：SSR 渲染 14 条路由（公开 4 + 后台 10），断言外壳分离与关键内容
 - `UI 点击测试`（`scripts/ui-test.mjs`，**已纳入版本管理**，`npm run test:ui`）：
-  75 步真实浏览器点击，覆盖计划书 §21 后台专项、§22 前台回归与 GameJolt 导入全流程（助手/CDN 均为路由 mock）
+  76 步真实浏览器点击，覆盖计划书 §21 后台专项、§22 前台回归、GameJolt 助手导入与 ZIP 导入
+  （助手/CDN 均 mock，ZIP 用 fflate 现场生成）
+- `npm run test:extension`：扩展 E2E（同源抓取 → 下载图片 → 打包 ZIP），需要系统 Chrome，
+  **不进 verify / CI**，改扩展代码时本地跑
 - **公开站回归**：Phase 19 曾用逐字节基线；快照属 `.tmp/` 临时产物，不纳入版本管理，
   需要时重新构建一份即可
 
 ## 10. 新会话怎么开始
 
 1. 读本文件 → 读 `README.md`（项目手册，最完整）
-2. `npm run verify` 确认全绿，`npm run dev` 起本地；涉及交互行为时再跑 `npm run test:ui`
+2. `npm run verify` 确认全绿，`npm run dev` 起本地；涉及交互行为时再跑 `npm run test:ui`，
+   涉及扩展时跑 `npm run test:extension`
 3. 有疑问先查 `README.md` 对应章节，再查 `.workbuddy/memory/MEMORY.md` 的踩坑记录
 4. 改动之后：`npm run verify` 全绿 → 按阶段提交（**不要攒大批量**，见计划书 §23 的教训）
 5. 涉及数据仓 / 部署的操作，先读 `admin_phase13_persistence_decision.md`

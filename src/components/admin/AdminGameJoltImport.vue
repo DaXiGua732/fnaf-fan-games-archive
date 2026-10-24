@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { useAdminGameDraftContext } from '../../composables/useAdminGameDraft'
 import { useAdminGames } from '../../composables/useAdminGames'
+import { readGameJoltCaptureZip } from '../../services/gamejoltCapture'
 import {
   buildGameJoltDraftPatch,
   fetchGameJoltImport,
@@ -34,6 +35,12 @@ const { storage, uploadImage } = useAdminGames()
 const input = ref('')
 const fetching = ref(false)
 const applying = ref(false)
+const zipLoading = ref(false)
+const zipInput = ref<HTMLInputElement | null>(null)
+const zipName = ref('')
+const zipImages = ref<Map<string, File> | null>(null)
+const sourceLabel = ref('')
+const previewCoverUrl = ref('')
 const error = ref('')
 const data = ref<GameJoltImportData | null>(null)
 const warnings = ref<string[]>([])
@@ -41,7 +48,11 @@ const progress = ref<GameJoltImportProgress | null>(null)
 const result = ref<{ uploaded: number; failed: number; notes: string[] } | null>(null)
 
 const canApply = computed(
-  () => Boolean(data.value) && storage.value === 'remote' && !applying.value,
+  () =>
+    Boolean(data.value) &&
+    storage.value === 'remote' &&
+    !applying.value &&
+    !zipLoading.value,
 )
 
 const imageSummary = computed(() => {
@@ -73,25 +84,113 @@ function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : '操作失败'
 }
 
+function formatFetchedAt(value: string | undefined): string {
+  if (!value) return ''
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function revokePreviewCover(): void {
+  if (previewCoverUrl.value.startsWith('blob:')) {
+    URL.revokeObjectURL(previewCoverUrl.value)
+  }
+}
+
+function clearPreview(): void {
+  revokePreviewCover()
+  data.value = null
+  warnings.value = []
+  progress.value = null
+  result.value = null
+  zipImages.value = null
+  zipName.value = ''
+  sourceLabel.value = ''
+  previewCoverUrl.value = ''
+}
+
+/** 统一接收两种来源（助手 / ZIP）的预览数据 */
+function showPreview(
+  fetched: GameJoltImportData,
+  options: {
+    source: string
+    images: Map<string, File> | null
+    extraWarnings?: string[]
+  },
+): void {
+  revokePreviewCover()
+  data.value = fetched
+  warnings.value = [...new Set([...fetched.warnings, ...(options.extraWarnings ?? [])])]
+  zipImages.value = options.images
+  sourceLabel.value = options.source
+  previewCoverUrl.value = fetched.coverImage
+
+  if (options.images && fetched.coverImage) {
+    const cover = options.images.get(fetched.coverImage)
+    if (cover) previewCoverUrl.value = URL.createObjectURL(cover)
+  }
+}
+
 async function onFetch(): Promise<void> {
-  if (fetching.value || applying.value) return
+  if (fetching.value || zipLoading.value || applying.value) return
 
   error.value = ''
-  result.value = null
-  progress.value = null
-  warnings.value = []
-  data.value = null
+  clearPreview()
   fetching.value = true
 
   try {
     const fetched = await fetchGameJoltImport(input.value)
-    data.value = fetched
-    warnings.value = [...fetched.warnings]
+    showPreview(fetched, { source: '来源：本机助手抓取', images: null })
+    zipName.value = ''
   } catch (cause) {
     error.value = errorMessage(cause)
   } finally {
     fetching.value = false
   }
+}
+
+function openZipPicker(): void {
+  zipInput.value?.click()
+}
+
+async function loadZip(file: File): Promise<void> {
+  if (fetching.value || zipLoading.value || applying.value) return
+
+  if (!file.name.toLowerCase().endsWith('.zip')) {
+    error.value = '请选择扩展导出的 .zip 文件。'
+    return
+  }
+
+  error.value = ''
+  clearPreview()
+  zipLoading.value = true
+
+  try {
+    const bundle = await readGameJoltCaptureZip(file)
+    const fetchedAt = formatFetchedAt(bundle.manifest.fetchedAt)
+    zipName.value = file.name
+    showPreview(bundle.data, {
+      source: fetchedAt ? `来源：扩展 ZIP · 抓取于 ${fetchedAt}` : '来源：扩展 ZIP',
+      images: bundle.images,
+      extraWarnings: bundle.warnings,
+    })
+  } catch (cause) {
+    error.value = errorMessage(cause)
+  } finally {
+    zipLoading.value = false
+  }
+}
+
+async function onZipChange(event: Event): Promise<void> {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  // 清空 value，用户才能连续选择同一个文件重试
+  target.value = ''
+  if (file) await loadZip(file)
+}
+
+async function onDrop(event: DragEvent): Promise<void> {
+  const file = event.dataTransfer?.files?.[0]
+  if (file) await loadZip(file)
 }
 
 async function onApply(): Promise<void> {
@@ -133,11 +232,19 @@ async function onApply(): Promise<void> {
 
     // 新增作品还没有 id，图片目录按标题 slug 走 —— 与编辑器 imageOwnerId 的口径一致。
     const uploadGameId = props.isNew ? slugify(patch.title) || props.gameId : props.gameId
+    const localImages = zipImages.value
     const imageResult = await importGameJoltImages(fetched, {
       gameId: uploadGameId,
       storage: storage.value,
       galleryRoom: Math.max(0, IMAGE_LIMITS.maxGallery - draft.gallery.length),
       uploadImage,
+      imageLoader: localImages
+        ? (url) => {
+            const file = localImages.get(url)
+            if (!file) throw new Error('ZIP 里没有这张图片，请重新导出后再试。')
+            return file
+          }
+        : undefined,
       onProgress: (next) => {
         progress.value = next
       },
@@ -163,12 +270,11 @@ async function onApply(): Promise<void> {
 
 function onClear(): void {
   if (applying.value) return
-  data.value = null
-  warnings.value = []
   error.value = ''
-  progress.value = null
-  result.value = null
+  clearPreview()
 }
+
+onUnmounted(revokePreviewCover)
 
 const INPUT_CLASS =
   'w-full rounded-none border border-black bg-white px-4 py-3 font-sans text-sm ' +
@@ -186,18 +292,55 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
 <template>
   <div>
     <p class="max-w-[78ch] font-sans text-xs leading-relaxed text-black/60">
-      粘贴 GameJolt 作品页链接，自动抓取标题、作者、年份、引擎、简介与图片。
+      自动抓取标题、作者、年份、引擎、简介与图片。
       <span class="font-bold text-black">游戏文件不在自动导入范围内</span>
       —— 下载渠道仍需你手动下载、上传并填写。
     </p>
 
-    <p class="mt-3 max-w-[78ch] border border-[#cccccc] bg-[#f9f9f9] px-4 py-3 font-sans text-xs leading-relaxed text-black/60">
-      抓取需要本机助手：在项目目录运行
+    <!-- 方式一：浏览器扩展导出的 ZIP（运维主路径） -->
+    <div
+      class="mt-5 border border-black bg-[#f9f9f9] p-5"
+      @dragover.prevent
+      @drop.prevent="onDrop"
+    >
+      <p class="swiss-meta font-bold text-black">方式一 · 扩展导出的 ZIP（推荐）</p>
+      <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/60">
+        在 GameJolt 作品页点右下角「导出到 FNAF 档案」，再把下载的 ZIP 拖到这里。
+        不需要 Node、不需要保持任何本机进程开启。
+      </p>
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <input
+          id="gamejolt-zip"
+          ref="zipInput"
+          type="file"
+          accept=".zip,application/zip,application/x-zip-compressed"
+          class="sr-only"
+          :disabled="fetching || zipLoading || applying"
+          @change="onZipChange"
+        />
+        <button
+          type="button"
+          :class="ACTION_SECONDARY"
+          :disabled="fetching || zipLoading || applying"
+          @click="openZipPicker"
+        >
+          {{ zipLoading ? '读取 ZIP 中…' : '选择 ZIP 文件' }}
+        </button>
+        <span v-if="zipName" class="font-sans text-xs text-black/60">
+          已读取：{{ zipName }}
+        </span>
+        <span v-if="zipLoading" class="swiss-meta text-black/45">正在校验和解压…</span>
+      </div>
+    </div>
+
+    <!-- 方式二：本机助手（开发 / 调试备用） -->
+    <p class="mt-4 max-w-[78ch] border border-[#cccccc] bg-[#f9f9f9] px-4 py-3 font-sans text-xs leading-relaxed text-black/60">
+      方式二 · 本机助手（开发备用）：在项目目录运行
       <code class="font-mono text-[11px] font-bold text-black">npm run gamejolt:helper</code>
-      ，保持窗口开启。助手只代理 GameJolt 元数据，不会接触数据仓令牌。
+      ，保持窗口开启，再粘贴链接抓取。助手只代理 GameJolt 元数据，不会接触数据仓令牌。
     </p>
 
-    <div class="mt-5 flex flex-wrap items-stretch gap-3">
+    <div class="mt-3 flex flex-wrap items-stretch gap-3">
       <input
         id="gamejolt-url"
         v-model="input"
@@ -207,13 +350,13 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
         spellcheck="false"
         placeholder="https://gamejolt.com/games/xxx/123456"
         :class="INPUT_CLASS"
-        :disabled="fetching || applying"
+        :disabled="fetching || zipLoading || applying"
         @keydown.enter.prevent="onFetch"
       />
       <button
         type="button"
         :class="ACTION_PRIMARY"
-        :disabled="fetching || applying"
+        :disabled="fetching || zipLoading || applying"
         @click="onFetch"
       >
         {{ fetching ? '抓取中…' : '抓取信息' }}
@@ -229,8 +372,8 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
       <div class="grid gap-5 p-5 md:grid-cols-[180px_minmax(0,1fr)]">
         <div class="border border-[#cccccc] bg-[#f9f9f9]">
           <img
-            v-if="data.coverImage"
-            :src="data.coverImage"
+            v-if="previewCoverUrl"
+            :src="previewCoverUrl"
             alt="GameJolt 封面预览"
             class="aspect-video w-full object-cover"
             referrerpolicy="no-referrer"
@@ -242,6 +385,7 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
 
         <div class="min-w-0">
           <p class="swiss-meta text-black/45">GameJolt #{{ data.gameJoltId }}</p>
+          <p v-if="sourceLabel" class="swiss-meta mt-1 text-black/45">{{ sourceLabel }}</p>
           <h3 class="mt-1 font-sans text-lg font-bold leading-tight">{{ data.title }}</h3>
           <p class="mt-1 font-sans text-xs text-black/60">
             by {{ data.author || '未知作者' }} · {{ data.releaseYear }} ·

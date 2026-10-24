@@ -4,16 +4,16 @@
  * ============================================================================
  * 数据流：
  *
- *   后台页面 → 本机助手（127.0.0.1:4317）→ GameJolt 站内 JSON
- *            ← 已转换好的字段
+ *   方式一（运维主路径）：浏览器扩展在 GameJolt 作品页导出 ZIP → 后台读取
+ *   方式二（开发备用）：后台页面 → 本机助手（127.0.0.1:4317）→ GameJolt 站内 JSON
  *
- *   图片：浏览器直接 fetch GameJolt CDN（它带 ACAO: *）
+ *   图片：ZIP 里的 File，或浏览器直接 fetch GameJolt CDN（它带 ACAO: *）
  *         → 走现有 uploadImage（缩放 / 转 WebP / 上传数据仓）
  *
- * 【为什么元数据要绕本机助手】
- *   GameJolt 的 /site-api 接口不返回可跨域读取的 CORS 头，浏览器直连会被拦。
- *   助手只代理 JSON，不碰图片、不碰令牌 —— 图片和上传仍然在浏览器里完成，
- *   这样现有的图片处理与 GitHub 提交链路一行都不用改。
+ * 【为什么本机助手只剩「开发备用」】
+ *   GameJolt 的 /site-api 接口不返回可跨域读取的 CORS 头，浏览器页面直连会被拦。
+ *   扩展的 content script 运行在 gamejolt.com 里，属于同源请求，不需要助手；
+ *   助手保留给没有安装扩展的开发 / 调试场景。
  *
  * 【这里只负责「把数据变成草稿」】
  *   不自动保存。导入完成后用户仍然要点右上角的「保存」，
@@ -101,7 +101,7 @@ function asStringArray(value: unknown): string[] {
  * 这里不信任 `payload.data` 的运行时形状，缺字段就给安全缺省值；
  * 唯一硬性要求是标题，因为没有标题的条目在后台根本无法保存。
  */
-function normalizeImportData(raw: unknown): GameJoltImportData {
+export function normalizeGameJoltImportData(raw: unknown): GameJoltImportData {
   const data = (raw ?? {}) as Record<string, unknown>
   const title = asString(data.title)
   if (!title) throw new Error('GameJolt 返回的数据里没有标题，无法导入。')
@@ -164,7 +164,7 @@ export async function fetchGameJoltImport(input: string): Promise<GameJoltImport
       throw new Error(payload?.error || `本机助手返回 HTTP ${response.status}。`)
     }
 
-    return normalizeImportData(payload.data)
+    return normalizeGameJoltImportData(payload.data)
   } finally {
     clearTimeout(timer)
   }
@@ -274,6 +274,11 @@ export interface GameJoltImageImportOptions {
   /** 图库还能再加几张；编辑已有作品时由调用方算好 */
   galleryRoom: number
   uploadImage: GameJoltImageUploader
+  /**
+   * 图片来源。默认从 GameJolt CDN 下载；
+   * ZIP 导入时由调用方从压缩包里取出 File，避免再走一次网络。
+   */
+  imageLoader?: (url: string) => File | Promise<File>
   onProgress?: (progress: GameJoltImportProgress) => void
 }
 
@@ -413,7 +418,15 @@ export async function importGameJoltImages(
     }
 
     try {
-      const file = await fetchImageFile(task.url)
+      const file = options.imageLoader
+        ? await options.imageLoader(task.url)
+        : await fetchImageFile(task.url)
+
+      if (file.size > IMAGE_LIMITS.maxFileBytes) {
+        throw new Error(
+          `图片超过 ${Math.round(IMAGE_LIMITS.maxFileBytes / 1024 / 1024)} MB。`,
+        )
+      }
 
       // 与手动选图走同一套尺寸规则：太小 / 太大的图在这里就拦下，
       // 不把不合格的图传到数据仓再让前台裂图。

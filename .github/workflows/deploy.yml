@@ -60,6 +60,9 @@ jobs:
       - name: GameJolt import tests
         run: npm run test:gamejolt
 
+      - name: Build browser extension
+        run: npm run build:extension
+
       - name: Deep module self-test
         run: npm run selftest
 

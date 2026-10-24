@@ -1,0 +1,146 @@
+/*
+ * 扩展浮层样式。
+ * 用 #id 前缀 + all: initial 隔离 GameJolt 自己的 CSS；
+ * 保持站点一贯的 Swiss 风格：直角、无阴影、无渐变，hover 只改颜色。
+ */
+#fnaf-archive-capture-root {
+  all: initial;
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2147483647;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.5;
+  text-align: left;
+}
+
+#fnaf-archive-capture-root [hidden] {
+  display: none !important;
+}
+
+#fnaf-archive-capture-root .fnaf-capture-button {
+  appearance: none;
+  display: inline-block;
+  margin: 0;
+  padding: 12px 18px;
+  border: 2px solid #000000;
+  border-radius: 0;
+  background: #ff0000;
+  color: #ffffff;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 150ms ease-out, color 150ms ease-out;
+}
+
+#fnaf-archive-capture-root .fnaf-capture-button:hover:not(:disabled) {
+  background: #000000;
+  color: #ffffff;
+}
+
+#fnaf-archive-capture-root .fnaf-capture-button:disabled {
+  background: #ffffff;
+  color: rgba(0, 0, 0, 0.35);
+  cursor: wait;
+}
+
+#fnaf-archive-capture-root .fnaf-capture-panel {
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  padding: 16px;
+  border: 2px solid #000000;
+  border-radius: 0;
+  background: #ffffff;
+  color: #111111;
+  box-shadow: none;
+}
+
+#fnaf-archive-capture-root .fnaf-capture-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #cccccc;
+}
+
+#fnaf-archive-capture-root .fnaf-capture-header strong {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#fnaf-archive-capture-root .fnaf-capture-close {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.55);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+#fnaf-archive-capture-root .fnaf-capture-close:hover {
+  color: #ff0000;
+}
+
+#fnaf-archive-capture-root .fnaf-capture-status {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(0, 0, 0, 0.72);
+}
+
+#fnaf-archive-capture-root .fnaf-capture-status[data-tone='error'] {
+  color: #ff0000;
+}
+
+#fnaf-archive-capture-root .fnaf-capture-status[data-tone='success'] {
+  color: #000000;
+  font-weight: 700;
+}
+
+#fnaf-archive-capture-root .fnaf-capture-download {
+  align-self: flex-start;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 2px solid #000000;
+  border-radius: 0;
+  background: #000000;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+#fnaf-archive-capture-root .fnaf-capture-download:hover {
+  border-color: #ff0000;
+  background: #ff0000;
+  color: #ffffff;
+}
+
+#fnaf-archive-capture-root .fnaf-capture-hint {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid #cccccc;
+  font-size: 11px;
+  line-height: 1.6;
+  color: rgba(0, 0, 0, 0.5);
+}

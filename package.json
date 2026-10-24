@@ -10,14 +10,17 @@
     "typecheck": "vue-tsc --noEmit",
     "assets": "node scripts/gen-placeholders.mjs",
     "gamejolt:helper": "node scripts/gamejolt/helper.mjs",
-    "test:gamejolt": "node --test scripts/gamejolt/test.mjs",
+    "build:extension": "node scripts/build-extension.mjs",
+    "test:gamejolt": "node --test scripts/gamejolt/test.mjs extension/capture.test.mjs",
     "selftest": "esbuild scripts/selftest.mts --bundle --platform=node --format=esm --external:vue --outfile=.tmp/selftest.mjs --log-level=warning && node .tmp/selftest.mjs",
     "smoke": "vite build --config vite.smoke.config.ts --logLevel warn && node .tmp/smoke-build/smoke.js",
     "test:ui": "node scripts/ui-test.mjs",
-    "verify": "npm run typecheck && npm run test:gamejolt && npm run selftest && npm run smoke && npm run build",
-    "preview": "vite preview"
+    "verify": "npm run typecheck && npm run test:gamejolt && npm run build:extension && npm run selftest && npm run smoke && npm run build",
+    "preview": "vite preview",
+    "test:extension": "npm run build:extension && node scripts/extension-test.mjs"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
   },

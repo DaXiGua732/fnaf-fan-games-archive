@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "FNAF 档案 · GameJolt 抓取",
+  "version": "0.1.0",
+  "description": "把 GameJolt 作品信息与图片打包成 ZIP，供 FNAF 档案后台导入。",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "打开 GameJolt 作品页后，点右下角「导出到 FNAF 档案」"
+  },
+  "host_permissions": [
+    "https://gamejolt.com/*",
+    "https://www.gamejolt.com/*",
+    "https://*.gjcdn.net/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://gamejolt.com/*",
+        "https://www.gamejolt.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -18,7 +18,7 @@ import {
   richTextToPlainText,
   upgradeMediaUrl,
 } from './parse.mjs'
-import { fetchGameJoltGame } from './fetch.mjs'
+import { BROWSER_REQUEST_HEADERS, fetchGameJoltGame } from './fetch.mjs'
 
 /* ==========================================================================
    一、链接解析
@@ -306,6 +306,29 @@ test('fetchGameJoltGame：详情成功、概览失败时仍返回带警告的数
   assert.ok(calls.some((url) => url.includes('/discover/games/123')))
   assert.ok(calls.some((url) => url.includes('/overview/123')))
   assert.ok(data.warnings.some((warning) => warning.includes('截图')))
+})
+
+test('fetchGameJoltGame：可以传入浏览器安全请求头（扩展场景）', async () => {
+  const seen = []
+  const fakeFetch = async (_url, init) => {
+    seen.push(init?.headers)
+    return new Response(JSON.stringify(detailFixture()), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
+  await fetchGameJoltGame('123', {
+    fetchImpl: fakeFetch,
+    headers: BROWSER_REQUEST_HEADERS,
+  })
+
+  assert.equal(seen.length, 2)
+  for (const headers of seen) {
+    assert.equal(headers.accept, 'application/json, text/plain, */*')
+    assert.equal(headers['user-agent'], undefined)
+    assert.equal(headers.referer, undefined)
+  }
 })
 
 test('fetchGameJoltGame：非法链接在发请求前就被拒绝', async () => {

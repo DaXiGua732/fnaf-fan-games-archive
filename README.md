@@ -40,7 +40,8 @@ Phase 0–20 全部落地，并已在线上实际使用。**后续改动仍按�
 | `admin_phase0_design_freeze.md` | 设计冻结：审计结论、架构决策、数据模型增量方案、路由与文件规划 |
 
 已完成：**Phase 0–20 全部**。其中 Phase 14（数据库设计）不适用 —— `db.json` 就是库；
-Phase 20（测试）由贯穿全程的门禁体系覆盖：`typecheck + selftest + smoke + UI 点击测试 + build`。
+Phase 20（测试）由贯穿全程的门禁体系覆盖：
+`typecheck + test:gamejolt + build:extension + selftest + smoke + UI 点击测试 + build`。
 
 > **后台能改线上数据、能传图、能预览、能永久删除作品**：登录后读写数据仓的 `db.json`，
 > 图片上传到数据仓的 `images/`，保存 = 一次提交，git 历史即回滚手段。
@@ -89,9 +90,10 @@ Phase 20（测试）由贯穿全程的门禁体系覆盖：`typecheck + selftest
 - 截图**灯箱**：点击查看大图，键盘 ← / → 切换、Esc 关闭；下载区有独立锚点。
 
 **GameJolt 半自动导入**：新增 / 编辑页顶部有「从 GameJolt 导入」区块。
-粘贴 GameJolt 作品页链接后，自动抓取标题、作者、年份、引擎、简介、标签与
-封面 / Banner / 截图，图片走现有上传链路写入数据仓。抓取时需要在本机运行
-`npm run gamejolt:helper`（GameJolt 站内接口不允许浏览器跨域直连）。
+推荐在 GameJolt 作品页用浏览器扩展导出 ZIP，再把 ZIP 拖进后台：标题、作者、年份、
+引擎、简介、标签与封面 / Banner / 截图自动填入，图片走现有上传链路写入数据仓。
+扩展的 content script 运行在 gamejolt.com 页面内，`/site-api` 是同源请求，
+**不需要本机助手或任何终端进程**。没有安装扩展时，仍可用本机助手作为开发备用。
 **下载渠道仍需人工下载、上传、填写**；导入后条目仍是草稿，不会自动保存或发布。
 详见 §7.3。
 
@@ -444,7 +446,7 @@ UI 于是如实说「只写入了内存」。**写失败绝不假装成功。**
 ### 测试覆盖对照（Phase 20）
 
 计划书 §21（后台专项）/ §22（前台回归）逐项对照。`selftest` = 纯函数与深模块断言，
-`UI` = `npm run test:ui`（75 步真实浏览器点击），`冒烟` = SSR 渲染 14 条路由，
+`UI` = `npm run test:ui`（76 步真实浏览器点击），`冒烟` = SSR 渲染 14 条路由，
 `字节对比` = 公开站产物逐字节基线。
 
 **§21 后台专项**
@@ -608,26 +610,32 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 | `npm run typecheck` | `vue-tsc --noEmit` 类型检查 |
 | `npm run selftest` | 深模块行为断言（前台 + 后台两套，见 §2.1） |
 | `npm run smoke` | SSR 冒烟：逐路由真实渲染并断言内容（14 条路由） |
-| `npm run test:gamejolt` | GameJolt 链接解析 / 字段转换 / 网络降级的单元测试（不联网） |
+| `npm run test:gamejolt` | GameJolt 链接解析 / 字段转换 / 扩展打包的单元测试（不联网） |
 | `npm run gamejolt:helper` | 启动 GameJolt 导入助手（只监听 127.0.0.1:4317，见 §7.3） |
+| `npm run build:extension` | 构建 Chrome / Edge 扩展到 `extension/dist/` |
+| `npm run test:extension` | 扩展端到端测试（需系统 Chrome；会先构建扩展） |
 | `npm run test:ui` | Playwright 真实浏览器点击测试（需先另开终端 `npm run dev`） |
 | `npm run assets` | 按 `db.json` 重新生成占位图到 `public/images/` |
-| `npm run verify` | `typecheck` + `test:gamejolt` + `selftest` + `smoke` + `build` |
+| `npm run verify` | `typecheck` + `test:gamejolt` + `build:extension` + `selftest` + `smoke` + `build` |
 
 ---
 
-## 2. 质量门禁：为什么有五道关卡
+## 2. 质量门禁：为什么有六道关卡
 
-本项目开发期间**无法在浏览器里手动点击验证**，所以用五个自动化关卡替代人工验收。
-`npm run verify` 必须全绿才允许提交，CI 里也会跑同样五步（见 `.github/workflows/deploy.yml`）。
+本项目开发期间**无法在浏览器里手动点击验证**，所以用六个自动化关卡替代人工验收。
+`npm run verify` 必须全绿才允许提交，CI 里也会跑同样六步（见 `.github/workflows/deploy.yml`）。
 
 | 关卡 | 覆盖什么 | 抓不到什么 |
 | --- | --- | --- |
 | `typecheck` | 类型错误、拼写错误的属性名 | 运行时逻辑 |
-| `test:gamejolt` | GameJolt 链接解析 / 富文本转换 / 图片选择 / 网络降级 | 真实接口改版（靠失败提示兜底） |
+| `test:gamejolt` | GameJolt 链接解析 / 富文本转换 / 图片选择 / 网络降级 / 扩展 ZIP 打包 | 真实接口改版（靠失败提示兜底） |
+| `build:extension` | 扩展能否打包、manifest / 图标 / 依赖是否齐全 | 真实浏览器里的扩展行为 |
 | `selftest` | 深模块的搜索/过滤/排序/分页逻辑是否正确 | UI |
 | `smoke` | 每个路由能否真实渲染出 DOM（**防白屏**） | 样式是否正确 |
 | `build` | 生产构建能否通过、代码分割是否正常 | — |
+
+> `npm run test:extension` 用系统 Chrome 跑扩展的端到端流程（抓取 → 下载图片 → 打包 ZIP），
+> 因为它依赖本机浏览器，**不进 CI / verify**；改了扩展代码就本地跑一次。
 
 ### 2.1 `selftest` 的设计要点
 
@@ -653,9 +661,10 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 实现方式：用 `esbuild` 把 `scripts/selftest.mts` 打成 `.tmp/selftest.mjs`（`--external:vue`），
 再用 Node 直接跑。**不需要 vitest / jsdom**。
 
-GameJolt 抓取 / 转换的测试单独放在 `scripts/gamejolt/test.mjs`，用 Node 内置的
-`node --test` 跑（`npm run test:gamejolt`）。它**不联网**：`fetchGameJoltGame()` 允许注入
-`fetchImpl`，所以接口 500、字段缺失、简介超长这些分支都能稳定复现。
+GameJolt 抓取 / 转换 / 扩展打包的测试放在 `scripts/gamejolt/test.mjs` 与
+`extension/capture.test.mjs`，用 Node 内置的 `node --test` 跑（`npm run test:gamejolt`）。
+它**不联网**：`fetchGameJoltGame()` 允许注入 `fetchImpl`，扩展的 ZIP 打包也是纯函数，
+所以接口 500、字段缺失、简介超长、图片去重这些分支都能稳定复现。
 
 ### 2.2 `smoke` 的设计要点
 
@@ -720,9 +729,12 @@ npm run test:ui
 BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 ```
 
-> GameJolt 导入那一步在 Playwright 层 mock 了本机助手与 GameJolt CDN 的响应，
-> 因此 UI 测试**不依赖外网**、也不会向真实数据仓上传图片。断言的仍是后台自己的
-> 字段映射、图片上传和保存路径。
+> GameJolt 导入的两步都在 Playwright 层 mock / 构造夹具：本机助手与 CDN 响应被路由拦下，
+> ZIP 导入则用 `fflate` 现场生成一个真实压缩包。因此 UI 测试**不依赖外网**、
+> 也不会向真实数据仓上传图片。断言的仍是后台自己的字段映射、ZIP 校验、图片上传和保存路径。
+>
+> 扩展本身的端到端流程（同源抓取 → 下载图片 → 打包 ZIP）用 `npm run test:extension` 单独跑；
+> 它同样用系统 Chrome，并把构建好的 `content.js` 注入一个被接管的 GameJolt 页面。
 
 > ⚠️ **三个必须知道的坑**（写这个脚本时全踩过）：
 > 1. **脚本必须自己定位项目根目录**（`import.meta.url`），不要依赖 cwd ——
@@ -1047,7 +1059,8 @@ grep -o '\.rounded-md\|\.shadow{\|\.font-serif\|\.font-mono' "$CSS" | sort -u  #
 
 **线上数据请走后台**：`/#/admin` 登录后新增 / 编辑，保存即提交数据仓，
 公开页会在下次打开或切回标签页时自动同步。GameJolt 上有原作页面的作品，
-建议先用后台里的「从 GameJolt 导入」抓取字段与图片（见 §7.3），再人工补下载渠道。
+建议先用浏览器扩展导出 ZIP，再拖进后台「从 GameJolt 导入」抓取字段与图片
+（见 §7.3），最后人工补下载渠道。
 
 `src/data/db.json` 只是**本地开发 / 断网兜底快照**。直接手改它不会影响线上，
 除非重新构建并发布；需要与线上对齐时先跑 `npm run data:pull`。字段契约见
@@ -1134,11 +1147,10 @@ create table views (game_id text primary key, count integer not null default 0);
 如果以后重新引入评论，请先想清楚为什么需要它，并作为一个新功能重新评估：
 Hash 路由下讨论串映射、跨域 iframe 的样式约束、审核与滥用处理，都会重新成为问题。
 
-### 7.3 GameJolt 半自动导入 —— 本机助手 + 后台一键填充
+### 7.3 GameJolt 半自动导入 —— 扩展 ZIP（运维主路径）+ 本机助手（开发备用）
 
-**它做什么**：在后台「新增 / 编辑游戏」页粘贴 GameJolt 作品页链接，点「抓取信息」，
-自动填充标题、作者、发行年份、开发引擎、简介、一句话简介、视频 URL、标签，并把
-封面 / Banner / 截图下载后走现有图片处理链路（缩放 + WebP）上传到数据仓。
+**它做什么**：在 GameJolt 作品页把标题、作者、发行年份、开发引擎、简介、一句话简介、
+视频 URL、标签和图片抓下来，自动填进后台草稿；图片走现有处理链路（缩放 + WebP）上传到数据仓。
 
 **它不做什么**：
 
@@ -1146,12 +1158,62 @@ Hash 路由下讨论串映射、跨域 iframe 的样式约束、审核与滥用�
   这是产品决定，工具不会把 GameJolt 的下载地址伪装成网盘渠道。
 - **不自动保存 / 不自动发布**。导入只改草稿，用户仍要点「保存」；新建条目默认是草稿。
 
-**为什么需要本机助手**：GameJolt 的 `/site-api` 是站内接口，响应里没有可跨域读取的
-CORS 头，浏览器直接 `fetch` 会被拦下。助手跑在 `127.0.0.1:4317`，只代理两个 JSON 接口；
-图片仍然由浏览器直接从 `m.gjcdn.net` 下载（该 CDN 返回 `Access-Control-Allow-Origin: *`），
-所以现有上传链路不需要任何改动。
+#### 方式一：浏览器扩展 + ZIP（推荐给所有运维）
 
-**用法**：
+扩展的 content script 运行在 `gamejolt.com` 页面里，请求 `/site-api` 属于**同源请求**，
+因此不需要本机助手、不需要 Node、不需要保持任何进程开启。图片 CDN `m.gjcdn.net`
+返回 `Access-Control-Allow-Origin: *`，扩展可以直接下载。
+
+**安装 / 更新**：
+
+```bash
+npm run build:extension
+# 产物在 extension/dist/
+```
+
+- Chrome：`chrome://extensions` → 打开「开发者模式」→「加载已解压的扩展程序」→ 选 `extension/dist/`
+- Edge：`edge://extensions` → 打开「开发人员模式」→「加载解压缩的扩展」→ 选 `extension/dist/`
+
+**使用**：
+
+1. 打开任意 GameJolt 作品页（`/games/<slug>/<id>`）；
+2. 点右下角「导出到 FNAF 档案」；
+3. 扩展抓取数据、下载图片、生成 `<slug>-<id>-<时间>.zip`；
+4. 到后台「新增游戏 / 编辑游戏」→「从 GameJolt 导入」→ 把 ZIP 拖进去；
+5. 检查预览 →「填入表单并上传图片」→ 手动补下载渠道 →「保存」。
+
+**ZIP 结构**：
+
+```
+manifest.json   格式版本 / 来源 / 抓取时间 / 图片 URL → 文件映射
+capture.json    已归一化的 GameJoltImportData（与助手路径同一形状）
+images/...      封面 / Banner / 截图
+README.txt      给人看的导入说明
+```
+
+**为什么是 ZIP 不是 RAR**：浏览器端没有可靠的纯 JS RAR 编码器；ZIP 是标准容器，
+扩展用 `fflate` 生成 store 模式（图片已经压缩过，再 deflate 没意义），后台用同一库读取。
+
+**安全边界**：
+
+- 扩展只申请 `gamejolt.com` / `www.gamejolt.com` / `*.gjcdn.net` 的 host 权限，
+  **不读取、不发送 GitHub 令牌**；
+- 一次点击只抓一个作品，不做批量爬取；
+- 后台把 ZIP 当**不可信输入**：只接受固定格式标识与版本、GameJolt 来源域名、
+  白名单条目；限制压缩包 64 MB / 解压后 128 MB / 40 个条目；
+- 图片仍要通过 `createImageBitmap` 解码和原有尺寸校验（单文件 4 MB 上限），
+  包内 HTML / JS 一律不执行；
+- 扩展不上传任何数据，ZIP 只是本地下载文件。
+
+**分发方式**：内部用「加载已解压扩展」最简单；要给非技术运维并自动更新，
+可把 `extension/dist/` 打包上架 Chrome Web Store / Edge Add-ons 的不公开条目
+（需要开发者注册和审核，更新后由商店自动推送）。
+
+#### 方式二：本机助手（开发 / 调试备用）
+
+GameJolt 的 `/site-api` 不返回可跨域读取的 CORS 头，普通页面直接 `fetch` 会被拦。
+助手跑在 `127.0.0.1:4317`，只代理两个 JSON 接口；图片仍由浏览器直接下载。
+它现在主要用于开发、调试和没有安装扩展的场景。
 
 ```bash
 # 终端 1：启动助手（保持窗口开启）
@@ -1161,31 +1223,34 @@ npm run gamejolt:helper
 npm run dev
 ```
 
-然后在后台新增页粘贴链接 → 抓取信息 → 检查预览 → 「填入表单并上传图片」→ 手动补下载渠道
-→ 保存。线上后台（GitHub Pages）访问 `http://127.0.0.1:4317` 属于回环地址，
-Chrome / Edge 允许；助手已经处理了 Private Network Access 预检。
-
-**安全边界**：
+然后在后台「方式二」粘贴链接 → 抓取信息 → 检查预览 → 「填入表单并上传图片」→ 补下载渠道 → 保存。
+线上后台（GitHub Pages）访问 `http://127.0.0.1:4317` 属于回环地址，Chrome / Edge 允许；
+助手已经处理了 Private Network Access 预检。
 
 - 只绑定 `127.0.0.1`，不暴露到局域网；
 - 只允许 `https://daxigua732.github.io` 与 `localhost` / `127.0.0.1` 的任意端口作为 Origin，
   可用 `GAMEJOLT_ALLOWED_ORIGIN` 追加自定义域名；
 - 输入只接受 `gamejolt.com` 的作品链接或纯数字 ID，请求地址由助手自己拼，不接受任意 URL；
-- **助手完全接触不到 GitHub 令牌** —— 图片上传仍由浏览器里的后台完成。
+- **助手完全接触不到 GitHub 令牌**。
 
-**已知限制**：
+#### 已知限制
 
-- 依赖 GameJolt 的内部站内接口，对方改版时可能失效；失败会在导入区块里给出可见报错，
+- 依赖 GameJolt 的**内部站内接口**，对方改版时可能失效；扩展和后台都会给出可见报错，
   不会静默写入半条数据；
 - 简介超过 2000 字会截断（后台字段上限），完整内容请打开原页；
-- 图库最多导入 8 张；低于本站最小尺寸的图片会被跳过并提示；
+- 图库最多导入 8 张；低于本站最小尺寸或超过 4 MB 的图片会被跳过并提示；
 - 抓到的文本是 GameJolt 原文，不会自动翻译；IP 系列只在识别到 FNAF 字样时自动填 `FNAF`；
-- 改端口：`npm run gamejolt:helper -- --port 4318`，并在构建时设置
+- 改助手端口：`npm run gamejolt:helper -- --port 4318`，并在构建时设置
   `VITE_GAMEJOLT_HELPER=http://127.0.0.1:4318`。
 
-相关文件：`scripts/gamejolt/`（解析 / 抓取 / 助手 / 测试）、
-`src/services/gamejoltImport.ts`（后台侧字段映射与图片导入）、
-`src/components/admin/AdminGameJoltImport.vue`（UI）。
+相关文件：
+
+- `extension/` —— MV3 扩展（content script / 抓取打包纯函数 / 测试）
+- `scripts/build-extension.mjs` —— 构建到 `extension/dist/`
+- `scripts/gamejolt/` —— 解析 / 抓取 / 本机助手 / 测试
+- `src/services/gamejoltCapture.ts` —— ZIP 读取与安全校验
+- `src/services/gamejoltImport.ts` —— 后台字段映射与图片导入
+- `src/components/admin/AdminGameJoltImport.vue` —— 两种导入方式的 UI
 
 ---
 
@@ -1194,10 +1259,10 @@ Chrome / Edge 允许；助手已经处理了 Private Network Access 预检。
 ### 8.1 机制
 
 `.github/workflows/deploy.yml`：push 到 `main` **或手动触发** → 依次跑
-`npm ci --ignore-scripts` → typecheck → selftest → smoke → build → configure-pages
-→ upload-pages-artifact → deploy-pages。
+`npm ci --ignore-scripts` → data:pull → typecheck → test:gamejolt → build:extension
+→ selftest → smoke → build → configure-pages → upload-pages-artifact → deploy-pages。
 
-**部署前跑三道门禁是刻意的**，保证线上永远不会出现"编译通过但页面白屏"的版本。
+**部署前跑全部门禁是刻意的**，保证线上永远不会出现"编译通过但页面白屏"的版本。
 
 Pages 配置：`build_type = workflow`。
 
@@ -1212,17 +1277,18 @@ base: command === 'build' ? '/fnaf-fan-games-archive/' : '/'
 好处：生产产物带正确子路径前缀，而**本地开发地址仍是 `http://localhost:5173/`**。
 若仓库改名，**必须同步修改这里的字符串**，否则资源全 404。
 
-### 8.3 ⚠️ 发布代码：本环境不能 `git push`
+### 8.3 ⚠️ 发布代码：沙箱内网络受限
 
-沙箱代理**只放行 `api.github.com`**，`github.com` 与直连都不通（免沙箱执行也一样）。
-`git push` / `git fetch` 在本环境**不可用**。
+默认沙箱的代理只放行 `api.github.com`，`github.com:443` 连不上，`git push` / `git fetch`
+会超时；在允许网络的环境（用户自己的终端，或让代理以**免沙箱**方式执行）可以直接推送。
+2026-10-24 的 `bc67a96` 就是这样推上去的：默认沙箱失败，免沙箱重试成功。
 
 **两个选择：**
 
-**A. 在你自己的终端推送（推荐，最省事）**
-你的终端没有网络限制，`git push` 可直接使用。
+**A. 直接推送（推荐）**
+在你自己的终端执行 `git push origin main`；或让代理在免沙箱网络下重试。
 
-**B. 用 GitHub API 推送**（本次开发全程用这个方法）
+**B. 用 GitHub API 推送**（网络受限时的兜底）
 
 ```bash
 # 1. 暂存并生成 tree 对象（不需要先建本地提交）
@@ -1367,6 +1433,23 @@ Tailwind 的提取器会把**注释和字符串里的词**当成候选类名。
 第二张覆盖第一张，返回的 URL 也相同，`addImages` 去重后图库凭空少一张
 （UI 测试报「图库应有 2 张，实际 1」）。现在格式为
 `YYYYMMDDHHmmssSSS` + 4 位随机后缀，单人/多标签页都不会撞名。
+
+### 9.11 扩展的 content script 必须打包成 IIFE
+
+Chrome / Edge 的 `content_scripts` **不支持** `"type": "module"`，直接写
+`import ... from` 会在页面里报语法错误。所以扩展源码用 esbuild 打成 IIFE
+（`npm run build:extension`），加载的是 `extension/dist/`，不是 `extension/src/`。
+
+另外，**同源抓取只成立在 content script 里**：它运行在 `gamejolt.com` 页面内，
+`/site-api` 是 same-origin。popup / background 属于扩展自己的 origin，
+请求 GameJolt 仍会受 CORS 限制 —— 要挪到那边就得走 host_permissions 或再加代理。
+
+### 9.12 ZIP 导入必须当不可信输入
+
+`capture.json` 和 `manifest.json` 都是下载目录里的普通文件，用户可以把任意 ZIP 改名后拖进来。
+`gamejoltCapture.ts` 因此只信任固定格式标识、版本、GameJolt 来源和白名单条目，
+并限制压缩包 64 MB / 解压后 128 MB / 40 个条目；图片仍走 `createImageBitmap` + 尺寸校验。
+不要为了省事直接 `JSON.parse` 后写进草稿，也不要把包内 HTML 渲染出来。
 
 ---
 
