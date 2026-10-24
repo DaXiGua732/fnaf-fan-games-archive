@@ -11,8 +11,9 @@
  * 【禁止】后台的 `.vue` 里出现 `import db from '../data/db.json'`，
  * 也禁止组件直接碰运行期数据源。`scripts/selftest.mts` 有一条静态守卫在扫这个。
  *
- * 【当前实现】`localGameRepository` —— 内存实现，**刷新即丢**（Phase 12 才持久化）。
- * `remoteGameRepository` 是尚未接入的占位，被调用会直接抛错。
+ * 【当前实现】两个：
+ *   - `localGameRepository` —— 构建期快照 + localStorage（未登录后台 / 前台兜底）
+ *   - `githubGameRepository` —— GitHub Contents API（登录后的后台，写线上数据仓）
  * ============================================================================
  */
 import type { ComputedRef } from 'vue'
@@ -70,9 +71,9 @@ export interface GameRepository {
   /** 更新。id 不存在时**显式抛错**，不静默吞掉 */
   updateGame(id: string, patch: GamePatch): Promise<AdminGame>
   /**
-   * 删除。
-   * ⚠️ **UI 刻意不暴露这个动作** —— 下线的正确做法是 `unpublishGame`（数据完整保留）。
-   * 保留这个方法是为了接口完整，以及给「确实要清理脏数据」的场景用。
+   * 永久删除。
+   * UI 在列表行内和编辑页「危险操作」区提供入口，且必须经过二次确认；
+   * 如果只是不想让作品对外可见，正确做法是 `unpublishGame`（数据完整保留）。
    */
   deleteGame(id: string): Promise<boolean>
 

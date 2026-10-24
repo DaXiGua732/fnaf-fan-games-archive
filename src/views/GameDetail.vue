@@ -2,7 +2,6 @@
 import { computed, inject, onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { RouterLink } from 'vue-router'
 import Button from '../components/Button.vue'
-import CommentSection from '../components/CommentSection.vue'
 import DownloadPanel from '../components/DownloadPanel.vue'
 import GalleryLightbox from '../components/GalleryLightbox.vue'
 import { useGameLibrary } from '../composables/useGameLibrary'
@@ -17,7 +16,6 @@ import { assetUrl } from '../utils/asset'
  *   Hero      标题 / 作者 / 短描述 / 主 CTA + 宣传图
  *   两栏      左：简介 + 截图 + 视频；右：封面 / 作品信息 / 标签 / 下载入口
  *   下载      独立区块，锚点可直达
- *   评论      页面底部
  *
  * 这不是「像 itch.io 那样圆角卡片」—— 视觉仍然全部遵守 Swiss：
  * 1px 边框、零圆角、零阴影、文本左对齐、悬停只改颜色。
@@ -313,14 +311,6 @@ watchEffect(() => {
       <div class="mx-auto max-w-[1280px] px-6 py-12 md:px-12 md:py-16">
         <p class="swiss-meta mb-6 text-black/60">03 — 资源下载</p>
         <DownloadPanel :downloads="game.downloads" />
-      </div>
-    </section>
-
-    <!-- ============ 评论区 ============ -->
-    <section>
-      <div class="mx-auto max-w-[1280px] px-6 py-12 md:px-12 md:py-16">
-        <p class="swiss-meta mb-6 text-black/60">04 — 讨论</p>
-        <CommentSection :term="game.id" />
       </div>
     </section>
 

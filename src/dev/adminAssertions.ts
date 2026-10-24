@@ -1,8 +1,8 @@
 /**
  * 后台深模块接口断言集（开发期工具）
  *
- * 与 `libraryAssertions.ts` 同款设计：断言集只写一份，被命令行（`npm run selftest`）消费，
- * 保证「浏览器里的自检」与「命令行自检」不会两处漂移。
+ * 与 `libraryAssertions.ts` 同款设计：断言集只写一份，被命令行（`npm run selftest`）消费。
+ * （原浏览器调试台已移除，避免开发页面进入生产包。）
  *
  * 【边界】这里只做「输入 → 期望输出」的行为断言，
  *         绝不重新实现过滤 / 排序 / 分页 / 勾选逻辑（那属于深模块内部职责）。
@@ -142,8 +142,166 @@ function titleAsc(games: { title: string }[]): string[] {
   return games.map((game) => game.title).sort((a, b) => a.localeCompare(b, 'en'))
 }
 
+/**
+ * 后台断言的**合成数据**。
+ *
+ * 这些断言会改状态、改作者、删条目，所以必须有一份可控的起点。
+ * 从前它们直接假设 `db.json` 里存在 `tjoc-reborn` / `popgoes` ——
+ * 数据仓把这两条删掉后，CI 的 selftest 就在第一行 `!` 解引用上崩了。
+ * 现在把起点显式注入仓储：断言只依赖**这里**，不再依赖线上数据内容。
+ *
+ * 数值刻意覆盖三种状态和重复作者，让筛选 / 分页 / 批量分支都有真实样本。
+ */
+const FIXTURE_GAMES: AdminGame[] = normalizeGames([
+  {
+    id: 'tjoc-reborn',
+    title: 'Fixture Alpha',
+    author: 'Fixture Author A',
+    releaseYear: 2016,
+    ipSeries: 'Fixture Series',
+    engine: 'Clickteam',
+    coverImage: '/images/fixture-alpha-cover.png',
+    bannerImage: '/images/fixture-alpha-banner.png',
+    gallery: ['/images/fixture-alpha-gallery-1.png', '/images/fixture-alpha-gallery-2.png'],
+    description: 'Synthetic fixture used by the admin assertion suite.',
+    downloads: [
+      { provider: 'Fixture Drive', url: 'https://example.com/alpha', password: 'alpha' },
+      { provider: 'Fixture Mirror', url: 'https://example.com/alpha-mirror' },
+    ],
+    metrics: { fakeViews: 12, score: 4.2 },
+    tags: [],
+    platforms: ['Windows'],
+    status: 'published',
+    featured: false,
+    archived: false,
+    sortOrder: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    publishedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'popgoes',
+    title: 'Fixture Beta',
+    author: 'Fixture Author B',
+    releaseYear: 2017,
+    ipSeries: 'Fixture Series',
+    engine: 'Unreal Engine 4',
+    coverImage: '/images/fixture-beta-cover.png',
+    bannerImage: '/images/fixture-beta-banner.png',
+    gallery: [],
+    description: 'Synthetic fixture used by the admin assertion suite.',
+    downloads: [{ provider: 'Fixture Drive', url: 'https://example.com/beta' }],
+    metrics: { fakeViews: 5, score: 3.8 },
+    tags: [],
+    platforms: ['Windows'],
+    status: 'published',
+    featured: false,
+    archived: false,
+    sortOrder: 2,
+    createdAt: '2026-01-02T00:00:00.000Z',
+    updatedAt: '2026-01-02T00:00:00.000Z',
+    publishedAt: '2026-01-02T00:00:00.000Z',
+  },
+  {
+    id: 'dayshift-at-freddys',
+    title: 'Fixture Gamma',
+    author: 'Fixture Author A',
+    releaseYear: 2018,
+    ipSeries: 'Fixture Series',
+    engine: 'Clickteam',
+    coverImage: '/images/fixture-gamma-cover.png',
+    bannerImage: '',
+    gallery: [],
+    description: 'Synthetic fixture used by the admin assertion suite.',
+    downloads: [],
+    metrics: { fakeViews: 0, score: 0 },
+    tags: [],
+    platforms: [],
+    status: 'offline',
+    featured: false,
+    archived: false,
+    sortOrder: 0,
+    createdAt: '2026-01-03T00:00:00.000Z',
+    updatedAt: '2026-01-03T00:00:00.000Z',
+  },
+  {
+    id: 'five-nights-at-candys',
+    title: 'Fixture Delta',
+    author: 'Fixture Author C',
+    releaseYear: 2019,
+    ipSeries: 'Fixture Series',
+    engine: 'Unity',
+    coverImage: '/images/fixture-delta-cover.png',
+    bannerImage: '/images/fixture-delta-banner.png',
+    gallery: [],
+    description: 'Synthetic fixture used by the admin assertion suite.',
+    downloads: [{ provider: 'Fixture Drive', url: 'https://example.com/delta' }],
+    metrics: { fakeViews: 9, score: 4.5 },
+    tags: [],
+    platforms: ['Windows', 'Android'],
+    status: 'published',
+    featured: false,
+    archived: false,
+    sortOrder: 1,
+    createdAt: '2026-01-04T00:00:00.000Z',
+    updatedAt: '2026-01-04T00:00:00.000Z',
+    publishedAt: '2026-01-04T00:00:00.000Z',
+  },
+  {
+    id: 'one-night-at-flumptys',
+    title: 'Fixture Epsilon',
+    author: 'Fixture Author D',
+    releaseYear: 2020,
+    ipSeries: 'Fixture Series',
+    engine: 'Godot',
+    coverImage: '/images/fixture-epsilon-cover.png',
+    bannerImage: '',
+    gallery: [],
+    description: 'Synthetic fixture used by the admin assertion suite.',
+    downloads: [],
+    metrics: { fakeViews: 2, score: 3.1 },
+    tags: [],
+    platforms: [],
+    status: 'published',
+    featured: false,
+    archived: false,
+    sortOrder: 0,
+    createdAt: '2026-01-05T00:00:00.000Z',
+    updatedAt: '2026-01-05T00:00:00.000Z',
+    publishedAt: '2026-01-05T00:00:00.000Z',
+  },
+  {
+    id: 'jolly-anniversary-edition',
+    title: 'Fixture Zeta',
+    author: 'Fixture Author E',
+    releaseYear: 2021,
+    ipSeries: 'Fixture Series',
+    engine: 'Clickteam Fusion',
+    coverImage: '/images/fixture-zeta-cover.png',
+    bannerImage: '/images/fixture-zeta-banner.png',
+    gallery: [],
+    description: 'Synthetic fixture used by the admin assertion suite.',
+    downloads: [{ provider: 'Fixture Drive', url: 'https://example.com/zeta' }],
+    metrics: { fakeViews: 7, score: 4.0 },
+    tags: [],
+    platforms: ['Windows'],
+    status: 'published',
+    featured: false,
+    archived: false,
+    sortOrder: 0,
+    createdAt: '2026-01-06T00:00:00.000Z',
+    updatedAt: '2026-01-06T00:00:00.000Z',
+    publishedAt: '2026-01-06T00:00:00.000Z',
+  },
+] as Game[])
+
 export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[]> {
   const results: Assertion[] = []
+
+  // 先读一份**出厂数据**快照，供后面的「恢复出厂」断言做同源比较；
+  // 再把后台目录换成合成夹具。顺序不能反，否则读到的就是夹具了。
+  const seedGames = await createLocalGameRepository({ storage: null }).listGames()
+  publicGameRepository.hydrate(FIXTURE_GAMES.map((game) => ({ ...game })))
 
   const check = (name: string, actual: unknown, expected: unknown): void => {
     const a = String(actual)
@@ -833,6 +991,63 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   check('删除标签后 · 目录回到初始标签数', lib.availableTags.value.length, TAG0)
   check('删除标签 · 作品本身还在', Boolean(lib.getGameById('tjoc-reborn')), true)
 
+  /* ------------------------------------- 14.5 作者管理（与标签同一页面） ------------ */
+  // 作者和标签一样是**从作品派生**的字段。这里验证使用次数、搜索、
+  // 重命名传播、合并，以及非法输入不会悄悄写入。
+  // 前面「新建」断言留下了两条 Test Author 的临时作品 —— 作者应比基线多 1 位
+  check('作者列表 · 全量数量', lib.allAuthors.value.length, UNIQUE_AUTHORS + 1)
+  check('作者列表 · 含夹具作者', lib.allAuthors.value.some((item) => item.name === 'Fixture Author A'), true)
+  check('作者列表 · 使用次数（两条作品的作者）', lib.findAuthor('Fixture Author A')?.usage, 2)
+  check('作者列表 · 使用次数（单条作品的作者）', lib.findAuthor('Fixture Author B')?.usage, 1)
+
+  const authorCount0 = lib.allAuthors.value.length
+  lib.setAuthorSearch('author a')
+  check('作者搜索 · 命中数（大小写不敏感）', lib.visibleAuthors.value.length, 1)
+  check('作者搜索 · 命中名称', lib.visibleAuthors.value[0]?.name, 'Fixture Author A')
+  lib.setAuthorSearch('zzz')
+  check('作者搜索 · 无命中', lib.visibleAuthors.value.length, 0)
+  lib.clearAuthorSearch()
+  check('作者搜索 · 清空后恢复全部', lib.visibleAuthors.value.length, authorCount0)
+
+  await lib.renameAuthor('Fixture Author A', 'Fixture Renamed')
+  check(
+    '重命名作者 · 动作名',
+    lib.lastOutcome.value?.label,
+    '重命名作者「Fixture Author A」→「Fixture Renamed」',
+  )
+  check('重命名作者 · 影响条数', lib.lastOutcome.value?.changed, 2)
+  check('重命名作者后 · tjoc-reborn', lib.getGameById('tjoc-reborn')?.author, 'Fixture Renamed')
+  check(
+    '重命名作者后 · dayshift-at-freddys',
+    lib.getGameById('dayshift-at-freddys')?.author,
+    'Fixture Renamed',
+  )
+  check(
+    '重命名作者后 · 旧名已不存在',
+    lib.allAuthors.value.some((item) => item.name === 'Fixture Author A'),
+    false,
+  )
+  check('重命名作者后 · 新名使用次数', lib.findAuthor('Fixture Renamed')?.usage, 2)
+
+  // 目标名已存在 → 合并到同一个作者名下
+  await lib.renameAuthor('Fixture Author B', 'Fixture Renamed')
+  check('重命名作者到已存在的名字 · 合并', lib.findAuthor('Fixture Renamed')?.usage, 3)
+  check('合并后 · 旧作者不再出现', lib.findAuthor('Fixture Author B'), undefined)
+
+  await lib.renameAuthor('Fixture Renamed', 'Fixture Renamed')
+  check('重命名作者 · 同名不改动', lib.lastOutcome.value?.changed, 0)
+  await lib.renameAuthor('Fixture Renamed', '   ')
+  check('重命名作者 · 空名不改动', lib.lastOutcome.value?.changed, 0)
+  await lib.renameAuthor('Fixture Renamed', 'x'.repeat(DRAFT_LIMITS.author + 1))
+  check('重命名作者 · 超长不改动', lib.lastOutcome.value?.changed, 0)
+
+  // 复原：先整体改回 A，再把 B 单独接回去（保存只写作者字段，不动其它数据）
+  await lib.renameAuthor('Fixture Renamed', 'Fixture Author A')
+  await lib.saveGame({ id: 'popgoes', patch: { author: 'Fixture Author B' } })
+  check('作者复原 · tjoc-reborn', lib.getGameById('tjoc-reborn')?.author, 'Fixture Author A')
+  check('作者复原 · popgoes', lib.getGameById('popgoes')?.author, 'Fixture Author B')
+  check('作者复原 · 使用次数', lib.findAuthor('Fixture Author A')?.usage, 2)
+
   /* ------------------------------------------- 15. 图片（纯函数 + 草稿 + 保存） ------ */
   check('空草稿 · 图库为空', emptyDraft().gallery.length, 0)
   check('gameToDraft · 图库是副本而不是引用', gameToDraft(target).gallery !== target.gallery, true)
@@ -1343,15 +1558,21 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   const repoA = createLocalGameRepository({ storage: disk.backend })
   check('持久化 · 有可用存储时 storage 为 local', repoA.storage.value, 'local')
 
-  await repoA.updateGame('tjoc-reborn', { status: 'offline' })
+  // 新实例读的是 `db.json` 出厂数据，不是上面的合成夹具 ——
+  // 所以探针 id 必须从它自己的数据里取，不能写死某个条目。
+  const seedSample = seedGames[0] ?? FIXTURE_GAMES[0]!
+  const seedStatus = seedSample.status
+  const changedStatus = seedStatus === 'offline' ? 'draft' : 'offline'
+
+  await repoA.updateGame(seedSample.id, { status: changedStatus })
   check('持久化 · 写入后存档里确实有内容', disk.map.has(STORAGE_KEY), true)
 
   // 新实例 = 模拟刷新页面
   const repoB = createLocalGameRepository({ storage: disk.backend })
   check(
     '持久化 · 新实例读得到上次的改动（刷新不丢）',
-    (await repoB.getGame('tjoc-reborn'))?.status,
-    'offline',
+    (await repoB.getGame(seedSample.id))?.status,
+    changedStatus,
   )
   check(
     '持久化 · 新实例的条目数一致',
@@ -1363,14 +1584,14 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   disk.map.set(STORAGE_KEY, '{ 这不是 JSON')
   check(
     '持久化 · 存档解析失败时退回出厂数据',
-    (await createLocalGameRepository({ storage: disk.backend }).getGame('tjoc-reborn'))?.status,
-    'published',
+    (await createLocalGameRepository({ storage: disk.backend }).getGame(seedSample.id))?.status,
+    seedStatus,
   )
   disk.map.set(STORAGE_KEY, JSON.stringify({ not: 'an array' }))
   check(
     '持久化 · 存档不是数组时也退回出厂数据',
-    (await createLocalGameRepository({ storage: disk.backend }).getGame('tjoc-reborn'))?.status,
-    'published',
+    (await createLocalGameRepository({ storage: disk.backend }).getGame(seedSample.id))?.status,
+    seedStatus,
   )
 
   // 没有可用存储（SSR / 隐私模式）→ 只写内存
@@ -1390,19 +1611,19 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
     },
   })
   check('持久化 · 写失败之前仍报 local', failing.storage.value, 'local')
-  await failing.updateGame('tjoc-reborn', { status: 'draft' })
+  await failing.updateGame(seedSample.id, { status: changedStatus })
   check('持久化 · 写失败之后降级为 memory（不假装成功）', failing.storage.value, 'memory')
 
   // 恢复出厂数据
   const disk2 = fakeStorage()
   const repoE = createLocalGameRepository({ storage: disk2.backend })
-  await repoE.updateGame('tjoc-reborn', { status: 'offline' })
+  await repoE.updateGame(seedSample.id, { status: changedStatus })
   await repoE.resetToSeed()
-  check('重置 · 内存里回到出厂数据', (await repoE.getGame('tjoc-reborn'))?.status, 'published')
+  check('重置 · 内存里回到出厂数据', (await repoE.getGame(seedSample.id))?.status, seedStatus)
   check(
     '重置 · 重置也落了盘（新实例读到的就是出厂数据）',
-    (await createLocalGameRepository({ storage: disk2.backend }).getGame('tjoc-reborn'))?.status,
-    'published',
+    (await createLocalGameRepository({ storage: disk2.backend }).getGame(seedSample.id))?.status,
+    seedStatus,
   )
 
   /* ------------------- 20. 远程仓储：read-modify-write 与冲突重试 ------------------- */
@@ -1495,7 +1716,8 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
     true,
   )
   check('上传 · 按作品 slug 分目录', uploadedUrl.includes('/images/games/tjoc-reborn/'), true)
-  check('上传 · 文件名含位置与扩展名', /cover-\d{14}\.jpg$/.test(uploadedUrl), true)
+  // 时间戳精确到毫秒 + 4 位随机后缀 —— 同一秒内连续上传多张图库不会撞名
+  check('上传 · 文件名含位置与扩展名', /cover-\d{17}[a-z0-9]{4}\.jpg$/.test(uploadedUrl), true)
   check(
     '上传 · 确实提交到了远端',
     remoteUpload.lastPutMessage.includes('上传图片'),
@@ -1609,9 +1831,19 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   lib.dismissDelete()
   check('删除 · 结果提示可关闭', lib.lastDelete.value, null)
 
-  // 复原被删掉的条目，后续断言仍从完整目录出发
+  // 恢复出厂数据（注意：出厂数据里不一定有刚才删掉的合成夹具，
+  // 所以这里断言的是「回到了 db.json 的那份数据」，而不是「夹具又出现了」）
   await lib.resetToSeed()
-  check('删除 · 恢复出厂后条目回来了', Boolean(lib.getGameById('popgoes')), true)
+  check(
+    '删除 · 恢复出厂后回到 db.json 的条目',
+    seedGames.length === 0 || Boolean(lib.getGameById(seedGames[0]!.id)),
+    true,
+  )
+  check(
+    '删除 · 恢复出厂后条目数与 db.json 一致',
+    lib.statusCounts.value.all + lib.statusCounts.value.archived,
+    seedGames.length,
+  )
 
   /* ------------------------------------------------------ 复原默认状态 */
   lib.clearTagSearch()

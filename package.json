@@ -9,10 +9,12 @@
     "build": "vite build",
     "typecheck": "vue-tsc --noEmit",
     "assets": "node scripts/gen-placeholders.mjs",
+    "gamejolt:helper": "node scripts/gamejolt/helper.mjs",
+    "test:gamejolt": "node --test scripts/gamejolt/test.mjs",
     "selftest": "esbuild scripts/selftest.mts --bundle --platform=node --format=esm --external:vue --outfile=.tmp/selftest.mjs --log-level=warning && node .tmp/selftest.mjs",
     "smoke": "vite build --config vite.smoke.config.ts --logLevel warn && node .tmp/smoke-build/smoke.js",
     "test:ui": "node scripts/ui-test.mjs",
-    "verify": "npm run typecheck && npm run selftest && npm run smoke && npm run build",
+    "verify": "npm run typecheck && npm run test:gamejolt && npm run selftest && npm run smoke && npm run build",
     "preview": "vite preview"
   },
   "dependencies": {

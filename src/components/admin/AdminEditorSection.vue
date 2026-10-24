@@ -19,8 +19,14 @@ withDefaults(
     pending?: string
     /** 锚点 id —— 供页内分区导航跳转 */
     anchor?: string
+    /**
+     * 不显示右上角的「已修改 / 未修改」。
+     * 用于「从 GameJolt 导入」这类不对应任何草稿字段的工具区块 ——
+     * 在那里显示「未修改」只会让人以为它也有脏检查。
+     */
+    hideStatus?: boolean
   }>(),
-  { changed: false, pending: '', anchor: '' },
+  { changed: false, pending: '', anchor: '', hideStatus: false },
 )
 </script>
 
@@ -37,7 +43,7 @@ withDefaults(
 
       <span v-if="pending" class="swiss-meta text-black/40">{{ pending }} 接入</span>
       <span
-        v-else
+        v-else-if="!hideStatus"
         class="swiss-meta"
         :class="changed ? 'font-bold text-[#ff0000]' : 'text-black/40'"
       >

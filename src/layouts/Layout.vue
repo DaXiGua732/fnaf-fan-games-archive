@@ -22,23 +22,17 @@ interface NavItem {
   label: string
   /** 是否精确匹配（'/' 必须精确，否则任何路由都会点亮首页） */
   exact: boolean
-  /** 开发期入口，正式上线前移除 */
-  dev?: boolean
 }
 
 /**
  * 前台导航项。
  * 这个数组同时驱动**桌面导航 / 移动端菜单 / 页脚站点导航**三处，改一处即可。
- *
- * 顺序约定：公开入口在前，`dev: true` 的开发期入口聚在最后（上线前整体移除）。
  */
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: '首页', exact: true },
   // 站点管理入口。放在这里是为了不用手输 /#/admin/games；
-  // Phase 15 接入认证之前，它只是一个普通链接（后台目前没有权限校验）。
+  // 真正的权限校验在后台路由守卫里，公开站只负责给出入口。
   { to: '/admin/games', label: '后台管理', exact: false },
-  { to: '/debug', label: '调试台', exact: false, dev: true },
-  { to: '/style', label: '样式规范', exact: false, dev: true },
 ]
 
 const route = useRoute()
@@ -96,7 +90,6 @@ const currentYear = new Date().getFullYear()
           >
             <a :href="href" :class="linkClass(item.exact ? isExactActive : isActive)" @click="navigate">
               {{ item.label }}
-              <sup v-if="item.dev" class="ml-1 font-sans text-[8px] tracking-normal text-black/35">DEV</sup>
             </a>
           </RouterLink>
         </nav>
@@ -131,7 +124,6 @@ const currentYear = new Date().getFullYear()
           >
             <a :href="href" :class="linkClass(item.exact ? isExactActive : isActive)" @click="navigate">
               {{ item.label }}
-              <sup v-if="item.dev" class="ml-1 font-sans text-[8px] tracking-normal text-black/35">DEV</sup>
             </a>
           </RouterLink>
         </div>

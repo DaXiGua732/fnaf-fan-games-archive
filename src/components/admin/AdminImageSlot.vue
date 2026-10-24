@@ -54,6 +54,8 @@ const uploadedJustNow = ref(false)
 const uploadNote = ref('')
 /** 比例偏离的提示（不拦截） */
 const ratioNotice = ref('')
+/** 文案里的文件大小上限（从常量推导，改上限时文案不会漂） */
+const maxFileMb = Math.round(IMAGE_LIMITS.maxFileBytes / 1024 / 1024)
 /** 上一次上传失败的文件 —— 提供「重试」，不用让用户重新选一遍 */
 const failedFile = ref<File | null>(null)
 
@@ -92,25 +94,31 @@ async function handleFile(file: File): Promise<void> {
     return
   }
   if (file.size > IMAGE_LIMITS.maxFileBytes) {
-    notice.value = `图片不能超过 ${Math.round(IMAGE_LIMITS.maxFileBytes / 1024 / 1024)} MB`
+    notice.value = `图片不能超过 ${maxFileMb} MB`
     return
   }
 
   // 尺寸检查（本地模式也做 —— 至少别让人存下一个糊成一片的地址）
-  let box
-  try {
-    box = await readImageSize(file)
-  } catch {
-    notice.value = '这个文件读不出图片尺寸，可能已经损坏。'
-    return
+  //
+  // SVG 例外：它是矢量图，`createImageBitmap` 根本解不了；而且「像素太小」
+  // 对矢量图没有意义。旧实现会把它当成「文件损坏」拒掉，与「SVG 保持原样」
+  // 的上传策略自相矛盾。
+  if (file.type !== 'image/svg+xml') {
+    let box
+    try {
+      box = await readImageSize(file)
+    } catch {
+      notice.value = '这个文件读不出图片尺寸，可能已经损坏。'
+      return
+    }
+    const sizeProblem = checkImageSize(box, slot.value)
+    if (sizeProblem) {
+      notice.value = sizeProblem
+      return
+    }
+    // 比例只提示、不拦 —— 见 utils/imageInspect.ts 的说明
+    ratioNotice.value = aspectWarning(box, slot.value)
   }
-  const sizeProblem = checkImageSize(box, slot.value)
-  if (sizeProblem) {
-    notice.value = sizeProblem
-    return
-  }
-  // 比例只提示、不拦 —— 见 utils/imageInspect.ts 的说明
-  ratioNotice.value = aspectWarning(box, slot.value)
 
   // 本地模式：没有可写的远端，只能给一个本页有效的预览
   if (storage.value !== 'remote') {
@@ -248,7 +256,7 @@ const URL_INPUT =
       <p class="swiss-meta mt-2 text-black/45">
         {{
           storage === 'remote'
-            ? '文件会上传到数据仓，返回的完整地址写进本条作品 —— 保存后前台即可使用；过大的图会自动缩小并转成 WebP（GIF 保持原样）'
+            ? `文件会上传到数据仓，完整地址写进本条作品。单张不超过 ${maxFileMb} MB；上传前会自动缩到合适尺寸并转成 WebP（GIF / SVG 保持原样）`
             : '未登录：文件只做本地预览、不会上传（刷新即失效）'
         }}
       </p>

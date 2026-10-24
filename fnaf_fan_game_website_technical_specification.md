@@ -1,5 +1,8 @@
 # FNAF FAN GAME 资源共享站 - 前端开发需求与技术规范详细文档
 
+> ⚠️ **原始需求文档（历史）**：文中提到的 Giscus 评论 / 评论后台已在后续产品决策中整体移除。
+> 当前实现与运行方式以 `README.md` / `HANDOVER.md` 为准。
+
 ## 1. 项目概述 (Project Overview)
 本项目旨在建立一个极简、高效、纯前端的 Five Nights at Freddy's (FNAF) 粉丝游戏资源导航与分享网站。考虑到国内网络环境及低成本运维需求，项目采用**静态化+无服务化 (Serverless)** 架构进行设计。
 

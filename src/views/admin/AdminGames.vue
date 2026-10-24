@@ -238,7 +238,15 @@ const pageSizeValue = computed<string>({
               v-if="lastOutcome.skipped > 0"
             >
               ，跳过 {{ lastOutcome.skipped }} 项（本来就是目标状态）</template
+            ><template v-if="lastOutcome.failed > 0">
+              ，<span class="text-[#ff0000]">失败 {{ lastOutcome.failed }} 项</span></template
             >
+          </p>
+          <p
+            v-if="lastOutcome.failed > 0 && lastOutcome.error"
+            class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-[#ff0000]"
+          >
+            失败原因：{{ lastOutcome.error }}。已成功的条目不会回滚；可以重试失败的条目。
           </p>
           <p class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
             {{ STORAGE_NOTICE[lastOutcome.storage] }}

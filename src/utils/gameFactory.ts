@@ -83,6 +83,13 @@ export function createGameFrom(
     id: uniqueId(games, title),
     createdAt: stamp,
     updatedAt: stamp,
+    // 首次发布时记录发布时间；草稿 / 下线保持空字符串（不伪造日期）
+    publishedAt:
+      typeof patch.publishedAt === 'string' && patch.publishedAt
+        ? patch.publishedAt
+        : patch.status === 'published'
+          ? stamp
+          : '',
     ...(updatedBy ? { updatedBy } : {}),
   }
 }
@@ -98,12 +105,23 @@ export function applyPatch(
   patch: Partial<AdminGame>,
   updatedBy?: string,
 ): AdminGame {
+  const stamp = nowIso()
+  const firstPublish = patch.status === 'published' && game.status !== 'published'
+
   // id 不可被 patch 覆盖（类型上已经排除，这里再兜一次底）
   return {
     ...game,
     ...patch,
     id: game.id,
-    updatedAt: nowIso(),
+    updatedAt: stamp,
+    // 首次变成「已上线」时记录发布时间；之后重命名 / 改简介都不会覆盖它。
+    // 从已上线 → 下线 → 再上线也保留首次发布时间（它回答的是「什么时候第一次发布」）。
+    publishedAt:
+      firstPublish && !game.publishedAt
+        ? stamp
+        : typeof patch.publishedAt === 'string'
+          ? patch.publishedAt
+          : game.publishedAt,
     ...(updatedBy ? { updatedBy } : { updatedBy: game.updatedBy }),
   }
 }

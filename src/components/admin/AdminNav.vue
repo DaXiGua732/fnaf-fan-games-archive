@@ -29,8 +29,8 @@ const { isAuthenticated } = useAdminAuth()
 
 const NAV_ITEMS: AdminNavItem[] = [
   { to: '/admin/games', label: '游戏管理', ready: true },
-  { to: '/admin/tags', label: '标签管理', ready: true },
-  { to: '/admin/authors', label: '作者管理', ready: false },
+  // 标签与作者合并在同一页：它们都是作品的派生分类维度，没必要占两个导航项。
+  { to: '/admin/taxonomy', label: '标签与作者', ready: true },
   { to: '/admin/settings', label: '系统设置', ready: false },
 ]
 

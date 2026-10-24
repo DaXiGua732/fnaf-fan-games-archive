@@ -38,6 +38,8 @@ const uploading = ref(false)
  * 而「第几张」对批量上传已经传达了同样的信息：它在动、还要多久。
  */
 const uploadProgress = ref({ done: 0, total: 0 })
+/** 文案里的文件大小上限（从常量推导，改上限时文案不会漂） */
+const maxFileMb = Math.round(IMAGE_LIMITS.maxFileBytes / 1024 / 1024)
 /** 失败的文件 —— 提供一键重试，不用让用户重新选一遍 */
 const failedFiles = ref<File[]>([])
 /** 比例偏离的提示（不拦截） */
@@ -102,23 +104,26 @@ async function trackFiles(files: FileList | null | undefined): Promise<void> {
           continue
         }
 
-        // 尺寸检查放上传前 —— 别把一张 200×100 的图传上去再发现问题
-        let box
-        try {
-          box = await readImageSize(file)
-        } catch {
-          skipped += 1
-          notice.value = `有一张图读不出尺寸（${file.name}），已跳过。`
-          continue
+        // 尺寸检查放上传前 —— 别把一张 200×100 的图传上去再发现问题。
+        // SVG 例外：矢量图没有「像素太小」的问题，createImageBitmap 也解不了它。
+        if (file.type !== 'image/svg+xml') {
+          let box
+          try {
+            box = await readImageSize(file)
+          } catch {
+            skipped += 1
+            notice.value = `有一张图读不出尺寸（${file.name}），已跳过。`
+            continue
+          }
+          const sizeProblem = checkImageSize(box, 'gallery')
+          if (sizeProblem) {
+            skipped += 1
+            notice.value = `${file.name}：${sizeProblem}`
+            continue
+          }
+          const ratioNote = aspectWarning(box, 'gallery')
+          if (ratioNote) ratioNotes.value.push(`${file.name}：${ratioNote}`)
         }
-        const sizeProblem = checkImageSize(box, 'gallery')
-        if (sizeProblem) {
-          skipped += 1
-          notice.value = `${file.name}：${sizeProblem}`
-          continue
-        }
-        const ratioNote = aspectWarning(box, 'gallery')
-        if (ratioNote) ratioNotes.value.push(`${file.name}：${ratioNote}`)
 
         uploadProgress.value = { ...uploadProgress.value, done: uploadProgress.value.done + 1 }
         try {
@@ -142,7 +147,7 @@ async function trackFiles(files: FileList | null | undefined): Promise<void> {
       const squeezed = compressed > 0 ? `，其中 ${compressed} 张已自动压缩为 WebP` : ''
       notice.value =
         skipped > 0
-          ? `已上传 ${added} 张${squeezed}，跳过 ${skipped} 张（非图片 / 超 ${Math.round(IMAGE_LIMITS.maxFileBytes / 1024 / 1024)}MB / 尺寸不合格 / 超出上限）`
+          ? `已上传 ${added} 张${squeezed}，跳过 ${skipped} 张（非图片 / 超 ${maxFileMb}MB / 尺寸不合格 / 超出上限）`
           : `已上传 ${added} 张到数据仓${squeezed}`
     }
     return
@@ -165,19 +170,22 @@ async function trackFiles(files: FileList | null | undefined): Promise<void> {
       skipped += 1
       continue
     }
-    // 本地模式也做尺寸检查：至少别让人存下一个糊成一片的地址
-    try {
-      const box = await readImageSize(file)
-      const sizeProblem = checkImageSize(box, 'gallery')
-      if (sizeProblem) {
+    // 本地模式也做尺寸检查：至少别让人存下一个糊成一片的地址。
+    // SVG 例外同远程分支 —— 矢量图不适用像素下限。
+    if (file.type !== 'image/svg+xml') {
+      try {
+        const box = await readImageSize(file)
+        const sizeProblem = checkImageSize(box, 'gallery')
+        if (sizeProblem) {
+          skipped += 1
+          notice.value = `${file.name}：${sizeProblem}`
+          continue
+        }
+      } catch {
         skipped += 1
-        notice.value = `${file.name}：${sizeProblem}`
+        notice.value = `有一张图读不出尺寸（${file.name}），已跳过。`
         continue
       }
-    } catch {
-      skipped += 1
-      notice.value = `有一张图读不出尺寸（${file.name}），已跳过。`
-      continue
     }
 
     const url = URL.createObjectURL(file)
@@ -189,7 +197,7 @@ async function trackFiles(files: FileList | null | undefined): Promise<void> {
   const added = addImages(accepted)
   notice.value =
     skipped > 0
-      ? `已加入 ${added} 张，跳过 ${skipped} 张（非图片 / 超 ${Math.round(IMAGE_LIMITS.maxFileBytes / 1024 / 1024)}MB / 超出上限）`
+      ? `已加入 ${added} 张，跳过 ${skipped} 张（非图片 / 超 ${maxFileMb}MB / 超出上限）`
       : ''
 }
 

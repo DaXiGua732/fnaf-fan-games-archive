@@ -17,17 +17,17 @@
 - 代码仓：`DaXiGua732/fnaf-fan-games-archive`（Public，只有站长有写权限）
 - 数据仓：`DaXiGua732/fnaf-fan-games-data`（Public，管理员有写权限；`db.json` + `images/`）
 
-## 2. 当前状态快照（2026-10-17）
+## 2. 当前状态快照（2026-10-24）
 
 | 项 | 状态 |
 | --- | --- |
 | 计划书 20 个阶段 | ✅ **全部完成**（0–20，Phase 20 测试由贯穿全程的门禁体系覆盖） |
 | 线上部署 | ✅ 已部署并用真实浏览器验证；**数据仓的改动不会自动触发构建**，现由每小时定时构建兜底 |
-| 后台能力 | ✅ 增删改查 / 批量 / 标签 / 图片上传（自动 WebP 压缩）/ 预览 / 永久删除 / 操作署名 |
+| 后台能力 | ✅ 增删改查 / 批量 / 标签与作者合并管理 / 图片上传（自动 WebP 压缩）/ 预览 / 永久删除 / 操作署名 / **GameJolt 半自动导入** |
 | 交互层 | ✅ 编辑器吸顶操作条 + 分区锚点 + 发布概览 + Ctrl/Cmd+S；列表行内快捷上下线 / 永久删除；详情页截图灯箱 |
 | 代码仓提交 | ✅ 已推送（最新提交见 `git log -1`；删除 / 压缩 / 构建兜底 / 断言去数据耦合 / UI 重构 / 一句话简介） |
-| 测试基线 | ✅ typecheck + **selftest 458** + **smoke 16** + **UI 点击 73 步** + build 全绿 |
-| 已知缺口 | 浏览量仍是静态基数；Giscus 未启用（缺 app 安装）；数据仓未加其他协作者 |
+| 测试基线 | ✅ typecheck + **test:gamejolt 14** + **selftest 481** + **smoke 14** + **UI 点击 75 步** + build 全绿 |
+| 已知缺口 | 浏览量仍是静态基数；数据仓未加其他协作者；评论区已按产品决策移除 |
 
 > ⚠️ **断言已改成从数据推导期望值**：`selftest` 会在 `data:pull` 之后跑，
 > 所以不允许再写死「6 款」「5 位作者」「封面一定是某个路径」。新增断言时先问一句：
@@ -58,10 +58,12 @@
 ```bash
 npm run dev            # 本地开发（读 src/data/db.json —— 可能是旧快照，见下）
 npm run data:pull      # 从数据仓同步 db.json 到本地（部署前自动执行；本地开发需手动）
-npm run verify         # 全部门禁：typecheck + selftest + smoke + build（提交/推送前必跑）
+npm run verify         # 全部门禁：typecheck + test:gamejolt + selftest + smoke + build（提交/推送前必跑）
 npm run test:ui        # 浏览器点击测试（先另开终端 npm run dev；需要系统 Chrome）
-npm run smoke          # 只跑 SSR 冒烟（16 条路由）
-npm run selftest       # 只跑断言集（458 项，含静态守卫）
+npm run test:gamejolt  # GameJolt 解析 / 网络层测试（14 项，注入 fetch 夹具，不出网）
+npm run gamejolt:helper # 后台「从 GameJolt 导入」所需的本机助手（127.0.0.1:4317）
+npm run smoke          # 只跑 SSR 冒烟（14 条路由）
+npm run selftest       # 只跑断言集（481 项，含静态守卫）
 ```
 
 - **部署**：推 `main` 即自动构建发布（`.github/workflows/deploy.yml`，构建前自动 `data:pull`）
@@ -81,6 +83,9 @@ npm run selftest       # 只跑断言集（458 项，含静态守卫）
 | **写路径必须「读最新 → 重放 → 409 重试」** | `db.json` 是**单个文件**，任意两人同时保存都会冲突；敢直接重试是因为重放**永远正确**（改的是字段，不是文本 diff） | README §后台的写入落在哪里 |
 | **图片文件名带时间戳** | 图片会被浏览器/CDN 缓存；换名即换地址，缓存自然失效 | README §图片上传 |
 | **预览复用 `GameDetail` 本身**（注入草稿） | 另写一个"像前台"的预览页迟早分叉，分叉后预览就在骗人 | README §预览功能 |
+| **不再提供评论区** | 产品决策：评论需要审核、滥用处理与独立的数据归属；没有这些能力时，一个空评论区只是在制造维护负担 | README §7.2 |
+| **标签与作者合并为一个页面** | 两者都是由作品数据派生的分类维度；分成两页只会让管理员在两张几乎相同的表格之间来回切换 | README §后台路由 |
+| **GameJolt 导入走本机助手，下载链接仍人工** | GameJolt 站内接口无 CORS 头，浏览器只能靠本机小代理拿 JSON；图片 CDN 本身开放跨域，可直接走现有上传链路。游戏资源与网盘链接是策展决定，自动化只做「信息搬运」 | README §7.3 |
 
 ## 6. 改动前必读的铁律
 
@@ -109,8 +114,8 @@ npm run selftest       # 只跑断言集（458 项，含静态守卫）
    拦截要挂 `context.route`（预览会开新标签页）
 10. 图片测试夹具：用 canvas 在浏览器里生成**指定尺寸的真实 PNG** ——
     SVG 喂给 `createImageBitmap` 会失败，1×1 PNG 会被尺寸校验拦下
-11. 公开站产物有**逐字节基线**（`.tmp/public-baseline`）：任何变化都必须解释清楚
-    （数据变化 or 代码变化），标准做法见 README §测试覆盖对照
+11. 公开站产物做**逐字节回归**时，先构建一份快照再比对；Phase 19 用过的
+    `.tmp/public-baseline` 属于一次性临时产物，不纳入版本管理（已随 `.tmp/` 清理）
 
 ## 7. 踩坑清单（全部踩过，别再踩）
 
@@ -139,23 +144,26 @@ npm run selftest       # 只跑断言集（458 项，含静态守卫）
 | 项 | 说明 |
 | --- | --- |
 | 浏览量 | `viewCounter.ts` 是适配器 + 静态基数，**未接任何后端**。接真实服务只需实现 `ViewProvider` 并在 `main.ts` 注册 |
-| 评论 | Giscus `enabled: false`、配置留空。启用需要建公开评论仓 + 安装 giscus App（网页操作，无法代劳） |
+| 评论 | 已按产品决策移除：`CommentSection.vue`、`src/config/giscus.ts`、`public/giscus-swiss.css` 与全部相关文案/测试均已删除 |
 | 多管理员 | 数据仓还没加协作者；加人命令见 `admin_phase13_persistence_decision.md` §15 |
 | 数据更新延迟 | 公开页挂载 / 切回时自动同步（通常几秒）；断网时退回构建期快照，最长等 1 小时的定时构建刷新快照 |
 | 图片处理 | 已做长边缩放 + WebP；**未做自动裁剪**（按比例留白是设计选择，不是缺陷） |
+| GameJolt 导入 | 依赖对方**内部站内接口**（`/site-api/web/discover/games/<id>`），改版即可能失效；失败会显式报错，不会写入半条数据。导入只填草稿，不碰下载渠道，仍需人工点保存 |
 
 ## 9. 质量门禁（改动之后必须全绿）
 
 ```
 npm run verify
-# = typecheck + selftest(458) + smoke(16) + build
+# = typecheck + test:gamejolt(14) + selftest(481) + smoke(14) + build
 ```
 
+- `test:gamejolt`：URL 解析 / 富文本 / 图片选型与尺寸升级 / 网络错误分支（`node --test`，夹具注入 fetch）
 - `selftest`：深模块断言 + **静态守卫**（扫源码的三条红线）+ 仓储/持久化/上传契约
-- `smoke`：SSR 渲染 16 条路由（公开 6 + 后台 10），断言外壳分离与关键内容
+- `smoke`：SSR 渲染 14 条路由（公开 4 + 后台 10），断言外壳分离与关键内容
 - `UI 点击测试`（`scripts/ui-test.mjs`，**已纳入版本管理**，`npm run test:ui`）：
-  73 步真实浏览器点击，覆盖计划书 §21 后台专项与 §22 前台回归
-- **公开站逐字节基线**（`.tmp/public-baseline`）：公开站产物有任何变化都必须解释
+  75 步真实浏览器点击，覆盖计划书 §21 后台专项、§22 前台回归与 GameJolt 导入全流程（助手/CDN 均为路由 mock）
+- **公开站回归**：Phase 19 曾用逐字节基线；快照属 `.tmp/` 临时产物，不纳入版本管理，
+  需要时重新构建一份即可
 
 ## 10. 新会话怎么开始
 

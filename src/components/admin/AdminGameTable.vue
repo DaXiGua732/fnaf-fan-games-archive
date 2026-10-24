@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAdminGames } from '../../composables/useAdminGames'
+import { PREVIEW_PATH, publishPreview } from '../../composables/useGamePreview'
 import type { AdminGame } from '../../types/admin'
 import { assetUrl } from '../../utils/asset'
 import { formatTimestamp } from '../../utils/datetime'
@@ -50,6 +51,18 @@ async function toggleVisibility(game: AdminGame): Promise<void> {
 
 function toggleLabel(game: AdminGame): string {
   return game.status === 'published' ? '下线这条' : '上线这条'
+}
+
+/**
+ * 列表行内「预览」。
+ *
+ * 不能直接链到公开详情页：草稿 / 已下线 / 已归档的条目在公开路由里是 404，
+ * 那会让管理员以为「预览坏了」。这里走后台自己的预览通道 ——
+ * 把已保存的条目写进 localStorage，再打开受登录保护的 /admin/preview。
+ */
+function openPreview(game: AdminGame): void {
+  publishPreview(game)
+  window.open(`${import.meta.env.BASE_URL}#${PREVIEW_PATH}`, '_blank', 'noopener')
 }
 
 /* ---------------------------------------------------------------------------
@@ -222,14 +235,14 @@ const CHECKBOX_CLASS =
                 编辑
               </RouterLink>
 
-              <RouterLink
-                :to="{ name: 'game', params: { id: game.id } }"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
                 class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:text-[#ff0000]"
+                :title="`预览 ${game.title}（包含未上线的条目）`"
+                @click="openPreview(game)"
               >
                 预览 &#8599;
-              </RouterLink>
+              </button>
 
               <button
                 type="button"

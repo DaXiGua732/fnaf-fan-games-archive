@@ -8,6 +8,7 @@ import AdminEditorSection from '../../components/admin/AdminEditorSection.vue'
 import AdminFeatureSettings from '../../components/admin/AdminFeatureSettings.vue'
 import AdminField from '../../components/admin/AdminField.vue'
 import AdminGalleryEditor from '../../components/admin/AdminGalleryEditor.vue'
+import AdminGameJoltImport from '../../components/admin/AdminGameJoltImport.vue'
 import AdminImageSlot from '../../components/admin/AdminImageSlot.vue'
 import AdminPublishOverview from '../../components/admin/AdminPublishOverview.vue'
 import AdminPublishSettings from '../../components/admin/AdminPublishSettings.vue'
@@ -118,22 +119,46 @@ const saveError = ref('')
 
 /* ---------------------------------------------------------------------------
    加载 / 重载
+   ---------------------------------------------------------------------------
+   本地仓储是同步就绪的，`game` 在 setup 里就能读到；但登录后换成远程仓储时，
+   `db.json` 要经过一次网络请求才到 —— 这时 setup 里的 `game` 是 undefined。
+   旧实现直接在 setup 调用 `loadFrom(game.value)`，于是**刷新 / 书签 / 登录跳转**
+   进入编辑页会得到一个空表单，用户一保存就把整条作品覆盖成空白。
+
+   所以加载必须等数据就绪，并且以「id 变化」为触发条件（而不是 game 对象的每次变化，
+   否则保存后仓储回写会让草稿重新加载，覆盖刚输入的内容）。
    --------------------------------------------------------------------------- */
-loadFrom(game.value)
+const loadedDraftId = ref('')
+const NEW_DRAFT_ID = '__new__'
+
+function syncDraftFromCatalog(): void {
+  if (!dataOk.value) return
+
+  if (isNew.value) {
+    if (loadedDraftId.value !== NEW_DRAFT_ID) {
+      loadFrom(undefined)
+      loadedDraftId.value = NEW_DRAFT_ID
+    }
+    return
+  }
+
+  const current = game.value
+  if (!current || loadedDraftId.value === current.id) return
+  loadFrom(current)
+  loadedDraftId.value = current.id
+}
+
+syncDraftFromCatalog()
 
 /**
  * 新增与编辑两个路由**共用同一个组件**，props.id 变化不会重跑 setup，
  * 所以必须显式重载草稿；否则新建成功跳到编辑路由后会继续显示旧草稿。
+ * 同时监听 `dataOk` 与 `game.id`：远程数据晚到时，等它到了再填表单。
  *
  * ⚠️ 这里**不要**清空 savedOutcome：新建成功后紧接着就会 replace 到编辑路由，
  *    清掉的话用户根本看不到保存结果提示条。
  */
-watch(
-  () => props.id,
-  () => {
-    loadFrom(game.value)
-  },
-)
+watch([() => props.id, dataOk, () => game.value?.id], syncDraftFromCatalog)
 
 /* ---------------------------------------------------------------------------
    离开页面拦截
@@ -253,7 +278,7 @@ async function onPublish(): Promise<void> {
  *
  * 【预览数据怎么来】以已保存的那条为底（保住 metrics 这类不可编辑字段），
  * 再把草稿盖上去 —— 于是「能编辑的字段是新的，不能编辑的字段还在」。
- * 传给预览页的方式是 sessionStorage：跨标签页只能靠 storage。
+ * 传给预览页的方式是 localStorage（sessionStorage 不会跟着新标签页走）。
  */
 function onPreview(): void {
   const source = props.id ? getGameById(props.id) : undefined
@@ -303,6 +328,7 @@ const featureChanged = computed(() =>
    吸顶的索引，点一下直接跳过去，并在有未保存改动的区块上点一个红点。
    --------------------------------------------------------------------------- */
 const SECTIONS = computed(() => [
+  { id: 'section-import', label: 'GameJolt 导入', changed: false },
   { id: 'section-basic', label: '基本信息', changed: basicChanged.value },
   { id: 'section-media', label: '封面与宣传图', changed: mediaChanged.value },
   { id: 'section-gallery', label: '图库', changed: changedFields.value.includes('gallery') },
@@ -320,18 +346,41 @@ function jumpTo(id: string): void {
 
 /**
  * Ctrl / Cmd + S 保存。
- * 只在「有改动且可保存」时生效 —— 否则每按一次就产生一个空提交。
- * 输入框里也照常生效：这正是快捷键的意义（不用先点空白处再按）。
+ *
+ * 有改动就交给 `onSave()` —— 它会把 `touched` 置为 true，于是校验不通过时
+ * 页面会显示具体错误。旧实现在这里先判断 `canSave` 再调用，导致「按了没反应」：
+ * 用户不知道是快捷键没生效，还是表单有错。快捷键不能静默失败。
+ *
+ * 没有改动时不产生空提交；保存中也不重入。
  */
 function onKeydown(event: KeyboardEvent): void {
   if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 's') return
   event.preventDefault()
-  if (saving.value || !isDirty.value || !canSave.value) return
+  if (saving.value || !isDirty.value) return
   void onSave()
 }
 
-onMounted(() => window.addEventListener('keydown', onKeydown))
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+/**
+ * 关闭 / 刷新页面时的未保存提醒。
+ *
+ * 路由离开已有页内确认条；但刷新、关标签页不经过 vue-router，
+ * 只能靠 beforeunload。浏览器会显示自己的通用确认文案（无法自定义），
+ * 这是唯一能兜住「误按 F5 丢掉草稿」的机制。
+ */
+function onBeforeUnload(event: BeforeUnloadEvent): void {
+  if (!isDirty.value || allowLeave) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
+  window.addEventListener('beforeunload', onBeforeUnload)
+})
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('beforeunload', onBeforeUnload)
+})
 
 /* ---------------------------------------------------------------------------
    样式
@@ -539,6 +588,11 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
     <div class="mt-12 grid gap-12 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-16">
       <!-- ---------- 左栏 ---------- -->
       <div class="flex flex-col gap-12">
+        <!-- 从 GameJolt 导入：只填草稿 + 传图，不自动保存 -->
+        <AdminEditorSection title="从 GameJolt 导入" anchor="section-import" hide-status>
+          <AdminGameJoltImport :game-id="imageOwnerId" :is-new="isNew" />
+        </AdminEditorSection>
+
         <!-- 基本信息（Phase 5 已接入） -->
         <AdminEditorSection title="基本信息" anchor="section-basic" :changed="basicChanged">
           <div class="grid gap-6 md:grid-cols-2">

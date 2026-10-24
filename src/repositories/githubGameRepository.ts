@@ -91,19 +91,26 @@ function extensionOf(mime: string): string {
 }
 
 /**
- * 文件名里的时间戳（`YYYYMMDDHHmmss`）。
+ * 文件名里的时间戳（`YYYYMMDDHHmmssSSS`）+ 4 位随机后缀。
  *
  * 【为什么文件名要带它】图片是公开地址、会被浏览器和 CDN 缓存。
  * 若沿用固定文件名（`cover.jpg`）覆盖上传，用户会一直看到旧图。
  * 换名即换地址，缓存自然失效 —— 代价是旧文件留在仓库里，
  * 「上传后删除旧图」是 Phase 17 的事。
+ *
+ * 【为什么精确到毫秒还要随机后缀】图库是多张连续上传的。
+ * 只用秒级时间戳时，同一秒内的两张 `gallery-*.webp` 会得到**同一个路径**：
+ * 第二张覆盖第一张，返回的地址也相同，图库看起来凭空少了一张。
+ * 毫秒 + 随机后缀让单个标签页、多个标签页都不会撞名。
  */
 function timestampTag(): string {
   const now = new Date()
-  const pad = (value: number): string => String(value).padStart(2, '0')
+  const pad = (value: number, width = 2): string => String(value).padStart(width, '0')
+  const nonce = Math.random().toString(36).slice(2, 6).padEnd(4, '0')
   return (
     `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}` +
-    `${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}`
+    `${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}` +
+    `${pad(now.getUTCMilliseconds(), 3)}${nonce}`
   )
 }
 

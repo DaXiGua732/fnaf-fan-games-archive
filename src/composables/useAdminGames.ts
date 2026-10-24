@@ -18,7 +18,7 @@
  *   7. 勾选（跨页保持；表头全选只作用于当前页）
  *   8. 批量写入（上线 / 下线 / 归档 / 加减标签 / 改作者）—— 当前只写内存，见「批量写入」一节
  *   9. 单条保存 saveGame()（Phase 5 起）—— 组件唯一允许的「写单条」入口
- *  10. 标签级操作 renameTag / deleteTag（Phase 6 起）—— 本质是改所有引用该标签的作品
+ *  10. 标签 / 作者级操作 renameTag / deleteTag / renameAuthor —— 本质都是改所有引用它的作品
  *
  * 【铁律】`views/admin/*.vue` 只允许调用本模块暴露的方法并遍历 `games`，
  *         绝对禁止在 `.vue` 内手写 `.filter()` / `.sort()`，也禁止 import db.json。
@@ -46,6 +46,7 @@ import type {
 import { TAG_LIMITS, isValidTag, normalizeTag } from '../types/admin'
 import type { GameStatus } from '../types/game'
 import { prepareImageForUpload } from '../utils/imageProcess'
+import { DRAFT_LIMITS } from './useAdminGameDraft'
 
 /** 每页条数默认值（后台表格，比前台网格密，默认放宽到 20） */
 const DEFAULT_PAGE_SIZE = 20
@@ -171,9 +172,50 @@ const statusCounts = computed<Record<StatusFilter, number>>(() => {
   return counts
 })
 
-const availableAuthors = computed(() =>
-  [...new Set(adminGameRepository.value.games.value.map((game) => game.author))].sort((a, b) => a.localeCompare(b, 'en')),
-)
+/**
+ * 全量作者：名称 + 使用次数。
+ *
+ * 作者和标签一样没有独立存储，只是作品上的字符串。
+ * 「作者管理」能做的事因此也只有一件：把某个名字**统一改掉** ——
+ * 改名会让所有引用它的作品一起变，输入已有名字就是合并。
+ */
+const allAuthors = computed(() => {
+  const usage = new Map<string, number>()
+  for (const game of adminGameRepository.value.games.value) {
+    const name = game.author.trim()
+    if (!name) continue
+    usage.set(name, (usage.get(name) ?? 0) + 1)
+  }
+  return [...usage.entries()]
+    .map(([name, count]) => ({ name, usage: count }))
+    .sort((a, b) => b.usage - a.usage || a.name.localeCompare(b.name, 'zh'))
+})
+
+/** 供编辑器 datalist / 批量修改作者使用的作者名列表 */
+const availableAuthors = computed(() => allAuthors.value.map((item) => item.name))
+
+/* ---- 标签与作者共用的一页：两套独立搜索 ---- */
+const authorSearch = ref('')
+
+/** 作者页展示用的列表：应用搜索条件后的结果（空搜索 = 全部） */
+const visibleAuthors = computed(() => {
+  const needle = authorSearch.value.trim().toLowerCase()
+  if (!needle) return allAuthors.value
+  return allAuthors.value.filter((item) => item.name.toLowerCase().includes(needle))
+})
+
+function setAuthorSearch(value: string): void {
+  authorSearch.value = value
+}
+
+function clearAuthorSearch(): void {
+  authorSearch.value = ''
+}
+
+/** 按名称查单个作者（供重命名确认等场景显示使用次数） */
+function findAuthor(name: string): { name: string; usage: number } | undefined {
+  return allAuthors.value.find((item) => item.name === name)
+}
 
 /**
  * 标签首次被后台引入的时间。
@@ -400,6 +442,10 @@ export interface BatchOutcome {
   changed: number
   /** 无需改动而跳过的条目数（例如作品本来就已经是目标状态） */
   skipped: number
+  /** 写入失败而被跳过的条目数（网络 / 权限 / 冲突重试耗尽） */
+  failed: number
+  /** 第一条失败原因；没有失败时为空串。UI 必须把它显示出来 */
+  error: string
   /** 这次写入实际落在了哪里 —— UI 据此说出准确的那句话，见 STORAGE_NOTICE */
   storage: StorageKind
 }
@@ -614,25 +660,43 @@ async function applyBatch(
 ): Promise<BatchOutcome> {
   let changed = 0
   let skipped = 0
+  let failed = 0
+  let firstError = ''
 
   for (const id of ids) {
-    const game = await adminGameRepository.value.getGame(id)
-    // 不存在的 id 直接忽略：旧实现对「不在目录里的 id」也是静默跳过
-    if (!game) continue
+    try {
+      const game = await adminGameRepository.value.getGame(id)
+      // 不存在的 id 直接忽略：旧实现对「不在目录里的 id」也是静默跳过
+      if (!game) continue
 
-    const patch = mutate(game)
-    if (patch === null) {
-      skipped += 1
-      continue
+      const patch = mutate(game)
+      if (patch === null) {
+        skipped += 1
+        continue
+      }
+      await adminGameRepository.value.updateGame(id, patch)
+      changed += 1
+    } catch (error) {
+      // 批量操作不能因为第 3 条失败就把前两条的结果丢掉、或者让整个 Promise
+      // 变成未处理的拒绝。逐条记录，最后如实告诉用户「改了几条、失败几条」。
+      failed += 1
+      if (!firstError) {
+        firstError = error instanceof Error ? error.message : '未知错误'
+      }
     }
-    await adminGameRepository.value.updateGame(id, patch)
-    changed += 1
   }
 
   // 语义冻结（Phase 0 §8.2）：执行后清空勾选，但**保留筛选条件与页码**
   clearSelection()
 
-  const outcome: BatchOutcome = { label, changed, skipped, storage: adminGameRepository.value.storage.value }
+  const outcome: BatchOutcome = {
+    label,
+    changed,
+    skipped,
+    failed,
+    error: firstError,
+    storage: adminGameRepository.value.storage.value,
+  }
   lastOutcome.value = outcome
   return outcome
 }
@@ -687,11 +751,27 @@ function batchSetAuthor(ids: string[], author: string): Promise<BatchOutcome> {
   })
 }
 
+/** 没有产生任何写入的结果（参数非法 / 本来就是同名）。仍然要让 UI 有反馈 */
+function recordNoop(label: string): BatchOutcome {
+  const outcome: BatchOutcome = {
+    label,
+    changed: 0,
+    skipped: 0,
+    failed: 0,
+    error: '',
+    storage: adminGameRepository.value.storage.value,
+  }
+  lastOutcome.value = outcome
+  return outcome
+}
+
 /* ---------------------------------------------------------------------------
-   标签级操作（Phase 6）
+   标签 / 作者级操作
    ---------------------------------------------------------------------------
-   标签没有独立存储，所以「重命名 / 删除标签」的本质是**改所有引用它的作品**。
-   这两条都是可撤销的（数据本身没删），但会一次改动多条记录，因此走同一个结果提示通道。
+   两者都没有独立存储 —— 标签是作品上的字符串数组，作者是作品上的字符串。
+   所以「重命名 / 删除标签」「重命名作者」的本质都是**改所有引用它的作品**。
+   这些操作会一次改动多条记录，统一走 applyBatch：逐条写入、逐条容错，
+   结果提示条能同时说清「改了几条、失败几条」。
    --------------------------------------------------------------------------- */
 
 /** 重命名标签：改掉所有引用它的作品。目标名已存在时会合并去重，不产生重复标签 */
@@ -700,19 +780,18 @@ async function renameTag(from: string, to: string): Promise<BatchOutcome> {
   const next = normalizeTag(to)
 
   if (!previous || !isValidTag(next) || previous === next) {
-    const noop: BatchOutcome = { label: '重命名标签', changed: 0, skipped: 0, storage: adminGameRepository.value.storage.value }
-    lastOutcome.value = noop
-    return noop
+    return recordNoop('重命名标签')
   }
 
-  let changed = 0
-  for (const game of await adminGameRepository.value.listGames()) {
-    if (!game.tags.includes(previous)) continue
+  const ids = adminGameRepository.value.games.value
+    .filter((game) => game.tags.includes(previous))
+    .map((game) => game.id)
+
+  const outcome = await applyBatch(ids, `重命名标签「${previous}」→「${next}」`, (game) => {
     const renamed = game.tags.map((tag) => (tag === previous ? next : tag))
     // 合并去重：目标名可能本来就在这条作品上
-    await adminGameRepository.value.updateGame(game.id, { tags: [...new Set(renamed)] })
-    changed += 1
-  }
+    return { tags: [...new Set(renamed)] }
+  })
 
   // 首次引入时间跟着标签走
   const carried = tagCreatedAt.value[previous]
@@ -722,51 +801,56 @@ async function renameTag(from: string, to: string): Promise<BatchOutcome> {
   tagCreatedAt.value = rest
   if (!carried) rememberTag(next)
 
-  const outcome: BatchOutcome = {
-    label: `重命名标签「${previous}」→「${next}」`,
-    changed,
-    skipped: 0,
-    storage: adminGameRepository.value.storage.value,
-  }
-  lastOutcome.value = outcome
   return outcome
 }
 
 /** 删除标签：从所有作品上摘掉该标签本身。**不会删除任何作品** */
 async function deleteTag(tag: string): Promise<BatchOutcome> {
   const target = normalizeTag(tag)
+  if (!target) return recordNoop('删除标签')
 
-  let changed = 0
-  if (target) {
-    for (const game of await adminGameRepository.value.listGames()) {
-      if (!game.tags.includes(target)) continue
-      await adminGameRepository.value.updateGame(game.id, {
-        tags: game.tags.filter((item) => item !== target),
-      })
-      changed += 1
-    }
-  }
+  const ids = adminGameRepository.value.games.value
+    .filter((game) => game.tags.includes(target))
+    .map((game) => game.id)
+
+  const outcome = await applyBatch(ids, `删除标签「${target}」`, (game) => ({
+    tags: game.tags.filter((item) => item !== target),
+  }))
 
   const rest = { ...tagCreatedAt.value }
   delete rest[target]
   tagCreatedAt.value = rest
 
-  const outcome: BatchOutcome = {
-    label: `删除标签「${target}」`,
-    changed,
-    skipped: 0,
-    storage: adminGameRepository.value.storage.value,
-  }
-  lastOutcome.value = outcome
   return outcome
 }
 
-/* ---------------------------------------------------------------------------
-   单条保存（Phase 5）
-   ---------------------------------------------------------------------------
-   这是计划书 §Phase 5 要求的「统一接口 saveGame(game)」，也是组件唯一允许的
-   写入单条数据的入口。Phase 12 接入本地仓储 / Phase 13 接入远程库时只换这里的实现。
-   --------------------------------------------------------------------------- */
+/**
+ * 重命名作者：改掉所有使用该名字的作品。
+ *
+ * 作者是必填字段，所以没有「删除作者」—— 唯一有意义的批量操作就是改名。
+ * 输入一个已存在的名字时，效果是**合并**（两条作品的作者变成同一个）。
+ */
+async function renameAuthor(from: string, to: string): Promise<BatchOutcome> {
+  const previous = from.trim()
+  const next = to.trim()
+
+  if (
+    !previous ||
+    !next ||
+    previous === next ||
+    next.length > DRAFT_LIMITS.author
+  ) {
+    return recordNoop('重命名作者')
+  }
+
+  const ids = adminGameRepository.value.games.value
+    // 作者表按 trim 后的名字展示，重命名也要按同一个口径匹配；
+    // 否则「 IvanG」这种带空白的旧数据会显示在表里、却改不动。
+    .filter((game) => game.author.trim() === previous)
+    .map((game) => game.id)
+
+  return applyBatch(ids, `重命名作者「${previous}」→「${next}」`, () => ({ author: next }))
+}
 
 /* ---------------------------------------------------------------------------
    单条保存（Phase 5）
@@ -774,7 +858,7 @@ async function deleteTag(tag: string): Promise<BatchOutcome> {
    这是计划书 §Phase 5 要求的「统一接口 saveGame(game)」，也是组件唯一允许的
    写入单条数据的入口。内部只做两件事：调仓储 + 记录标签首次引入时间。
 
-   「新建时的缺省值」「id 由标题生成」「时间戳怎么打」都已经搬到仓储里 ——
+   「新建时的缺省值」「id 由标题生成」「时间戳怎么打」都已经搬到仓储 / 工厂里 ——
    它们属于数据层，不该由业务层操心。
    --------------------------------------------------------------------------- */
 
@@ -857,6 +941,16 @@ export interface AdminGamesAPI {
   /** 标签候选（本条作品还没有的、匹配输入的） */
   suggestTags: typeof suggestTags
 
+  // —— 作者（与标签合并在一页管理）——
+  /** 全量作者：名称 + 使用次数 */
+  allAuthors: typeof allAuthors
+  /** 作者页搜索 */
+  authorSearch: typeof authorSearch
+  visibleAuthors: typeof visibleAuthors
+  setAuthorSearch: typeof setAuthorSearch
+  clearAuthorSearch: typeof clearAuthorSearch
+  findAuthor: typeof findAuthor
+
   // —— 当前查询状态 ——
   activeQuery: typeof activeQuery
   hasActiveQuery: typeof hasActiveQuery
@@ -918,9 +1012,11 @@ export interface AdminGamesAPI {
   /** 永久删除一条作品并清理其专属上传图 */
   deleteGame: typeof deleteGame
 
-  // —— 标签级操作 ——
+  // —— 标签 / 作者级操作 ——
   renameTag: typeof renameTag
   deleteTag: typeof deleteTag
+  /** 重命名作者（输入已有名字即合并） */
+  renameAuthor: typeof renameAuthor
 
   // —— 单条读取 ——
   getGameById: typeof getGameById
@@ -944,6 +1040,13 @@ export function useAdminGames(): AdminGamesAPI {
     clearTagSearch,
     findTag,
     suggestTags,
+
+    allAuthors,
+    authorSearch,
+    visibleAuthors,
+    setAuthorSearch,
+    clearAuthorSearch,
+    findAuthor,
 
     activeQuery,
     hasActiveQuery,
@@ -990,6 +1093,7 @@ export function useAdminGames(): AdminGamesAPI {
 
     renameTag,
     deleteTag,
+    renameAuthor,
 
     getGameById,
   }

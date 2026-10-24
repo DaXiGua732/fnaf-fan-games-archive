@@ -36,6 +36,7 @@ const GROUPS: FilterGroup[] = [
 ]
 
 const SORTS: { key: SortKey; label: string }[] = [
+  { key: 'recommended', label: '推荐' },
   { key: 'views', label: '热度' },
   { key: 'score', label: '评分' },
   { key: 'title', label: '首字母' },

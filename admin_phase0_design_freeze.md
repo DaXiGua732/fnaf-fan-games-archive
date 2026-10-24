@@ -3,6 +3,10 @@
 > 对应 `admin_backend_development_plan.md` 的 Phase 0。
 > 本文件是**开工前的一次性交付物**，只做审计与设计，不含任何后台业务代码。
 > 审计基准提交：`f42fb32`；基线质量门禁：见 §1.1。
+>
+> ⚠️ **历史文档**：文中对 `/debug`、`/style`、`AdminTags.vue`、作者管理页的规划已被实现期决策取代。
+> 当前状态以 `README.md` / `HANDOVER.md` 与代码为准：开发入口已移除；
+> 标签与作者合并为 `/admin/taxonomy`；评论区（Giscus）已整体移除。
 
 ---
 

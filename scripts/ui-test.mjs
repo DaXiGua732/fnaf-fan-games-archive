@@ -80,8 +80,18 @@ page.on('response', (r) => {
 })
 
 const hash = (p) => `${BASE}/#${p}`
+/**
+ * 打开一个页面，**保证是一次干净的加载**。
+ *
+ * ⚠️ 只改 hash 时浏览器不会刷新文档，而筛选条件、草稿、结果提示条都是模块级状态 ——
+ * 于是 `go('/')` 之后上一轮的年份筛选还挂着，搜索会得到 0 条；
+ * `go('/admin/taxonomy')` 之后上一轮的重命名提示条还在，断言「旧标签名不再出现」就会假失败。
+ * 原先的 `page.goto` 在「目标 URL 与当前 URL 完全相同」时甚至什么都不做。
+ * 因此这里在 goto 之后强制 reload：go 的语义是「重新进入」，需要保留内存状态时用 nav()。
+ */
 async function go(p, waitText) {
   await page.goto(hash(p), { waitUntil: 'domcontentloaded' })
+  await page.reload({ waitUntil: 'domcontentloaded' })
   if (waitText) await page.getByText(waitText, { exact: false }).first().waitFor({ timeout: 8000 })
   await page.waitForTimeout(250)
 }
@@ -139,10 +149,62 @@ const localDb = JSON.parse(
  * ⚠️ `src/data/db.json` 是「上次构建用的快照」，会随 `data:pull` 变化；
  * 写死「6 款」会让一次正常的数据更新把 UI 测试弄挂。
  */
-const TOTAL_COUNT = localDb.games.length
-const VISIBLE_COUNT = localDb.games.filter(
-  (game) => (game.status ?? 'published') === 'published' && !game.archived,
+const isPublished = (game) => (game.status ?? 'published') === 'published'
+const VISIBLE_GAMES = localDb.games.filter((game) => isPublished(game) && !game.archived)
+/** 后台列表默认视图 = 未归档的全部状态 */
+const ADMIN_GAMES = localDb.games.filter((game) => !game.archived)
+const TOTAL_COUNT = ADMIN_GAMES.length
+const VISIBLE_COUNT = VISIBLE_GAMES.length
+const DRAFT_COUNT = ADMIN_GAMES.filter((game) => game.status === 'draft').length
+const ARCHIVED_COUNT = localDb.games.filter((game) => game.archived).length
+
+/**
+ * 测试主对象：优先选一条「封面 / Banner / 至少 2 张图库 / 至少 2 个下载」的可见作品，
+ * 因为后续要测图库排序、下载行排序、发布状态。
+ * 数据被编辑到不满足条件时退回第一款可见作品，测试里的分支会相应降级。
+ */
+const TEST_GAME =
+  VISIBLE_GAMES.find(
+    (game) =>
+      game.coverImage &&
+      game.bannerImage &&
+      (game.gallery?.length ?? 0) >= 2 &&
+      (game.downloads?.length ?? 0) >= 2,
+  ) ??
+  VISIBLE_GAMES.find((game) => game.coverImage && game.bannerImage) ??
+  VISIBLE_GAMES[0] ??
+  localDb.games[0]
+const TEST_GAME_ID = TEST_GAME?.id ?? ''
+const TEST_GAME_TITLE = TEST_GAME?.title ?? ''
+const TEST_GAME_GALLERY = TEST_GAME?.gallery?.length ?? 0
+const TEST_GAME_DOWNLOADS = TEST_GAME?.downloads?.length ?? 0
+
+/** 用于「改状态 → 刷新仍在」的另一个可见作品（尽量不与主对象重合） */
+const OTHER_GAME = VISIBLE_GAMES.find((game) => game.id !== TEST_GAME_ID) ?? TEST_GAME
+
+/** 前台年份筛选探针：取可见作品里最新的年份，命中数从数据推导 */
+const YEAR_PROBE = [...new Set(VISIBLE_GAMES.map((game) => game.releaseYear))].sort(
+  (a, b) => b - a,
+)[0]
+const YEAR_PROBE_COUNT = VISIBLE_GAMES.filter((game) => game.releaseYear === YEAR_PROBE).length
+
+/** 前台搜索探针：用完整标题，命中数从数据推导（避免标题互为子串时写死 1） */
+const SEARCH_PROBE = TEST_GAME_TITLE
+const SEARCH_PROBE_COUNT = VISIBLE_GAMES.filter((game) =>
+  game.title.toLowerCase().includes(SEARCH_PROBE.toLowerCase()),
 ).length
+
+/** 至少两张图库的详情页探针（灯箱需要前后切换） */
+const LIGHTBOX_GAME = VISIBLE_GAMES.find((game) => (game.gallery?.length ?? 0) >= 2)
+
+/** 后台搜索探针：用完整标题，命中数按后台搜索字段口径推导（不含归档） */
+const ADMIN_SEARCH_PROBE = TEST_GAME_TITLE
+const ADMIN_SEARCH_COUNT = ADMIN_GAMES.filter((game) =>
+  `${game.title} ${game.author} ${game.ipSeries} ${game.engine} ${(game.tags ?? []).join(' ')}`
+    .toLowerCase()
+    .includes(ADMIN_SEARCH_PROBE.toLowerCase()),
+).length
+
 let fakeDb = JSON.parse(JSON.stringify(localDb))
 let fakeSha = 'sha-1'
 let fakeCommits = 0
@@ -286,28 +348,37 @@ await step('公开站 · 首页渲染出全部可见作品', async () => {
   await page.waitForTimeout(400)
   await need('游戏库')
   await need('关键词搜索')
-  await need('The Joy of Creation: Reborn')
+  await need(TEST_GAME_TITLE)
   const cards = await page.locator('article').count()
   assert(cards === VISIBLE_COUNT, `首页卡片数应为 ${VISIBLE_COUNT}，实际 ${cards}`)
   await shot('01-home')
 })
 
-await step('公开站 · 筛选：点年份 2015 → 命中 2 款', async () => {
+await step(`公开站 · 筛选：点年份 ${YEAR_PROBE} → 命中 ${YEAR_PROBE_COUNT} 款`, async () => {
   await go('/', '游戏库')
-  await btn('2015').click()
-  await page.getByText('命中 2 款', { exact: false }).first().waitFor({ timeout: 5000 })
-  await shot('02-home-filter-2015')
+  await btn(String(YEAR_PROBE)).click()
+  await page
+    .getByText(`命中 ${YEAR_PROBE_COUNT} 款`, { exact: false })
+    .first()
+    .waitFor({ timeout: 5000 })
+  await shot('02-home-filter-year')
 })
 
-await step('公开站 · 搜索 flumpty → 只剩 1 张卡片', async () => {
-  await page.fill('#library-search', 'flumpty')
-  await page.getByText('命中 1 款', { exact: false }).first().waitFor({ timeout: 5000 })
+await step(`公开站 · 搜索完整标题 → 命中 ${SEARCH_PROBE_COUNT} 款`, async () => {
+  // 上一步的年份筛选是会话内状态，先回到干净首页再搜索。
+  await go('/', '游戏库')
+  await page.fill('#library-search', SEARCH_PROBE)
+  await page
+    .getByText(`命中 ${SEARCH_PROBE_COUNT} 款`, { exact: false })
+    .first()
+    .waitFor({ timeout: 5000 })
   const cards = await page.locator('article').count()
-  assert(cards === 1, `应剩 1 张卡片，实际 ${cards}`)
+  assert(cards === SEARCH_PROBE_COUNT, `应剩 ${SEARCH_PROBE_COUNT} 张卡片，实际 ${cards}`)
 })
 
 await step('公开站 · 点卡片进入详情页', async () => {
   // 链接是包在 article **外面**的（RouterLink > Card > article），所以点 article 本身
+  await go('/', '游戏库')
   await page.locator('article').first().click()
   await page.getByText('资源下载', { exact: false }).first().waitFor({ timeout: 8000 })
   assert(page.url().includes('/game/'), `URL 未跳到详情页：${page.url()}`)
@@ -315,6 +386,11 @@ await step('公开站 · 点卡片进入详情页', async () => {
 })
 
 await step('详情页 · 截图灯箱支持键盘切换与关闭', async () => {
+  if (!LIGHTBOX_GAME) {
+    console.log('        （当前数据没有 ≥2 张图库的作品，跳过灯箱切换）')
+    return
+  }
+  await go(`/game/${LIGHTBOX_GAME.id}`, '资源下载')
   const thumbs = page.getByRole('button', { name: /查看第 \d+ 张截图的大图/ })
   const count = await thumbs.count()
   assert(count >= 2, `详情页应至少渲染 2 张截图，实际 ${count}`)
@@ -381,21 +457,26 @@ await step('Phase 2 · 列表默认展示全部作品', async () => {
   await shot('04-admin-games')
 })
 
-await step('Phase 2 · 搜索 unreal → 2 行', async () => {
-  await page.fill('#admin-search', 'unreal')
+await step(`Phase 2 · 搜索完整标题 → ${ADMIN_SEARCH_COUNT} 行`, async () => {
+  await page.fill('#admin-search', ADMIN_SEARCH_PROBE)
   await page.waitForTimeout(300)
   const n = await rowCount()
-  assert(n === 2, `应有 2 行，实际 ${n}`)
+  assert(n === ADMIN_SEARCH_COUNT, `应有 ${ADMIN_SEARCH_COUNT} 行，实际 ${n}`)
 })
 
-await step('Phase 2 · 状态筛选「草稿」→ 空状态', async () => {
+await step(`Phase 2 · 状态筛选「草稿」→ ${DRAFT_COUNT} 行`, async () => {
   await page.fill('#admin-search', '')
   await page.waitForTimeout(200)
   await chip('草稿').click()
   await page.waitForTimeout(300)
-  await need('No Results')
-  const n = await rowCount()
-  assert(n === 1, `空状态应只有 1 行提示，实际 ${n}`)
+  if (DRAFT_COUNT === 0) {
+    await need('No Results')
+    const n = await rowCount()
+    assert(n === 1, `空状态应只有 1 行提示，实际 ${n}`)
+  } else {
+    const n = await rowCount()
+    assert(n === DRAFT_COUNT, `草稿应有 ${DRAFT_COUNT} 行，实际 ${n}`)
+  }
   await chip('全部').click()
   await page.waitForTimeout(300)
 })
@@ -418,7 +499,7 @@ await step('Phase 2 · 排序切「游戏名称」→ 首行是标题最小的�
   )
 })
 
-await step('Phase 2 · 每页条数可调小 → 分页控件出现并能前后翻页', async () => {
+await step('Phase 2 · 每页条数可调小 → 分页控件随数据出现', async () => {
   const options = await page.locator('#admin-page-size option').allTextContents()
   assert(options.join(',') === '5,10,20,50,100', `每页选项不符：${options.join(',')}`)
 
@@ -430,17 +511,22 @@ await step('Phase 2 · 每页条数可调小 → 分页控件出现并能前后�
   await need(`1 / ${PAGE_COUNT}`)
   await shot('05a-admin-paging')
 
-  await btn('下一页').click()
-  await page.waitForTimeout(400)
-  n = await rowCount()
-  const secondPageRows = TOTAL_COUNT - 5
-  assert(n === secondPageRows, `第 2 页应有 ${secondPageRows} 行，实际 ${n}`)
-  await need(`2 / ${PAGE_COUNT}`)
-  assert(await btn('下一页').isDisabled(), '末页时「下一页」应禁用')
+  if (PAGE_COUNT > 1) {
+    await btn('下一页').click()
+    await page.waitForTimeout(400)
+    n = await rowCount()
+    const secondPageRows = TOTAL_COUNT - 5
+    assert(n === secondPageRows, `第 2 页应有 ${secondPageRows} 行，实际 ${n}`)
+    await need(`2 / ${PAGE_COUNT}`)
+    assert(await btn('下一页').isDisabled(), '末页时「下一页」应禁用')
 
-  await btn('上一页').click()
-  await page.waitForTimeout(400)
-  await need(`1 / ${PAGE_COUNT}`)
+    await btn('上一页').click()
+    await page.waitForTimeout(400)
+    await need(`1 / ${PAGE_COUNT}`)
+  } else {
+    console.log('        （当前数据不足 6 条，分页只有一页；翻页分支跳过）')
+    assert(await btn('下一页').isDisabled(), '只有一页时「下一页」应禁用')
+  }
   assert(await btn('上一页').isDisabled(), '首页时「上一页」应禁用')
 
   await page.locator('#admin-page-size').selectOption('20')
@@ -455,6 +541,12 @@ await step('Phase 2 · 每页条数可调小 → 分页控件出现并能前后�
 await step('上一页箭头动画 = 下一页的镜像（旋转不丢、向左滑出）', async () => {
   await page.locator('#admin-page-size').selectOption('5')
   await page.waitForTimeout(300)
+  if (Math.ceil(TOTAL_COUNT / 5) <= 1) {
+    console.log('        （当前数据不足 6 条，没有第二页可翻；动画分支跳过）')
+    await page.locator('#admin-page-size').selectOption('20')
+    await page.waitForTimeout(300)
+    return
+  }
   await btn('下一页').click()
   await page.waitForTimeout(300)
 
@@ -587,7 +679,10 @@ await step('Phase 3 · 归档后默认列表隐藏，切「已归档」可见', 
   await chip('已归档').click()
   await page.waitForTimeout(400)
   const archivedRows = await rowCount()
-  assert(archivedRows === 2, `已归档筛选应有 2 行，实际 ${archivedRows}`)
+  assert(
+    archivedRows === ARCHIVED_COUNT + 2,
+    `已归档筛选应有 ${ARCHIVED_COUNT + 2} 行，实际 ${archivedRows}`,
+  )
   await shot('10-archived')
 })
 
@@ -607,10 +702,22 @@ await step('Phase 3 · 取消归档后数据复原', async () => {
    五、Phase 4 / 5 —— 编辑页（含上一轮修的三个缺陷）
    ====================================================================== */
 await step('Phase 5 · 列表「编辑」进入编辑页并带出真实数据', async () => {
+  // ⚠️ 不能点「第一行」：缺省排序是 updatedAt 降序，前面批量操作刷新过时间戳，
+  //    第一行是哪条作品并不确定。后面会用 TEST_GAME_ID 做一堆断言，
+  //    这里就必须先按标题定位到**同一条**作品，否则改的是别的条目。
   await go('/admin/games', '收录作品')
-  await link('编辑').click()
+  await page.fill('#admin-search', TEST_GAME_TITLE)
+  await page.waitForTimeout(400)
+  const row = page
+    .locator('tbody tr')
+    .filter({ has: page.getByRole('link', { name: TEST_GAME_TITLE, exact: true }) })
+    .first()
+  await row.getByRole('link', { name: '编辑', exact: true }).click()
   await page.getByText('基本信息', { exact: false }).first().waitFor({ timeout: 8000 })
-  assert(page.url().includes('/edit'), `未进入编辑页：${page.url()}`)
+  assert(
+    page.url().includes(`/games/${TEST_GAME_ID}/edit`),
+    `进入的不是目标作品的编辑页：${page.url()}`,
+  )
   assert((await page.inputValue('#f-title')).length > 0, '标题输入框为空')
   assert((await page.inputValue('#f-author')).length > 0, '作者输入框为空')
   await shot('11-editor')
@@ -686,14 +793,14 @@ await step('Phase 5 · 确认离开后正常跳回列表', async () => {
    六、Phase 6 —— 标签
    ====================================================================== */
 await step('Phase 6 · 批量加的标签已出现在标签页', async () => {
-  await go('/admin/tags', '标签管理')
+  await go('/admin/taxonomy', '标签与作者')
   await need('恐怖')
   await need('3D')
   await shot('15-tags')
 })
 
 await step('Phase 6 · 编辑页录入标签并保存', async () => {
-  await go('/admin/games/tjoc-reborn/edit', '基本信息')
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
   await page.fill('input[placeholder*="输入标签名"]', '剧情')
   await page.press('input[placeholder*="输入标签名"]', 'Enter')
   await page.waitForTimeout(300)
@@ -713,7 +820,7 @@ await step('Phase 6 · 重复标签被拒绝并给出红字提示', async () => 
 })
 
 await step('Phase 6 · 标签页搜索', async () => {
-  await go('/admin/tags', '标签管理')
+  await go('/admin/taxonomy', '标签与作者')
   await page.fill('#tag-search', '3d')
   await page.waitForTimeout(300)
   await need('命中 1 /')
@@ -736,14 +843,18 @@ await step('Phase 6 · 重命名标签并同步到作品', async () => {
   await shot('17-tag-rename')
 })
 
-await step('Phase 6 · 重命名确实改到了作品上', async () => {
-  await go('/admin/games/tjoc-reborn/edit', '基本信息')
-  await need('三维')
-  await needNot('3D')
+await step('Phase 6 · 重命名确实改到了作品上（使用次数保持）', async () => {
+  await go('/admin/taxonomy', '标签与作者')
+  const row = page
+    .locator('section[aria-labelledby="tag-section-title"] tbody tr', { hasText: '三维' })
+    .first()
+  const text = await row.innerText()
+  assert(text.includes('2 款'), `重命名后使用次数应为 2，实际行内容：${text}`)
+  assert(!(await body()).includes('3D'), '旧标签名「3D」不应再出现')
 })
 
 await step('Phase 6 · 删除标签：页内确认 → 标签消失、作品保留', async () => {
-  await go('/admin/tags', '标签管理')
+  await go('/admin/taxonomy', '标签与作者')
   const row = page.locator('table tbody tr', { hasText: '恐怖' }).first()
   await row.getByRole('button', { name: '删除', exact: true }).click()
   await page.waitForTimeout(300)
@@ -758,25 +869,53 @@ await step('Phase 6 · 删除标签：页内确认 → 标签消失、作品保�
   await need('三维')
 })
 
+await step('Phase 6 · 作者管理：重命名并同步到作品，再复原', async () => {
+  const originalAuthor = TEST_GAME.author ?? ''
+  const temporaryAuthor = 'UI 测试作者'
+
+  await go('/admin/taxonomy', '标签与作者')
+  const authorSection = page.locator('section[aria-labelledby="author-section-title"]')
+  let row = authorSection.locator('tbody tr', { hasText: originalAuthor }).first()
+  await row.getByRole('button', { name: '重命名', exact: true }).click()
+  await authorSection.locator('tbody input[type=text]').first().fill(temporaryAuthor)
+  await authorSection.getByRole('button', { name: '保存', exact: true }).first().click()
+  await page.waitForTimeout(700)
+  await need(`重命名作者「${originalAuthor}」→「${temporaryAuthor}」`)
+
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
+  assert(
+    (await page.inputValue('#f-author')) === temporaryAuthor,
+    '作者重命名后，作品编辑页的作者没有同步',
+  )
+
+  await go('/admin/taxonomy', '标签与作者')
+  row = authorSection.locator('tbody tr', { hasText: temporaryAuthor }).first()
+  await row.getByRole('button', { name: '重命名', exact: true }).click()
+  await authorSection.locator('tbody input[type=text]').first().fill(originalAuthor)
+  await authorSection.getByRole('button', { name: '保存', exact: true }).first().click()
+  await page.waitForTimeout(700)
+  await need(`重命名作者「${temporaryAuthor}」→「${originalAuthor}」`)
+})
+
 /* ======================================================================
    六·五、Phase 7 —— 图片管理 UI
    ====================================================================== */
 await step('Phase 7 · 封面与图库带出真实数据', async () => {
-  await go('/admin/games/tjoc-reborn/edit', '基本信息')
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
   await need('封面与宣传图')
   await need('Banner 宣传图')
   await need('或直接填图片地址')
   const cover = await page.inputValue('#f-cover-url')
-  // 只校验末段文件名：地址形态会随数据来源变化（站内路径 / 数据仓绝对外链），
-  // 写死整串会在数据换源时假失败。
-  assert(
-    cover.endsWith('tjoc-reborn-cover.svg'),
-    `封面地址末段不符：${cover}`,
-  )
+  // 与数据里的原值比较，而不是写死某个文件名 —— 数据仓随时会换图。
+  assert(cover === (TEST_GAME.coverImage ?? ''), `封面地址不符：期望 ${TEST_GAME.coverImage}，实际 ${cover}`)
   assert(cover.length > 0, '封面地址不应为空')
   await need('图库')
-  await need('NO.01')
-  await need('2 / 8 张')
+  if (TEST_GAME_GALLERY > 0) {
+    await need('NO.01')
+    await need(`${TEST_GAME_GALLERY} / 8 张`)
+  } else {
+    await need('图库还是空的')
+  }
   await shot('21-images')
 })
 
@@ -785,7 +924,7 @@ await step('Phase 7 · 封面地址校验：非法拒绝、合法通过', async 
   await page.waitForTimeout(300)
   await need('请填写站内路径（以 / 开头）或 http(s) 图片地址')
   await shot('22-cover-error')
-  await page.fill('#f-cover-url', '/images/tjoc-reborn-cover.svg')
+  await page.fill('#f-cover-url', TEST_GAME.coverImage ?? '')
   await page.waitForTimeout(300)
   await needNot('请填写站内路径（以 / 开头）或 http(s) 图片地址')
 })
@@ -803,6 +942,17 @@ await step('Phase 7 · 图库上移改变顺序、下移还原', async () => {
 })
 
 await step('Phase 7 · 图库地址校验与增删', async () => {
+  if (TEST_GAME_GALLERY >= 8) {
+    console.log('        （图库已满 8 张，跳过增删分支）')
+    return
+  }
+
+  /** 失败时带上页面实际的张数标记，别让报错只说「没包含」 */
+  const galleryCountLine = async () => {
+    const lines = (await body()).split('\n')
+    return lines.find((line) => line.includes('/ 8 张')) ?? '（页面上找不到张数标记）'
+  }
+
   await page.fill('#gallery-url', 'not a path')
   await btn('加入图片').click()
   await page.waitForTimeout(300)
@@ -811,17 +961,34 @@ await step('Phase 7 · 图库地址校验与增删', async () => {
   await page.fill('#gallery-url', '/images/ui-test-gallery.png')
   await btn('加入图片').click()
   await page.waitForTimeout(300)
-  await need('3 / 8 张')
+  assert(
+    await has(`${TEST_GAME_GALLERY + 1} / 8 张`),
+    `加入一张后应显示 ${TEST_GAME_GALLERY + 1} / 8 张，实际：${await galleryCountLine()}`,
+  )
   await shot('23-gallery')
 
-  await page.locator('figure').nth(2).getByRole('button', { name: '删除第 3 张' }).click()
+  // ⚠️ 删「新增的那一张」（最后一张），不是固定第 3 张：
+  //    后面还要把同一个地址再加回来验证复原。删中间那张的话，
+  //    新增的图仍在图库里，再添加会被「已经在图库里了」拦下。
+  const addedIndex = TEST_GAME_GALLERY + 1
+  await page
+    .locator('figure')
+    .nth(addedIndex - 1)
+    .getByRole('button', { name: `删除第 ${addedIndex} 张` })
+    .click()
   await page.waitForTimeout(300)
-  await need('2 / 8 张')
+  assert(
+    await has(`${TEST_GAME_GALLERY} / 8 张`),
+    `删除后应回到 ${TEST_GAME_GALLERY} / 8 张，实际：${await galleryCountLine()}`,
+  )
 
   await page.fill('#gallery-url', '/images/ui-test-gallery.png')
   await btn('加入图片').click()
   await page.waitForTimeout(300)
-  await need('3 / 8 张')
+  assert(
+    await has(`${TEST_GAME_GALLERY + 1} / 8 张`),
+    `再次加入后应显示 ${TEST_GAME_GALLERY + 1} / 8 张，实际：${await galleryCountLine()}`,
+  )
 })
 
 await step('Phase 7 · 保存图片改动', async () => {
@@ -835,36 +1002,38 @@ await step('Phase 7 · 保存图片改动', async () => {
    六·六、Phase 8 —— 下载资源管理
    ====================================================================== */
 await step('Phase 8 · 下载区块带出真实渠道', async () => {
-  await go('/admin/games/tjoc-reborn/edit', '基本信息')
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
   await need('下载资源')
+  const firstDownload = TEST_GAME.downloads?.[0] ?? {}
   const provider0 = await page.inputValue('#dl-0-provider')
-  assert(provider0 === '123云盘', `第 1 行服务商不符：${provider0}`)
+  assert(provider0 === (firstDownload.provider ?? ''), `第 1 行服务商不符：${provider0}`)
   const url0 = await page.inputValue('#dl-0-url')
-  assert(url0.startsWith('https://'), `第 1 行地址不符：${url0}`)
+  assert(url0 === (firstDownload.url ?? ''), `第 1 行地址不符：${url0}`)
   const pwd0 = await page.inputValue('#dl-0-password')
-  assert(pwd0 === 'tjoc', `第 1 行提取码不符：${pwd0}`)
-  await need('2 / 8 个渠道')
+  assert(pwd0 === (firstDownload.password ?? ''), `第 1 行提取码不符：${pwd0}`)
+  await need(`${TEST_GAME_DOWNLOADS} / 8 个渠道`)
   await shot('25-downloads')
 })
 
 await step('Phase 8 · 新增渠道：空行不飘红，开始填才实时提示', async () => {
+  const newIndex = TEST_GAME_DOWNLOADS
   await btn('添加下载渠道').click()
   await page.waitForTimeout(300)
-  await need('3 / 8 个渠道')
+  await need(`${TEST_GAME_DOWNLOADS + 1} / 8 个渠道`)
   // 刚加的空行不该立刻报错 —— 那是噪音
   await needNot('服务商不能为空')
 
-  await page.fill('#dl-2-provider', '夸克网盘')
+  await page.fill(`#dl-${newIndex}-provider`, '夸克网盘')
   await page.waitForTimeout(300)
   await need('下载地址不能为空')
 
-  await page.fill('#dl-2-url', 'www.quark.cn')
+  await page.fill(`#dl-${newIndex}-url`, 'www.quark.cn')
   await page.waitForTimeout(300)
   await need('下载地址必须是 http:// 或 https:// 开头的完整链接')
   await shot('26-download-error')
 
-  await page.fill('#dl-2-url', 'https://pan.quark.cn/s/ui-test')
-  await page.fill('#dl-2-password', 'ui9')
+  await page.fill(`#dl-${newIndex}-url`, 'https://pan.quark.cn/s/ui-test')
+  await page.fill(`#dl-${newIndex}-password`, 'ui9')
   await page.waitForTimeout(300)
   await needNot('下载地址必须是 http:// 或 https:// 开头的完整链接')
   await needNot('服务商不能为空')
@@ -887,9 +1056,11 @@ await step('Phase 8 · 保存渠道改动，再删除复原', async () => {
   await need('保存结果')
   await shot('27-downloads-saved')
 
-  await page.getByRole('button', { name: '删除第 3 个渠道' }).click()
+  await page
+    .getByRole('button', { name: `删除第 ${TEST_GAME_DOWNLOADS + 1} 个渠道` })
+    .click()
   await page.waitForTimeout(300)
-  await need('2 / 8 个渠道')
+  await need(`${TEST_GAME_DOWNLOADS} / 8 个渠道`)
   await btn('保存').click()
   await page.waitForTimeout(700)
   await need('保存结果')
@@ -899,7 +1070,7 @@ await step('Phase 8 · 保存渠道改动，再删除复原', async () => {
    六·七、Phase 9 —— 发布状态 / 归档 / 推荐排序
    ====================================================================== */
 await step('Phase 9 · 发布设置与推荐排序区块渲染', async () => {
-  await go('/admin/games/tjoc-reborn/edit', '基本信息')
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
   await need('发布设置')
   await need('推荐与排序')
   await need('已下线')
@@ -938,7 +1109,7 @@ await step('Phase 9 · 切回「草稿」就能保存', async () => {
 })
 
 await step('Phase 9 · 「发布」把状态切回已上线并保存', async () => {
-  await page.fill('#f-cover-url', '/images/tjoc-reborn-cover.svg')
+  await page.fill('#f-cover-url', TEST_GAME.coverImage ?? '')
   await page.waitForTimeout(300)
   await btn('发布').click()
   await page.waitForTimeout(800)
@@ -1097,14 +1268,26 @@ await step('永久删除 · 二次确认后删除，回到列表且条目消失'
    ====================================================================== */
 await step('Phase 16 · 后台改状态会提交到数据仓（开发环境前台仍读快照）', async () => {
   // ⚠️ 先强刷。筛选 / 搜索是**会话内**状态，上一步留下的条件会把目标作品挡在外面
-  //    （我重写这一步时漏掉过这句，结果 popgoes 被残留筛选挡住、表格里一行都没有）。
+  //    （我重写这一步时漏掉过这句，结果目标作品被残留筛选挡住、表格里一行都没有）。
   await page.goto(hash('/admin/games'), { waitUntil: 'domcontentloaded' })
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.getByText('收录作品', { exact: false }).first().waitFor({ timeout: 8000 })
 
-  await page.fill('#admin-search', 'popgoes')
+  const targetRow = () =>
+    page
+      .locator('tbody tr')
+      .filter({ has: page.getByRole('link', { name: OTHER_GAME.title, exact: true }) })
+      .first()
+
+  await page.fill('#admin-search', OTHER_GAME.title)
   await page.waitForTimeout(400)
-  await page.locator('tbody input[type=checkbox]').first().check()
+  try {
+    await targetRow().locator('input[type=checkbox]').check({ timeout: 8000 })
+  } catch {
+    throw new Error(
+      `表格里找不到「${OTHER_GAME.title}」这一行。当前表格内容：\n${await page.locator('tbody').innerText()}`,
+    )
+  }
   await page.waitForTimeout(200)
   await btn('下线').click()
   await page.waitForTimeout(200)
@@ -1115,9 +1298,12 @@ await step('Phase 16 · 后台改状态会提交到数据仓（开发环境前�
   // 真刷新 —— 状态仍然在，说明它确实写进了「数据仓」，而不是只躺在本机内存里
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.getByText('收录作品', { exact: false }).first().waitFor({ timeout: 8000 })
-  await page.fill('#admin-search', 'popgoes')
+  await page.fill('#admin-search', OTHER_GAME.title)
   await page.waitForTimeout(600)
-  await need('已下线')
+  assert(
+    (await targetRow().innerText()).includes('已下线'),
+    '刷新后目标作品的「已下线」状态丢了',
+  )
   await shot('31-committed-to-data-repo')
 
   // ✅ 开发环境不执行运行时同步（避免测试依赖网络），所以前台仍是构建期快照；
@@ -1130,11 +1316,11 @@ await step('Phase 16 · 后台改状态会提交到数据仓（开发环境前�
   assert(stillCards === VISIBLE_COUNT, `前台此时应仍是快照中的 ${VISIBLE_COUNT} 款，实际 ${stillCards}`)
   await shot('32-public-unchanged-in-dev')
 
-  // 复原：把 popgoes 放回上线
+  // 复原：把目标作品放回上线
   await nav('/admin/games', '收录作品')
-  await page.fill('#admin-search', 'popgoes')
+  await page.fill('#admin-search', OTHER_GAME.title)
   await page.waitForTimeout(400)
-  await page.locator('tbody input[type=checkbox]').first().check()
+  await targetRow().locator('input[type=checkbox]').check()
   await page.waitForTimeout(200)
   await btn('上线').click()
   await page.waitForTimeout(600)
@@ -1152,7 +1338,7 @@ await step('Phase 12 · 提示条如实说明改动写到了哪里', async () =>
 })
 
 await step('Phase 12 · 改动在真刷新之后仍然存在', async () => {
-  await go('/admin/games/tjoc-reborn/edit', '基本信息')
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
   await page.fill('#f-title', '持久化探针标题')
   await btn('保存').click()
   await page.waitForTimeout(700)
@@ -1168,7 +1354,7 @@ await step('Phase 12 · 改动在真刷新之后仍然存在', async () => {
   await shot('34-persisted')
 
   // 复原
-  await page.fill('#f-title', 'The Joy of Creation: Reborn')
+  await page.fill('#f-title', TEST_GAME_TITLE)
   await btn('保存').click()
   await page.waitForTimeout(700)
 })
@@ -1189,7 +1375,7 @@ await step('Phase 16 · 远程模式下不提供「恢复出厂数据」', async
    十、Phase 16 —— 图片上传到数据仓
    ====================================================================== */
 await step('Phase 16 · 选图会真的上传，并把完整外链写进草稿', async () => {
-  await go('/admin/games/tjoc-reborn/edit', '基本信息')
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
   await page.waitForTimeout(500)
 
   const original = await page.inputValue('#f-cover-url')
@@ -1205,7 +1391,7 @@ await step('Phase 16 · 选图会真的上传，并把完整外链写进草稿',
   const uploaded = await page.inputValue('#f-cover-url')
   assert(
     uploaded.startsWith(
-      'https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-reborn/cover-',
+      `https://daxigua732.github.io/fnaf-fan-games-data/images/games/${TEST_GAME_ID}/cover-`,
     ),
     `上传后地址不是数据仓的完整外链：${uploaded}`,
   )
@@ -1221,7 +1407,7 @@ await step('Phase 16 · 选图会真的上传，并把完整外链写进草稿',
 })
 
 await step('Phase 17 · 尺寸不合格的图会被拦下，且不写进地址', async () => {
-  await go('/admin/games/tjoc-reborn/edit', '基本信息')
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
   await page.waitForTimeout(500)
   const original = await page.inputValue('#f-cover-url')
 
@@ -1248,7 +1434,7 @@ await step('Phase 17 · 尺寸不合格的图会被拦下，且不写进地址',
 const PREVIEW_TITLE = '预览探针标题'
 
 await step('Phase 18 · 预览新标签页渲染出未保存的草稿，编辑页不受影响', async () => {
-  await go('/admin/games/tjoc-reborn/edit', '基本信息')
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
   await page.waitForTimeout(400)
 
   // 改标题但**不保存**
@@ -1274,7 +1460,7 @@ await step('Phase 18 · 预览新标签页渲染出未保存的草稿，编辑�
   await previewPage.close()
 
   // 还原
-  await page.fill('#f-title', 'The Joy of Creation: Reborn')
+  await page.fill('#f-title', TEST_GAME_TITLE)
   await page.waitForTimeout(300)
 })
 
@@ -1283,8 +1469,8 @@ await step('Phase 18 · 预览新标签页渲染出未保存的草稿，编辑�
    ====================================================================== */
 for (const [label, path, wait] of [
   ['游戏列表', '/admin/games', '收录作品'],
-  ['编辑页', '/admin/games/tjoc-reborn/edit', '基本信息'],
-  ['标签页', '/admin/tags', '标签管理'],
+  ['编辑页', `/admin/games/${TEST_GAME_ID}/edit`, '基本信息'],
+  ['标签与作者页', '/admin/taxonomy', '标签与作者'],
 ]) {
   if (PROD) break // 哨兵挂在 import.meta.env.DEV 下，生产构建里本就不该出现
   await step(`视觉哨兵 · ${label} 无圆角 / 无阴影`, async () => {
@@ -1299,6 +1485,111 @@ for (const [label, path, wait] of [
     )
   })
 }
+
+/* ======================================================================
+   十二、GameJolt 半自动导入
+   ======================================================================
+   两段外部请求都在 Playwright 层拦掉：
+     - 本机助手（127.0.0.1:4317）→ 固定夹具
+     - GameJolt CDN（m.gjcdn.net）→ 一张真实的 1000×600 PNG
+   这样断言的是「后台自己的抓取预览 / 字段映射 / 图片上传 / 保存」，
+   而不是 GameJolt 今天是否在线、某张截图是否还挂在 CDN 上。
+   ====================================================================== */
+await step('GameJolt 导入 · 抓取预览 → 填表 → 传图 → 保存草稿', async () => {
+  const fixture = {
+    sourceUrl: 'https://gamejolt.com/games/gamejolt-import-test/999999',
+    gameJoltId: 999999,
+    title: 'GameJolt Import Test',
+    author: 'GameJolt Tester',
+    releaseYear: 2021,
+    engine: 'Unity',
+    ipSeries: 'FNAF',
+    description: 'A test description imported from GameJolt.',
+    shortDescription: 'A test game imported from GameJolt.',
+    coverImage: 'https://m.gjcdn.net/test/cover.webp',
+    bannerImage: 'https://m.gjcdn.net/test/banner.webp',
+    gallery: ['https://m.gjcdn.net/test/gallery-1.webp', 'https://m.gjcdn.net/test/gallery-2.webp'],
+    videoUrl: 'https://www.youtube.com/watch?v=test',
+    tags: ['horror', 'fangame'],
+    warnings: [],
+  }
+
+  const png = await makePng(1000, 600)
+  const cors = {
+    'access-control-allow-origin': '*',
+    'access-control-allow-methods': 'GET, OPTIONS',
+    'access-control-allow-headers': 'content-type',
+    'access-control-allow-private-network': 'true',
+  }
+
+  const helperHandler = async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers: cors })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      headers: { ...cors, 'content-type': 'application/json' },
+      body: JSON.stringify({ ok: true, data: fixture }),
+    })
+  }
+
+  const imageHandler = async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'content-type': 'image/png', 'access-control-allow-origin': '*' },
+      body: png,
+    })
+  }
+
+  await context.route('http://127.0.0.1:4317/**', helperHandler)
+  await context.route('https://m.gjcdn.net/**', imageHandler)
+
+  try {
+    await go('/admin/games/new', '从 GameJolt 导入')
+
+    await page.fill('#gamejolt-url', fixture.sourceUrl)
+    await btn('抓取信息').click()
+    await page.getByText(fixture.title, { exact: false }).first().waitFor({ timeout: 10000 })
+    await need('GameJolt #999999')
+
+    await btn('填入表单并上传图片').click()
+    await page.getByText('导入结果', { exact: false }).first().waitFor({ timeout: 20000 })
+    await page.waitForTimeout(800)
+
+    assert((await page.inputValue('#f-title')) === fixture.title, '标题没有填进草稿')
+    assert((await page.inputValue('#f-author')) === fixture.author, '作者没有填进草稿')
+    assert((await page.inputValue('#f-year')) === '2021', '年份没有填进草稿')
+    assert((await page.inputValue('#f-series')) === 'FNAF', 'IP 系列没有填进草稿')
+    assert((await page.inputValue('#f-engine')) === 'Unity', '引擎没有填进草稿')
+
+    // 1 封面 + 1 Banner + 2 截图 = 4 张；图片走的是现有的 uploadImage 链路
+    await need('已填入表单并上传 4 张图片')
+    const cover = await page.inputValue('#f-cover-url')
+    assert(
+      cover.includes('/images/games/gamejolt-import-test/cover-'),
+      `封面没有上传到按标题生成的目录：${cover}`,
+    )
+    assert(cover.endsWith('.webp'), `上传前应转成 WebP：${cover}`)
+
+    await btn('保存').click()
+    await page.getByText('保存结果', { exact: false }).first().waitFor({ timeout: 10000 })
+    await page.waitForTimeout(500)
+
+    const created = fakeDb.games.find((game) => game.id === 'gamejolt-import-test')
+    assert(Boolean(created), '数据仓里没有新建的 GameJolt 条目')
+    assert(created.status === 'draft', `导入后应是草稿，实际 ${created.status}`)
+    assert(created.downloads.length === 0, '下载渠道必须保持为空，等待人工补充')
+    assert(created.gallery.length === 2, `图库应有 2 张，实际 ${created.gallery.length}`)
+    await shot('43-gamejolt-import')
+  } finally {
+    await context.unroute('http://127.0.0.1:4317/**', helperHandler)
+    await context.unroute('https://m.gjcdn.net/**', imageHandler)
+    // 这一条会往假数据仓里多写一条；复原，避免影响后续任何计数断言
+    fakeDb = JSON.parse(JSON.stringify(localDb))
+    fakeSha = 'sha-1'
+  }
+})
 
 await step('控制台无 JS 报错 / 无业务请求 4xx', async () => {
   const real = consoleErrors.filter((e) => !e.includes('404'))

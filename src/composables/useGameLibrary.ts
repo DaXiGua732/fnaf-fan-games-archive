@@ -25,7 +25,7 @@ import type { AdminGame } from '../types/admin'
 import type { Game } from '../types/game'
 
 export type FilterCategory = 'author' | 'year' | 'series'
-export type SortKey = 'views' | 'score' | 'title' | 'year'
+export type SortKey = 'recommended' | 'views' | 'score' | 'title' | 'year'
 
 /** 每页条数默认值（12 列网格 / 3 列 = 4 行） */
 const DEFAULT_PAGE_SIZE = 12
@@ -68,6 +68,13 @@ export function isPubliclyVisible(game: AdminGame): boolean {
 const VISIBLE = computed(() => publicGameRepository.games.value.filter(isPubliclyVisible))
 
 const COMPARATORS: Record<SortKey, (a: Game, b: Game) => number> = {
+  // 推荐：先把「推荐」标记的排前面，再按后台填写的手动权重降序；
+  // 权重相同才退回热度，最后用标题保证顺序确定。
+  recommended: (a, b) =>
+    Number(Boolean(b.featured)) - Number(Boolean(a.featured)) ||
+    (b.sortOrder ?? 0) - (a.sortOrder ?? 0) ||
+    b.metrics.fakeViews - a.metrics.fakeViews ||
+    a.title.localeCompare(b.title, 'en'),
   views: (a, b) => b.metrics.fakeViews - a.metrics.fakeViews,
   score: (a, b) => b.metrics.score - a.metrics.score,
   title: (a, b) => a.title.localeCompare(b.title, 'en'),

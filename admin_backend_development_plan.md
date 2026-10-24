@@ -8,6 +8,13 @@
 >
 > Agent 必须严格按照阶段执行。除非用户明确要求，不得跨阶段一次性实现整个后台。
 
+> **实现现状（2026-10-23）**：本计划已全部落地。此后有两项产品决策调整，
+> 与下文的部分早期描述不同，**以 `README.md` / `HANDOVER.md` 和实际代码为准**：
+>
+> 1. **评论区已移除** —— Giscus / `CommentSection.vue` / `giscus-swiss.css` 全部删除，前台详情页不再有讨论区块。
+> 2. **标签与作者合并为一个后台页面** —— 路由 `/admin/taxonomy`（`AdminTaxonomy.vue`）；
+>    旧的 `/admin/tags`、`/admin/authors` 保留为重定向。作者与标签一样从作品数据派生，不单独存储。
+
 ---
 
 # 1. 项目现状
@@ -111,7 +118,7 @@ Game {
 +
 发布状态管理
 +
-标签管理
+标签与作者管理
 +
 图片管理
 +
@@ -134,8 +141,7 @@ Game {
 /admin/games/new
 /admin/games/:id/edit
 
-/admin/tags
-/admin/authors
+/admin/taxonomy        # 标签与作者（合并；旧 /admin/tags、/admin/authors 重定向到这里）
 
 /admin/settings
 ```
@@ -156,8 +162,7 @@ Game {
 最后再根据实际需求扩展：
 
 ```text
-/admin/tags
-/admin/authors
+/admin/taxonomy
 /admin/settings
 ```
 
@@ -419,8 +424,7 @@ AdminLayout.vue
 ├────────────────┬─────────────────────────────────────────┤
 │                │                                         │
 │ 游戏管理       │                                         │
-│ 标签管理       │             Admin Content               │
-│ 作者管理       │                                         │
+│ 标签与作者     │             Admin Content               │
 │ 系统设置       │                                         │
 │                │                                         │
 └────────────────┴─────────────────────────────────────────┘
@@ -827,7 +831,7 @@ Mock Repository
 
 ---
 
-# Phase 6 — 标签管理
+# Phase 6 — 标签管理（实现时与作者管理合并为「标签与作者」）
 
 ## 编辑游戏时
 
@@ -852,23 +856,23 @@ Mock Repository
 [ + 添加标签 ]
 ```
 
-## 全局标签页面
+## 全局标签与作者页面
 
 路由：
 
 ```text
-/admin/tags
+/admin/taxonomy
 ```
 
 支持：
 
 ```text
-标签名称
-使用数量
-创建时间
-编辑
-删除
+标签：名称 / 使用数量 / 创建时间 / 重命名（含合并） / 删除
+作者：名称 / 使用数量 / 重命名（含合并）
+搜索：标签与作者各自独立的关键词过滤
 ```
+
+> 作者不是独立实体：它是从作品的 `author` 字段派生的。重命名作者 = 批量改写该名字下的所有作品。
 
 ---
 
@@ -1048,7 +1052,7 @@ offline
 src/repositories/
 ├── gameRepository.ts
 ├── localGameRepository.ts
-└── remoteGameRepository.ts
+└── githubGameRepository.ts
 ```
 
 或者：
@@ -1475,7 +1479,6 @@ offline
 分页
 游戏详情
 下载
-评论区域
 浏览量
 图片
 ```
@@ -1630,7 +1633,6 @@ build
 游戏详情页
 游戏搜索
 游戏筛选
-评论
 浏览量
 下载
 ```
@@ -1719,7 +1721,7 @@ PASS / FAIL
 复杂权限系统
 多管理员
 用户系统
-评论后台
+评论系统（后续产品决策：不提供）
 浏览量分析 Dashboard
 复杂日志系统
 全文搜索引擎
@@ -1745,9 +1747,8 @@ src/
 │
 ├── composables/
 │   ├── useGameLibrary.ts
-│   ├── useAdminGames.ts
-│   ├── useAdminTags.ts
-│   └── useAuth.ts
+│   ├── useAdminGames.ts        # 标签 / 作者的派生与批量操作也在这里
+│   └── useAdminAuth.ts
 │
 ├── layouts/
 │   ├── Layout.vue
@@ -1756,7 +1757,7 @@ src/
 ├── repositories/
 │   ├── gameRepository.ts
 │   ├── localGameRepository.ts
-│   └── remoteGameRepository.ts
+│   └── githubGameRepository.ts
 │
 ├── services/
 │   ├── storage.ts
@@ -1773,7 +1774,7 @@ src/
 │   └── admin/
 │       ├── AdminGames.vue
 │       ├── AdminGameEditor.vue
-│       ├── AdminTags.vue
+│       ├── AdminTaxonomy.vue     # 标签与作者
 │       └── AdminSettings.vue
 │
 ├── router/

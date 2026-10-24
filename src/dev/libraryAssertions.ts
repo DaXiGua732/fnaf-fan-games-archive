@@ -1,9 +1,8 @@
 /**
  * 深模块接口断言集（开发期工具）
  *
- * 同时被两处消费，保证「浏览器里看到的自检」与「命令行跑的自检」完全一致：
- *   - src/views/DebugLibrary.vue  （阶段二调试视图）
- *   - scripts/selftest.mts        （npm run selftest，CI 可复用）
+ * 由 `scripts/selftest.mts` 消费（npm run selftest，CI 可复用）。
+ * 断言集只保留一份，避免「浏览器里看到的自检」与命令行自检两处漂移。
  *
  * 【边界】这里只做「输入 → 期望输出」的行为断言，
  *         绝不重新实现过滤/排序逻辑（那属于深模块内部职责）。

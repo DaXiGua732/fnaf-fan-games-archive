@@ -27,7 +27,7 @@ Five Nights at Freddy's **同人游戏资源导航站**。纯前端静态站，�
 3. **本环境不能 `git push`**（沙箱只放行 `api.github.com`）。要发布请看 §8。这是环境限制，
    不是项目配置问题。
 
-另外：**改完必须跑 `npm run verify`**，四道关卡全绿才算完成（见 §2）。
+另外：**改完必须跑 `npm run verify`**，全部关卡全绿才算完成（见 §2）。
 
 ### 0.1 后台管理系统（已完成）
 
@@ -60,8 +60,8 @@ Phase 20（测试）由贯穿全程的门禁体系覆盖：`typecheck + selftest
 | `/#/admin/games/new` | `AdminGameEditor.vue` | ✅ 全部区块（P5–P9） |
 | `/#/admin/games/:id/edit` | `AdminGameEditor.vue` | ✅ 全部区块（P5–P9）+ 永久删除 |
 | `/#/admin/preview` | `AdminGamePreview.vue` | ✅ 未保存草稿的预览（Phase 18） |
-| `/#/admin/tags` | `AdminTags.vue` | ✅ 搜索 / 重命名 / 删除（Phase 6） |
-| `/#/admin/authors` 等 | 尚未创建 | 延伸 |
+| `/#/admin/taxonomy` | `AdminTaxonomy.vue` | ✅ 标签与作者合并管理：搜索 / 重命名 / 删除标签（Phase 6） |
+| `/#/admin/tags`、`/#/admin/authors` | 重定向 → `admin-taxonomy` | ✅ 旧地址保留，避免书签 404 |
 | `/#/admin/*`（兜底） | `AdminNotFound.vue` | ✅ |
 
 **进入后台的入口**：公开站 Header 的导航项「后台管理」（`Layout.vue` 的 `NAV_ITEMS`），
@@ -69,7 +69,6 @@ Phase 20（测试）由贯穿全程的门禁体系覆盖：`typecheck + selftest
 
 > 入口对所有访客可见，但进入后立刻被登录门禁拦到登录页（Phase 15）。
 > 真正保护数据的是**令牌权限**（细粒度 PAT 只授权数据仓），不是隐藏入口。
-> `NAV_ITEMS` 里 `dev: true` 的两项（调试台 / 样式规范）才是上线前该决定是否保留的。
 
 **编辑器的信息结构**（参考 YouTube Studio / B 站创作中心的**操作流**，视觉仍是 Swiss）：
 
@@ -88,6 +87,13 @@ Phase 20（测试）由贯穿全程的门禁体系覆盖：`typecheck + selftest
 - Hero：标题 / 作者 / 短描述 / 主 CTA + 宣传图（无 banner 时退回封面）。
 - 两栏：左为简介、截图、视频；右为封面、作品信息、标签、下载入口。
 - 截图**灯箱**：点击查看大图，键盘 ← / → 切换、Esc 关闭；下载区有独立锚点。
+
+**GameJolt 半自动导入**：新增 / 编辑页顶部有「从 GameJolt 导入」区块。
+粘贴 GameJolt 作品页链接后，自动抓取标题、作者、年份、引擎、简介、标签与
+封面 / Banner / 截图，图片走现有上传链路写入数据仓。抓取时需要在本机运行
+`npm run gamejolt:helper`（GameJolt 站内接口不允许浏览器跨域直连）。
+**下载渠道仍需人工下载、上传、填写**；导入后条目仍是草稿，不会自动保存或发布。
+详见 §7.3。
 
 
 ### 前台可见性（Phase 10 起生效）
@@ -438,7 +444,7 @@ UI 于是如实说「只写入了内存」。**写失败绝不假装成功。**
 ### 测试覆盖对照（Phase 20）
 
 计划书 §21（后台专项）/ §22（前台回归）逐项对照。`selftest` = 纯函数与深模块断言，
-`UI` = `npm run test:ui`（73 步真实浏览器点击），`冒烟` = SSR 渲染 16 条路由，
+`UI` = `npm run test:ui`（75 步真实浏览器点击），`冒烟` = SSR 渲染 14 条路由，
 `字节对比` = 公开站产物逐字节基线。
 
 **§21 后台专项**
@@ -449,9 +455,10 @@ UI 于是如实说「只写入了内存」。**写失败绝不假装成功。**
 | 列表：全选 / 取消全选 | ✅ | ✅ | 表头全选只作用于当前页 |
 | 列表：行内快捷上线 / 下线 | ✅ | ✅ | 立即提交，结果条如实报数 |
 | 列表：行内永久删除 | ✅ | ✅ | 二次确认弹窗；取消不删数据 |
-| 批量：上线 / 下线 / 加标签 / 删标签 | ✅ | ✅ | 二次确认 + 结果条如实报数 |
-| 编辑：新建 / 修改 / 取消 / 保存 / 发布 | ✅ | ✅ | 含未保存离开拦截 |
-| 编辑：Ctrl / Cmd + S 保存 | — | ✅ | 只在有改动且可保存时生效 |
+| 批量：上线 / 下线 / 加标签 / 删标签 / 改作者 | ✅ | ✅ | 二次确认 + 结果条如实报数；逐条容错 |
+| 标签与作者：搜索 / 重命名 / 合并 | ✅ | ✅ | 两者都是派生字段；作者改名=批量改写作品 |
+| 编辑：新建 / 修改 / 取消 / 保存 / 发布 | ✅ | ✅ | 含未保存离开拦截与 `beforeunload` 提醒 |
+| 编辑：Ctrl / Cmd + S 保存 | — | ✅ | 有改动才提交；校验失败会显示具体错误 |
 | 编辑：**预览** | — | ✅ | 新标签页渲染真实前台详情页（Phase 18） |
 | 状态：draft / published / offline | ✅ | ✅ | 前台可见性联动（Phase 10） |
 | 图片：上传 / 替换 / 尺寸不合格 / 失败重试 | ✅ | ✅ | Phase 16 / 17 |
@@ -600,20 +607,24 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 | `npm run preview` | 预览生产产物 |
 | `npm run typecheck` | `vue-tsc --noEmit` 类型检查 |
 | `npm run selftest` | 深模块行为断言（前台 + 后台两套，见 §2.1） |
-| `npm run smoke` | SSR 冒烟：逐路由真实渲染并断言内容（6 条路由） |
+| `npm run smoke` | SSR 冒烟：逐路由真实渲染并断言内容（14 条路由） |
+| `npm run test:gamejolt` | GameJolt 链接解析 / 字段转换 / 网络降级的单元测试（不联网） |
+| `npm run gamejolt:helper` | 启动 GameJolt 导入助手（只监听 127.0.0.1:4317，见 §7.3） |
+| `npm run test:ui` | Playwright 真实浏览器点击测试（需先另开终端 `npm run dev`） |
 | `npm run assets` | 按 `db.json` 重新生成占位图到 `public/images/` |
-| `npm run verify` | `typecheck` + `selftest` + `smoke` + `build` |
+| `npm run verify` | `typecheck` + `test:gamejolt` + `selftest` + `smoke` + `build` |
 
 ---
 
-## 2. 质量门禁：为什么有四道关卡
+## 2. 质量门禁：为什么有五道关卡
 
-本项目开发期间**无法在浏览器里手动点击验证**，所以用四个自动化关卡替代人工验收。
-`npm run verify` 必须全绿才允许提交，CI 里也会跑同样四步（见 `.github/workflows/deploy.yml`）。
+本项目开发期间**无法在浏览器里手动点击验证**，所以用五个自动化关卡替代人工验收。
+`npm run verify` 必须全绿才允许提交，CI 里也会跑同样五步（见 `.github/workflows/deploy.yml`）。
 
 | 关卡 | 覆盖什么 | 抓不到什么 |
 | --- | --- | --- |
 | `typecheck` | 类型错误、拼写错误的属性名 | 运行时逻辑 |
+| `test:gamejolt` | GameJolt 链接解析 / 富文本转换 / 图片选择 / 网络降级 | 真实接口改版（靠失败提示兜底） |
 | `selftest` | 深模块的搜索/过滤/排序/分页逻辑是否正确 | UI |
 | `smoke` | 每个路由能否真实渲染出 DOM（**防白屏**） | 样式是否正确 |
 | `build` | 生产构建能否通过、代码分割是否正常 | — |
@@ -627,13 +638,12 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 | `libraryAssertions.ts` | 前台 `useGameLibrary`（搜索 / 交叉过滤 / 排序 / 分页） |
 | `adminAssertions.ts` | 后台 `useAdminGames`（状态统计 / 筛选 / 排序 / 分页 / 勾选） |
 
-`libraryAssertions.ts` 被**两处消费**：
+两份断言集都由 `scripts/selftest.mts` 在命令行消费（原先公开站的调试台已随
+`/debug` 入口一起移除，避免开发页面进入生产包）。
 
-- `src/views/DebugLibrary.vue`（浏览器里的调试台）
-- `scripts/selftest.mts`（命令行）
-
-> **这是刻意的设计**：保证"浏览器里看到的自检"与"命令行跑的自检"是同一份实现，
-> 永远不会出现两处漂移。新增断言请只改对应的那一个文件。
+> **后台断言不依赖线上数据内容**：`runAdminAssertions` 启动时先向本地仓储注入
+> 一组合成 fixture（`FIXTURE_GAMES`），再跑状态统计 / 批量 / 标签 / 作者等断言。
+> CI 在 `data:pull` 之后运行，站长随时可能删改真实条目 —— 断言不能把条目标题或 id 编码进去。
 
 `scripts/selftest.mts` 顺序跑两份断言集并分组汇总。
 
@@ -642,6 +652,10 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 
 实现方式：用 `esbuild` 把 `scripts/selftest.mts` 打成 `.tmp/selftest.mjs`（`--external:vue`），
 再用 Node 直接跑。**不需要 vitest / jsdom**。
+
+GameJolt 抓取 / 转换的测试单独放在 `scripts/gamejolt/test.mjs`，用 Node 内置的
+`node --test` 跑（`npm run test:gamejolt`）。它**不联网**：`fetchGameJoltGame()` 允许注入
+`fetchImpl`，所以接口 500、字段缺失、简介超长这些分支都能稳定复现。
 
 ### 2.2 `smoke` 的设计要点
 
@@ -683,7 +697,8 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 
 `src/components/StyleAuditBadge.vue` 会在**运行时全量扫描 DOM**，逐个比对
 `border-radius` 与 `box-shadow`，在页面顶部直接显示 `PASS` / `FAIL` + 违规元素列表。
-调试台 `/debug` 和样式验收页 `/style` 都挂了这个组件。
+它挂在 `AdminLayout` 上，所以后台每个页面都会被检查；公开站的视觉红线由
+`tailwind.config.js` 的覆盖式配置、全局 CSS 重置与 UI 测试的视觉哨兵共同保证。
 
 ### 2.4 UI 点击测试（交互行为，SSR 覆盖不到的部分）
 
@@ -705,6 +720,10 @@ npm run test:ui
 BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 ```
 
+> GameJolt 导入那一步在 Playwright 层 mock 了本机助手与 GameJolt CDN 的响应，
+> 因此 UI 测试**不依赖外网**、也不会向真实数据仓上传图片。断言的仍是后台自己的
+> 字段映射、图片上传和保存路径。
+
 > ⚠️ **三个必须知道的坑**（写这个脚本时全踩过）：
 > 1. **脚本必须自己定位项目根目录**（`import.meta.url`），不要依赖 cwd ——
 >    从 `scripts/` 或仓库根启动时，读 `src/data/db.json` 和写截图目录的相对路径基准不同。
@@ -725,7 +744,6 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 ```
 ├── .github/workflows/deploy.yml    # Pages 自动部署（构建前跑三道门禁）
 ├── public/
-│   ├── giscus-swiss.css            # Giscus 自定义主题（唯一能改变评论样式的途径，见 §7.2）
 │   └── images/*.svg                # 占位图，由 npm run assets 生成
 ├── scripts/
 │   ├── gen-placeholders.mjs        # 占位图生成器
@@ -740,8 +758,7 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 │   │   ├── GameCard.vue            # 格子卡片（复用 Card）
 │   │   ├── FilterPanel.vue         # 筛选与排序面板
 │   │   ├── DownloadPanel.vue       # 下载区 + 提取码复制
-│   │   ├── CommentSection.vue      # Giscus 评论区（未配置时优雅降级）
-│   │   ├── StyleAuditBadge.vue     # 视觉规范运行期哨兵
+│   │   ├── StyleAuditBadge.vue     # 视觉规范运行期哨兵（后台布局挂载）
 │   │   └── admin/                  # 后台专用组件（与公开站组件不混放）
 │   │       ├── AdminNav.vue        # 后台分区导航（未实现的模块显示为禁用 + PLANNED）
 │   │       ├── AdminToolbar.vue    # 后台搜索 / 状态 / 作者 / 标签 / 排序
@@ -764,7 +781,6 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 │   │   ├── useGamePreview.ts       # 草稿 → 预览页的跨标签页传递
 │   │   ├── useSearchField.ts       # 搜索框绑定（避免受控输入回写光标）
 │   │   └── useViewCounter.ts       # 浏览量（remote / static 双模式）
-│   ├── config/giscus.ts            # Giscus 配置 + 启用步骤说明
 │   ├── data/
 │   │   └── db.json                 # ★ 构建期单一事实来源：所有游戏数据
 │   ├── repositories/               # ★ 数据访问层（Phase 11）
@@ -774,8 +790,8 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 │   │   ├── dataRepo.ts             # 数据仓坐标与 Pages 基址
 │   │   └── index.ts                # ★ 当前生效的仓储 —— 唯一的切换点
 │   ├── dev/
-│   │   ├── libraryAssertions.ts    # ★ 前台断言集（浏览器与命令行共用）
-│   │   └── adminAssertions.ts      # ★ 后台断言集（命令行消费）
+│   │   ├── libraryAssertions.ts    # ★ 前台断言集（命令行消费）
+│   │   └── adminAssertions.ts      # ★ 后台断言集（命令行消费，含合成 fixture）
 │   ├── layouts/
 │   │   ├── Layout.vue              # 公开站骨架：Header + RouterView + Footer
 │   │   └── AdminLayout.vue         # 后台骨架：后台 Header + 侧栏 + RouterView
@@ -797,16 +813,14 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 │   │   └── imageProcess.ts         # 上传前缩放 + 转 WebP（GIF/SVG 保持原样）
 │   └── views/
 │       ├── Home.vue                # 首页：Hero + 筛选 + 网格 + 分页
-│       ├── GameDetail.vue          # 详情页：标题 + Banner + 数据表格 + 下载 + 评论
+│       ├── GameDetail.vue          # 详情页：标题 + Banner + 数据表格 + 下载 + 截图灯箱
 │       ├── NotFound.vue            # 404
-│       ├── DebugLibrary.vue        # 调试台（/debug，上线前可移除）
-│       ├── StyleSpecimen.vue       # 视觉规范验收页（/style，上线前可移除）
 │       └── admin/                  # 后台视图
 │           ├── AdminLogin.vue      # /admin/login：令牌登录（唯一豁免认证的后台路由）
 │           ├── AdminGames.vue      # /admin/games：游戏管理列表
 │           ├── AdminGameEditor.vue # /admin/games/new 与 /:id/edit：编辑页（含永久删除）
 │           ├── AdminGamePreview.vue # /admin/preview：未保存草稿的预览
-│           ├── AdminTags.vue       # /admin/tags：标签管理
+│           ├── AdminTaxonomy.vue   # /admin/taxonomy：标签与作者合并管理
 │           └── AdminNotFound.vue   # 后台 404（防止输错的后台地址掉回公开站外壳）
 ├── tailwind.config.js              # ★ 覆盖式配置：违规工具类直接不生成
 ├── vite.config.ts                  # base 按 command 区分
@@ -906,7 +920,7 @@ useGameLibrary(): {
   setSearchQuery(query: string): void
   setFilter(category: 'author' | 'year' | 'series', value: string): void  // 再点同值 = 取消
   clearFilters(): void
-  setSortBy(key: 'views' | 'score' | 'title' | 'year'): void
+  setSortBy(key: 'recommended' | 'views' | 'score' | 'title' | 'year'): void
   setPage(page: number): void
   setPageSize(size: number): void
   isFilterActive(category, value): boolean
@@ -928,8 +942,6 @@ History 模式刷新子路径必然 404**，Hash 模式是唯一稳妥解。
 | --- | --- | --- |
 | `/` | `Home.vue` | 首页 |
 | `/game/:id` | `GameDetail.vue` | 动态路由，`props: true` 把 id 注入组件 |
-| `/debug` | `DebugLibrary.vue` | 调试台（上线前可移除） |
-| `/style` | `StyleSpecimen.vue` | 视觉规范验收页（上线前可移除） |
 | `/:pathMatch(.*)*` | `NotFound.vue` | 404 兜底 |
 
 `routes.ts` 与 router 实例**刻意分离**，这样 `scripts/smoke.ts` 能用 memory history
@@ -1012,7 +1024,7 @@ transitionDuration: { DEFAULT: '150ms', 150: '150ms' },
 ```
 
 body 强制 `Helvetica, Arial, sans-serif`，所有文本元素默认 `text-align: left`。
-这一层是**为第三方内容准备的**——比如 Giscus 的 iframe 元素本身。
+这一层是最后的兜底：即使某个组件或未来嵌入的外部内容漏写了工具类，也不会破坏红线。
 
 **第三层：运行时哨兵**（`StyleAuditBadge.vue`）
 全量扫描 DOM 比对计算结果，页面直接显示 PASS/FAIL。
@@ -1033,7 +1045,13 @@ grep -o '\.rounded-md\|\.shadow{\|\.font-serif\|\.font-mono' "$CSS" | sort -u  #
 
 ### 6.1 新增 / 修改一款游戏
 
-只改 `src/data/db.json`，字段契约见 `src/types/game.ts`：
+**线上数据请走后台**：`/#/admin` 登录后新增 / 编辑，保存即提交数据仓，
+公开页会在下次打开或切回标签页时自动同步。GameJolt 上有原作页面的作品，
+建议先用后台里的「从 GameJolt 导入」抓取字段与图片（见 §7.3），再人工补下载渠道。
+
+`src/data/db.json` 只是**本地开发 / 断网兜底快照**。直接手改它不会影响线上，
+除非重新构建并发布；需要与线上对齐时先跑 `npm run data:pull`。字段契约见
+`src/types/game.ts`：
 
 ```json
 {
@@ -1047,11 +1065,11 @@ grep -o '\.rounded-md\|\.shadow{\|\.font-serif\|\.font-mono' "$CSS" | sort -u  #
 }
 ```
 
-然后 `npm run assets` 生成配套占位图（真实封面替换同名文件即可，`db.json` 不用改）。
+本地占位图用 `npm run assets` 生成（真实封面替换同名文件即可，`db.json` 不用改）。
 **注意**：占位图生成器按数组顺序编号（`NO.01`…），插入新条目会改变后续编号。
 
-改动后 `npm run selftest` 里的计数断言可能需要同步更新
-（`libraryAssertions.ts` 里有写死的期望值，如"清除筛选后返回全量 = 6"）。
+后台保存的是数据仓里的 `db.json`，与本文件无关；`selftest` 的断言从数据推导期望值，
+**不要**再写死「共 6 款」「共 5 位作者」这类内容断言（否则线上数据一变、CI 就假失败）。
 
 ### 6.2 改文案 / 页脚 / 声明
 
@@ -1104,32 +1122,70 @@ create table views (game_id text primary key, count integer not null default 0);
 > 关于两种模式：`useViewCounter` 在 **static 模式下同步取值**（否则 SSR 首帧会永远卡在
 > "载入中"），remote 模式才走异步 + `isLoading`。
 
-### 7.2 评论 —— Giscus，**配置留空并优雅降级**
+### 7.2 评论区 —— 已按产品决策移除
 
-`src/config/giscus.ts` 里 `enabled: false`，UI 会渲染一个带编号步骤说明的占位块，
-**不报错、不留白**。
+详情页不再有评论 / Giscus 区块。以下内容已从代码库、构建产物和测试里一并删除：
 
-**启用步骤**（约 5 分钟）：
+- `src/components/CommentSection.vue`
+- `src/config/giscus.ts`
+- `public/giscus-swiss.css`
+- `GameDetail.vue` 的「讨论」区块、相关断言与文案
 
-1. 建一个**公开**仓库（建议与站点代码仓库分开）
-2. 该仓库 Settings → General → Features → 勾选 **Discussions**
-3. 在 Discussions 新建分类 `Announcements`（类型选 Announcements，仅维护者可发起）
-4. 安装 [giscus App](https://github.com/apps/giscus) 并授权该仓库
-5. 打开 [giscus.app/zh-CN](https://giscus.app/zh-CN) 填入仓库名，会生成 `repoId` / `categoryId`
-6. 抄进 `src/config/giscus.ts`，把 `enabled` 改 `true`
+如果以后重新引入评论，请先想清楚为什么需要它，并作为一个新功能重新评估：
+Hash 路由下讨论串映射、跨域 iframe 的样式约束、审核与滥用处理，都会重新成为问题。
 
-#### ⚠️ 两个必须知道的坑
+### 7.3 GameJolt 半自动导入 —— 本机助手 + 后台一键填充
 
-**坑一：Hash 路由下 `mapping` 必须保持 `specific`。**
-Giscus 的 `mapping: 'pathname'` 取的是 `window.location.pathname`，
-而本站是 Hash 路由，pathname **永远是 `/`** → **所有游戏会挤进同一个讨论串**。
-代码里已固定 `mapping: 'specific'` + `data-term={game.id}`。
+**它做什么**：在后台「新增 / 编辑游戏」页粘贴 GameJolt 作品页链接，点「抓取信息」，
+自动填充标题、作者、发行年份、开发引擎、简介、一句话简介、视频 URL、标签，并把
+封面 / Banner / 截图下载后走现有图片处理链路（缩放 + WebP）上传到数据仓。
 
-**坑二：跨域 iframe 无法从父页面注入 CSS。**
-Giscus 渲染在 `giscus.app` 域下的跨域 iframe 内，父页面 CSS 注入不进去。
-**唯一正确途径**是给 giscus 传 `data-theme` = 自定义主题 CSS 的 URL，由它在 iframe 内自己加载。
-项目已实现 `public/giscus-swiss.css`（把 GitHub Primer 整套变量压到 白/黑/`#ff0000`/`#cccccc`）。
-父页面能控制的**只有 iframe 元素本身**（尺寸/直角/无阴影，在 `index.css` 里约束）。
+**它不做什么**：
+
+- **不碰下载渠道**。游戏文件仍然由人工下载、上传网盘，再把链接填进后台 ——
+  这是产品决定，工具不会把 GameJolt 的下载地址伪装成网盘渠道。
+- **不自动保存 / 不自动发布**。导入只改草稿，用户仍要点「保存」；新建条目默认是草稿。
+
+**为什么需要本机助手**：GameJolt 的 `/site-api` 是站内接口，响应里没有可跨域读取的
+CORS 头，浏览器直接 `fetch` 会被拦下。助手跑在 `127.0.0.1:4317`，只代理两个 JSON 接口；
+图片仍然由浏览器直接从 `m.gjcdn.net` 下载（该 CDN 返回 `Access-Control-Allow-Origin: *`），
+所以现有上传链路不需要任何改动。
+
+**用法**：
+
+```bash
+# 终端 1：启动助手（保持窗口开启）
+npm run gamejolt:helper
+
+# 终端 2（或已经在跑）：开发服务器 / 线上后台都可以
+npm run dev
+```
+
+然后在后台新增页粘贴链接 → 抓取信息 → 检查预览 → 「填入表单并上传图片」→ 手动补下载渠道
+→ 保存。线上后台（GitHub Pages）访问 `http://127.0.0.1:4317` 属于回环地址，
+Chrome / Edge 允许；助手已经处理了 Private Network Access 预检。
+
+**安全边界**：
+
+- 只绑定 `127.0.0.1`，不暴露到局域网；
+- 只允许 `https://daxigua732.github.io` 与 `localhost` / `127.0.0.1` 的任意端口作为 Origin，
+  可用 `GAMEJOLT_ALLOWED_ORIGIN` 追加自定义域名；
+- 输入只接受 `gamejolt.com` 的作品链接或纯数字 ID，请求地址由助手自己拼，不接受任意 URL；
+- **助手完全接触不到 GitHub 令牌** —— 图片上传仍由浏览器里的后台完成。
+
+**已知限制**：
+
+- 依赖 GameJolt 的内部站内接口，对方改版时可能失效；失败会在导入区块里给出可见报错，
+  不会静默写入半条数据；
+- 简介超过 2000 字会截断（后台字段上限），完整内容请打开原页；
+- 图库最多导入 8 张；低于本站最小尺寸的图片会被跳过并提示；
+- 抓到的文本是 GameJolt 原文，不会自动翻译；IP 系列只在识别到 FNAF 字样时自动填 `FNAF`；
+- 改端口：`npm run gamejolt:helper -- --port 4318`，并在构建时设置
+  `VITE_GAMEJOLT_HELPER=http://127.0.0.1:4318`。
+
+相关文件：`scripts/gamejolt/`（解析 / 抓取 / 助手 / 测试）、
+`src/services/gamejoltImport.ts`（后台侧字段映射与图片导入）、
+`src/components/admin/AdminGameJoltImport.vue`（UI）。
 
 ---
 
@@ -1294,6 +1350,24 @@ Tailwind 的提取器会把**注释和字符串里的词**当成候选类名。
 响应式条目时直接抛 `DataCloneError`（Proxy 不可克隆）。数据本来就是 JSON，
 改用 `JSON.parse(JSON.stringify(...))` 深拷贝即可；不要为了「更现代」踩这个坑。
 
+### 9.9 GameJolt 站内接口没有 CORS 头，图片 CDN 有
+
+`https://gamejolt.com/site-api/...` 是给自家前端用的站内接口，响应不带
+`Access-Control-Allow-Origin`，浏览器里直接 `fetch` 一定失败。**不要**试图用
+公共 CORS 代理绕过（不稳定、会看到令牌/隐私风险），也不要把它搬到构建期
+（后台需要按需抓取任意作品）。本机助手 `scripts/gamejolt/helper.mjs` 只代理 JSON，
+并处理了 HTTPS → `127.0.0.1` 的 Private Network Access 预检。
+
+图片是例外：`m.gjcdn.net` 返回 `Access-Control-Allow-Origin: *`，所以封面/截图
+可以直接在浏览器里下载、缩放、走原有上传链路 —— 助手完全不需要碰图片。
+
+### 9.10 图片上传文件名必须毫秒 + 随机后缀
+
+`timestampTag()` 原来只精确到秒。图库连续上传两张时，同一秒内会生成**同一个路径**：
+第二张覆盖第一张，返回的 URL 也相同，`addImages` 去重后图库凭空少一张
+（UI 测试报「图库应有 2 张，实际 1」）。现在格式为
+`YYYYMMDDHHmmssSSS` + 4 位随机后缀，单人/多标签页都不会撞名。
+
 ---
 
 ## 10. 迭代协议
@@ -1317,10 +1391,7 @@ npm run verify     # 四道关卡必须全绿
 
 ## 11. 待办
 
-- [ ] **启用评论区** —— 按 §7.2 的 5 步填好 `src/config/giscus.ts`（用户尚无 GitHub 仓库）
 - [ ] **接入浏览量后端** —— 按 §7.1 实现 `ViewProvider`（当前为静态基数，数据是假的）
-- [ ] 上线前移除 `/debug` 与 `/style` 两个开发入口
-  （`src/router/routes.ts` 的对应路由、`Layout.vue` 的 `NAV_ITEMS` 里带 `dev: true` 的两项）
 - [ ] 升级 Actions 版本 —— 目前 `actions/checkout@v4` 等仍指向 Node 20，
       有 deprecation annotation（非致命）
 - [ ] 补一个 `README` 之外的 `LICENSE` / 贡献说明（可选）

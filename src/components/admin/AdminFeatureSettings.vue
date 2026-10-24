@@ -6,7 +6,7 @@ import AdminField from './AdminField.vue'
 /**
  * AdminFeatureSettings —— 「推荐与排序」区块的内容
  *
- * featured 决定是否进首页推荐位；sortOrder 是手动权重（越大越靠前）。
+ * featured 决定前台「推荐」排序中的第一优先级；sortOrder 是手动权重（越大越靠前）。
  * 两者都只在保存后生效，和其它字段一致。
  */
 const { draft, errors, touched, changedFields } = useAdminGameDraftContext()
@@ -31,7 +31,7 @@ const INPUT_CLASS =
     <AdminField
       label="首页推荐位"
       control-id="f-featured"
-      hint="标记后会出现在首页的推荐区域"
+      hint="标记后，前台选择「推荐」排序时会优先展示"
     >
       <label class="inline-flex cursor-pointer items-center gap-3">
         <input id="f-featured" v-model="draft.featured" type="checkbox" :class="CHECKBOX_CLASS" />
@@ -43,7 +43,7 @@ const INPUT_CLASS =
       label="排序权重"
       control-id="f-sort-order"
       :error="sortError"
-      hint="整数，越大越靠前；留空表示 0"
+      hint="推荐排序中的优先级，整数，越大越靠前；留空表示 0"
     >
       <input
         id="f-sort-order"

@@ -61,6 +61,9 @@ export function useViewCounter(
 
   onMounted(load)
   watch(gameId, load)
+  // static 模式下计数来自数据本身：公开页完成运行时同步后 fakeViews 会变，
+  // UI 必须跟着更新。远程模式不要监听它 —— 那会触发一次多余的浏览计数。
+  if (!remoteEnabled) watch(staticBase, syncStatic)
 
   return {
     count,

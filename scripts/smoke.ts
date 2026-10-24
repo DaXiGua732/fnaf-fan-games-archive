@@ -38,7 +38,8 @@ function anyGameTitle(index = 0): string {
   const db = JSON.parse(readFileSync(join(process.cwd(), 'src/data/db.json'), 'utf8')) as {
     games: { title: string }[]
   }
-  return db.games[index]?.title ?? ''
+  const safeIndex = Math.max(0, Math.min(index, db.games.length - 1))
+  return db.games[safeIndex]?.title ?? ''
 }
 
 /**
@@ -70,8 +71,14 @@ const VISIBLE_GAMES = SMOKE_GAMES.filter(
   (game) => (game.status ?? 'published') === 'published' && !game.archived,
 )
 
-/** 详情页 / 编辑页的探针：优先 tjoc-reborn，被下线了就退到第一款可见作品 */
-const DETAIL_GAME = VISIBLE_GAMES.find((game) => game.id === 'tjoc-reborn') ?? SMOKE_GAMES[0]!
+/**
+ * 详情页 / 编辑页的探针：取第一款**前台可见**的作品。
+ *
+ * 不写死某个 id —— 后台随时可能改数据（这正是它的职责）。
+ * 只有在目录里一条可见作品都没有时，才退回第一条任意作品，
+ * 让详情页的 404 分支仍然能被渲染到。
+ */
+const DETAIL_GAME = VISIBLE_GAMES[0] ?? SMOKE_GAMES[0]!
 
 interface SmokeCase {
   path: string
@@ -198,8 +205,6 @@ const CASES: SmokeCase[] = [
         ? ['提取码', `${DETAIL_GAME.downloads[0].provider}下载`]
         : []),
       '浏览',
-      '评论区',
-      '评论功能待接入',
     ],
   },
   {
@@ -207,18 +212,6 @@ const CASES: SmokeCase[] = [
     name: '详情页（空状态）',
     shell: 'public',
     expect: ['没有这个游戏', 'does-not-exist'],
-  },
-  {
-    path: '/debug',
-    name: '调试台',
-    shell: 'public',
-    expect: ['Debug Console', 'Interface Self-Test'],
-  },
-  {
-    path: '/style',
-    name: '样式验收页',
-    shell: 'public',
-    expect: ['Color Palette', 'Helvetica Bold'],
   },
   {
     path: '/a/b/c/d',
@@ -241,7 +234,7 @@ const CASES: SmokeCase[] = [
     shell: 'admin',
     // ⚠️ 预览页受门禁保护 —— 不带令牌测的是登录页，不是预览页
     token: true,
-    // ⚠️ SSR 里没有 sessionStorage → 预览内容必然为空，渲染空状态。
+    // ⚠️ SSR 里没有 localStorage → 预览内容必然为空，渲染空状态。
     //    「带着草稿渲染真实前台详情页」这条由 UI 点击测试在真实浏览器里验。
     expect: ['预览 · 未保存', '没有可预览的内容'],
   },
@@ -292,7 +285,7 @@ const CASES: SmokeCase[] = [
       //    `&#39;`，写成完整标题会永远断言失败。断言里不要放需要 HTML 转义的字符。
       // 从数据里取真实标题，而不是写死 —— 见 anyGameTitle 的说明
       anyGameTitle(0),
-      anyGameTitle(5),
+      anyGameTitle(SMOKE_GAMES.length - 1),
       // 行操作（编辑入口在 Phase 4 已接通到编辑器路由）
       '预览',
       '编辑',
@@ -379,20 +372,22 @@ const CASES: SmokeCase[] = [
     ],
   },
   {
-    path: '/admin/tags',
-    name: '后台·标签管理',
+    path: '/admin/taxonomy',
+    name: '后台·标签与作者',
     shell: 'admin',
     // 后台页面必须带令牌，否则会被登录门禁拦到登录页
     token: true,
     expect: [
-      '标签管理',
+      '标签与作者',
+      '标签',
+      '作者',
       '关键词搜索',
       '标签名称',
+      '作者名称',
       '使用数量',
-      '创建时间',
       '操作',
       // 标签没有独立存储这件事必须写在页面上
-      'Phase 14',
+      '没有独立存储',
     ],
   },
   {

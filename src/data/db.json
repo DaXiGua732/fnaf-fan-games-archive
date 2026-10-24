@@ -1,6 +1,119 @@
 {
   "games": [
     {
+      "id": "jolly3",
+      "title": "Jolly3 第二章",
+      "author": "IvanG",
+      "releaseYear": 2018,
+      "ipSeries": "Jolly",
+      "engine": "Clickteam",
+      "coverImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/games/jolly3/cover-20261018085409.webp",
+      "bannerImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/games/jolly3/banner-20261018085420.webp",
+      "gallery": [
+        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/jolly3/gallery-20261018085427.webp",
+        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/jolly3/gallery-20261018085430.webp",
+        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/jolly3/gallery-20261018085433.webp",
+        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/jolly3/gallery-20261018085435.webp",
+        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/jolly3/gallery-20261018085438.webp"
+      ],
+      "description": "你的工作还没结束。你还必须在这座可怕的设施里再度过五个夜晚。但这一次，一个骇人的发现尚未被揭开……\n\n展示 JOLLY 系列中最引人注目的特色及更多内容，例如：\n\n字幕\n\n挑战\n\n所有可访问区域的自定义夜晚\n\n点击式自由探索\n\n语音演出\n\n设置界面\n\n额外内容\n\n最低配置要求\n\n2GB 内存\n\n兼容 DirectX 9、支持像素着色器的 512MB 显卡\n\nIntel Core 2 Quad Q9550 CPU 或更好\n\nWindows 7、8、8.1、10 32 位\n\n推荐配置要求\n\n4GB 内存\n\n兼容 DirectX 9、支持像素着色器的 1GB 显卡\n\nIntel i5-7400 或更好\n\nWindows 7、8、8.1、10 64 位",
+      "downloads": [
+        {
+          "provider": "PC",
+          "url": "https://1813252629.share.123pan.cn/123pan/Et1UVv-DJXeA?pwd=2psM#",
+          "password": "2psM"
+        },
+        {
+          "provider": "安卓",
+          "url": "https://1813252629.share.123pan.cn/123pan/Et1UVv-nMStA?pwd=8GZJ#",
+          "password": "8GZJ"
+        }
+      ],
+      "metrics": {
+        "fakeViews": 0,
+        "score": 0
+      },
+      "shortDescription": "",
+      "tags": [
+        "Jolly"
+      ],
+      "platforms": [],
+      "status": "published",
+      "featured": false,
+      "archived": false,
+      "sortOrder": 0,
+      "createdAt": "2026-10-18T08:55:56.424Z",
+      "updatedAt": "2026-10-18T08:59:24.490Z",
+      "publishedAt": "",
+      "updatedBy": "DaXiGua732"
+    },
+    {
+      "id": "jolly",
+      "title": "Jolly",
+      "author": "IvanG",
+      "releaseYear": 2016,
+      "ipSeries": "Jolly",
+      "engine": "Clickteam",
+      "coverImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/games/jolly/cover-20261018084436.webp",
+      "bannerImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/games/jolly/banner-20261018084444.webp",
+      "gallery": [],
+      "description": "v1.6.0 由 @RainbowHype 制作\n\n欢迎来到 Jolly 的幻想世界！来吃我们的食物或策划派对，Jolly 的幻想世界就是你的好去处！\n\n主演：大家最喜欢的蜜蜂——Jolly！\n\n人们对 Jolly 和他的伙伴们总是百看不厌。工作时间现已延长！你能熬过五个夜晚吗？\n\n特色\n\n自定义夜晚\n\n电话通话字幕！\n\n叙事型 8 位小游戏\n\n玩法\n你在一栋电力有限的建筑里担任保安。使用发电机来充电。要聪明点，发电机的电力也是有限的！\n\n如果“某个不受欢迎的家伙”可能要用电梯，就把电梯往上推。\n\n如果一切都失败了，就关门作为最后手段。\n\n配置要求\nWindows XP 或更新版本（游戏在 Mac/Linux 设备上无法正常运行！）\n\nDirectX 9\n\n最低分辨率为 1024x768 的显示器\n\n512MB 存储空间\n\n1GB 内存\n\n512MB GPU（推荐 Nvidia GeForce 9400 及以上）",
+      "downloads": [
+        {
+          "provider": "123云盘",
+          "url": "https://1813252629.share.123pan.cn/123pan/Et1UVv-AEReA?pwd=1kAp#",
+          "password": "1kAp"
+        }
+      ],
+      "metrics": {
+        "fakeViews": 0,
+        "score": 0
+      },
+      "shortDescription": "",
+      "tags": [
+        "Jolly"
+      ],
+      "platforms": [],
+      "status": "published",
+      "featured": false,
+      "archived": false,
+      "sortOrder": 0,
+      "createdAt": "2026-10-18T08:45:22.840Z",
+      "updatedAt": "2026-10-18T08:57:32.315Z",
+      "publishedAt": "",
+      "updatedBy": "DaXiGua732"
+    },
+    {
+      "id": "jolly-4",
+      "title": "Jolly 4",
+      "author": "IvanG",
+      "releaseYear": 2025,
+      "ipSeries": "Jolly",
+      "engine": "Clickteam",
+      "coverImage": "",
+      "bannerImage": "",
+      "gallery": [],
+      "description": "Jolly系列的最新作\n目前还是demo状态",
+      "downloads": [],
+      "metrics": {
+        "fakeViews": 0,
+        "score": 0
+      },
+      "shortDescription": "乔利4：乔利系列的最新作",
+      "tags": [
+        "Jolly"
+      ],
+      "platforms": [],
+      "status": "draft",
+      "featured": false,
+      "archived": false,
+      "sortOrder": 0,
+      "createdAt": "2026-10-18T08:37:06.023Z",
+      "updatedAt": "2026-10-18T08:37:06.023Z",
+      "publishedAt": "",
+      "updatedBy": "DaXiGua732"
+    },
+    {
       "id": "jolly-anniversary-edition",
       "title": "Jolly: Anniversary Edition",
       "author": "Mannyboi",
@@ -35,259 +148,6 @@
       "sortOrder": 0,
       "createdAt": "2026-10-11T15:56:41.257Z",
       "updatedAt": "2026-10-11T15:57:43.724Z",
-      "publishedAt": "",
-      "updatedBy": "DaXiGua732"
-    },
-    {
-      "id": "tjoc-reborn",
-      "title": "The Joy of Creation: Reborn",
-      "author": "Nikson",
-      "releaseYear": 2017,
-      "ipSeries": "FNAF 主线同人",
-      "engine": "Unreal Engine 4",
-      "coverImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/tjoc-reborn-cover.svg",
-      "bannerImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/tjoc-reborn-banner.svg",
-      "gallery": [
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/tjoc-reborn-banner.svg",
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/tjoc-reborn-cover.svg"
-      ],
-      "videoUrl": "https://www.bilibili.com/video/BV1Js41137YQ",
-      "description": "以第一人称视角重述「被烧毁的宅邸」之夜。玩家在五个夜晚中躲避 Ignited 系列机械玩偶的追杀，需要用相机闪光灯自保。Reborn 是重制版，重置了全部场景光照与 AI 行为树，被公认为 FNAF 同人 3D 恐怖向的标杆之作。",
-      "downloads": [
-        {
-          "provider": "123云盘",
-          "url": "https://www.123pan.com/s/example-tjoc",
-          "password": "tjoc"
-        },
-        {
-          "provider": "百度网盘",
-          "url": "https://pan.baidu.com/s/example-tjoc",
-          "password": "2017"
-        }
-      ],
-      "metrics": {
-        "fakeViews": 12540,
-        "score": 4.8
-      },
-      "shortDescription": "",
-      "tags": [],
-      "platforms": [],
-      "status": "published",
-      "featured": false,
-      "archived": false,
-      "sortOrder": 0,
-      "createdAt": "",
-      "updatedAt": "",
-      "publishedAt": ""
-    },
-    {
-      "id": "tjoc-story-mode",
-      "title": "The Joy of Creation: Story Mode",
-      "author": "Nikson",
-      "releaseYear": 2019,
-      "ipSeries": "FNAF 主线同人",
-      "engine": "Unreal Engine 4",
-      "coverImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-story-mode/cover-20260930131757.jpg",
-      "bannerImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/tjoc-story-mode-banner.svg",
-      "gallery": [
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/tjoc-story-mode-banner.svg",
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/tjoc-story-mode-cover.svg",
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-story-mode/gallery-20260930131815.jpg",
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-story-mode/gallery-20260930131817.jpg",
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-story-mode/gallery-20260930131819.jpg",
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-story-mode/gallery-20260930131822.jpg",
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-story-mode/gallery-20260930131823.jpg",
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/tjoc-story-mode/gallery-20260930131826.jpg"
-      ],
-      "description": "Reborn 的正统续作，改为逐日推进的剧情模式。玩家扮演 Scott 本人，在七个章节中经历从创作到失控的全过程。新增潜行、解谜与多结局系统，是系列叙事最完整的一部。",
-      "downloads": [
-        {
-          "provider": "123云盘",
-          "url": "https://www.123pan.com/s/example-tjocsm",
-          "password": "tsm"
-        },
-        {
-          "provider": "阿里云盘",
-          "url": "https://www.aliyundrive.com/s/example-tjocsm"
-        }
-      ],
-      "metrics": {
-        "fakeViews": 8730,
-        "score": 4.6
-      },
-      "shortDescription": "",
-      "tags": [],
-      "platforms": [],
-      "status": "offline",
-      "featured": false,
-      "archived": false,
-      "sortOrder": 0,
-      "createdAt": "",
-      "updatedAt": "2026-10-17T09:49:00.515Z",
-      "publishedAt": "",
-      "updatedBy": "DaXiGua732",
-      "videoUrl": "https://www.bilibili.com/video/BV1X4411J7dv"
-    },
-    {
-      "id": "one-night-at-flumptys",
-      "title": "One Night at Flumpty's",
-      "author": "Jonochrome",
-      "releaseYear": 2015,
-      "ipSeries": "玩梗向混搭",
-      "engine": "Clickteam Fusion 2.5",
-      "coverImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/one-night-at-flumptys-cover.svg",
-      "bannerImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/one-night-at-flumptys-banner.svg",
-      "gallery": [
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/one-night-at-flumptys-banner.svg",
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/one-night-at-flumptys-cover.svg"
-      ],
-      "videoUrl": "https://www.bilibili.com/video/BV1Wx411s7hM",
-      "description": "「Flumpty Bumpty 不受物理规则限制。」一款画风人畜无害、实际难度极高的恶搞向同人。玩家只有一夜要守，蛋形角色会无视摄像头与门的规则直接逼近办公室。公认的「史上最不讲道理同人」。",
-      "downloads": [
-        {
-          "provider": "百度网盘",
-          "url": "https://pan.baidu.com/s/example-onaf",
-          "password": "egg1"
-        }
-      ],
-      "metrics": {
-        "fakeViews": 20180,
-        "score": 4.9
-      },
-      "shortDescription": "",
-      "tags": [],
-      "platforms": [],
-      "status": "published",
-      "featured": false,
-      "archived": false,
-      "sortOrder": 0,
-      "createdAt": "",
-      "updatedAt": "",
-      "publishedAt": ""
-    },
-    {
-      "id": "five-nights-at-candys",
-      "title": "Five Nights at Candy's",
-      "author": "Emil Macko",
-      "releaseYear": 2015,
-      "ipSeries": "FNAF 主线同人",
-      "engine": "Clickteam Fusion 2.5",
-      "coverImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/five-nights-at-candys-cover.svg",
-      "bannerImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/five-nights-at-candys-banner.svg",
-      "gallery": [
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/five-nights-at-candys-banner.svg",
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/five-nights-at-candys-cover.svg"
-      ],
-      "videoUrl": "https://www.bilibili.com/video/BV1ks411k7JY",
-      "description": "以「糖果猫」Candy the Cat 为首的独立玩偶阵容，构建了一套完整的原创世界观与时间线。以干净的像素美术、严密的 AI 难度曲线和出色的氛围营造，成为最早获得原作粉丝认可的同人系列之一。",
-      "downloads": [
-        {
-          "provider": "123云盘",
-          "url": "https://www.123pan.com/s/example-fnac",
-          "password": "fnac"
-        },
-        {
-          "provider": "百度网盘",
-          "url": "https://pan.baidu.com/s/example-fnac",
-          "password": "candy"
-        }
-      ],
-      "metrics": {
-        "fakeViews": 16320,
-        "score": 4.7
-      },
-      "shortDescription": "",
-      "tags": [],
-      "platforms": [],
-      "status": "published",
-      "featured": false,
-      "archived": false,
-      "sortOrder": 0,
-      "createdAt": "",
-      "updatedAt": "",
-      "publishedAt": ""
-    },
-    {
-      "id": "popgoes",
-      "title": "POPGOES",
-      "author": "Kane Carter",
-      "releaseYear": 2016,
-      "ipSeries": "FNAF 主线同人",
-      "engine": "Clickteam Fusion 2.5",
-      "coverImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/popgoes-cover.svg",
-      "bannerImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/popgoes-banner.svg",
-      "gallery": [
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/popgoes-banner.svg",
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/popgoes-cover.svg"
-      ],
-      "videoUrl": "https://www.bilibili.com/video/BV1Ns41167wa",
-      "description": "设定于原作时间线数十年后的未来。玩家作为看守人管理 Popgoes Pizza 的旧设施，靠一套「昼夜循环 + 电量分配」的双层资源机制生存。以极高的机制复杂度与隐藏剧情密度著称。",
-      "downloads": [
-        {
-          "provider": "123云盘",
-          "url": "https://www.123pan.com/s/example-popgoes",
-          "password": "pg16"
-        },
-        {
-          "provider": "夸克网盘",
-          "url": "https://pan.quark.cn/s/example-popgoes"
-        }
-      ],
-      "metrics": {
-        "fakeViews": 11260,
-        "score": 4.5
-      },
-      "shortDescription": "",
-      "tags": [],
-      "platforms": [],
-      "status": "published",
-      "featured": false,
-      "archived": false,
-      "sortOrder": 0,
-      "createdAt": "",
-      "updatedAt": "",
-      "publishedAt": ""
-    },
-    {
-      "id": "dayshift-at-freddys",
-      "title": "Dayshift at Freddy's",
-      "author": "DirectDogman",
-      "releaseYear": 2017,
-      "ipSeries": "玩梗向混搭",
-      "engine": "Clickteam Fusion 2.5",
-      "coverImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/games/dayshift-at-freddys/cover-20260930124737.jpg",
-      "bannerImage": "https://daxigua732.github.io/fnaf-fan-games-data/images/games/dayshift-at-freddys/banner-20260930124751.jpg",
-      "gallery": [
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/dayshift-at-freddys-banner.svg",
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/dayshift-at-freddys-cover.svg",
-        "https://daxigua732.github.io/fnaf-fan-games-data/images/games/dayshift-at-freddys/gallery-20260930124806.jpg"
-      ],
-      "videoUrl": "https://www.bilibili.com/video/BV1jx411x7Kz",
-      "description": "把恐怖生存彻底反转成「打工喜剧」。玩家白天在披萨店上班，通过对话选项、道具与一本会说话的账本推进多条荒诞分支剧情。以密集的玩梗密度和超多结局成为同人圈的经典。",
-      "downloads": [
-        {
-          "provider": "百度网盘",
-          "url": "https://pan.baidu.com/s/example-dsaf",
-          "password": "dsaf"
-        },
-        {
-          "provider": "阿里云盘",
-          "url": "https://www.aliyundrive.com/s/example-dsaf"
-        }
-      ],
-      "metrics": {
-        "fakeViews": 9450,
-        "score": 4.4
-      },
-      "shortDescription": "",
-      "tags": [],
-      "platforms": [],
-      "status": "offline",
-      "featured": false,
-      "archived": false,
-      "sortOrder": 0,
-      "createdAt": "",
-      "updatedAt": "2026-10-17T09:49:00.516Z",
       "publishedAt": "",
       "updatedBy": "DaXiGua732"
     }

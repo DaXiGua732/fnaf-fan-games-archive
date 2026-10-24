@@ -33,7 +33,7 @@ declare module 'vue-router' {
  *   - `/admin` → AdminLayout.vue （后台骨架）
  * 两套外壳完全分离，后台不再继承公开站 Header / Footer。
  *
- * 首屏之外的视图一律懒加载，避免把后台 / 调试台 / 样式验收页打进主包。
+ * 首屏之外的视图一律懒加载，避免把后台打进主包。
  */
 export const routes: RouteRecordRaw[] = [
   /* ========================= 公开站 ========================= */
@@ -54,18 +54,6 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('../views/GameDetail.vue'),
         props: true,
         meta: { title: '游戏详情' },
-      },
-      {
-        path: 'debug',
-        name: 'debug',
-        component: () => import('../views/DebugLibrary.vue'),
-        meta: { title: '调试台' },
-      },
-      {
-        path: 'style',
-        name: 'style',
-        component: () => import('../views/StyleSpecimen.vue'),
-        meta: { title: '样式规范' },
       },
       {
         // 公开站 404 兜底。位于子路由末尾，优先级最低，不会抢走 /admin/** 的匹配。
@@ -128,10 +116,21 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '预览' },
       },
       {
+        // 标签与作者合并为一页：两者都是「从作品数据派生出来的分类维度」，
+        // 分成两个页面只会让管理员在两条几乎相同的表格之间来回切换。
+        path: 'taxonomy',
+        name: 'admin-taxonomy',
+        component: () => import('../views/admin/AdminTaxonomy.vue'),
+        meta: { title: '标签与作者' },
+      },
+      {
+        // 旧地址保留重定向，避免书签 / 外部链接 404。
         path: 'tags',
-        name: 'admin-tags',
-        component: () => import('../views/admin/AdminTags.vue'),
-        meta: { title: '标签管理' },
+        redirect: { name: 'admin-taxonomy' },
+      },
+      {
+        path: 'authors',
+        redirect: { name: 'admin-taxonomy' },
       },
       {
         // 后台 404：静态前缀 /admin 使其优先级高于公开站的 catch-all，
