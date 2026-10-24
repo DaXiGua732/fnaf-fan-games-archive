@@ -41,7 +41,8 @@ Phase 0–20 全部落地，并已在线上实际使用。**后续改动仍按�
 
 已完成：**Phase 0–20 全部**。其中 Phase 14（数据库设计）不适用 —— `db.json` 就是库；
 Phase 20（测试）由贯穿全程的门禁体系覆盖：
-`typecheck + test:gamejolt + build:extension + selftest + smoke + UI 点击测试 + build`。
+`typecheck + test:gamejolt + build:extension + selftest + smoke + build`
+（UI 点击测试与扩展 E2E 需要本机浏览器，单独运行）。
 
 > **后台能改线上数据、能传图、能预览、能永久删除作品**：登录后读写数据仓的 `db.json`，
 > 图片上传到数据仓的 `images/`，保存 = 一次提交，git 历史即回滚手段。
