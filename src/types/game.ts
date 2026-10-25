@@ -11,7 +11,7 @@ export interface DownloadLink {
 }
 
 export interface GameMetrics {
-  /** 站内浏览量（无后端方案下为静态基数） */
+  /** 静态热度基数：用于列表排序 / 计数服务不可用时兜底（详情页实时数不写回这里） */
   fakeViews: number
   /** 5 分制评分 */
   score: number

@@ -17,7 +17,7 @@
 - 代码仓：`DaXiGua732/fnaf-fan-games-archive`（Public，只有站长有写权限）
 - 数据仓：`DaXiGua732/fnaf-fan-games-data`（Public，管理员有写权限；`db.json` + `images/`）
 
-## 2. 当前状态快照（2026-10-24）
+## 2. 当前状态快照（2026-10-25）
 
 | 项 | 状态 |
 | --- | --- |
@@ -26,8 +26,8 @@
 | 后台能力 | ✅ 增删改查 / 批量 / 标签与作者合并管理 / 图片上传（自动 WebP 压缩）/ 预览 / 永久删除 / 操作署名 / **GameJolt 扩展 ZIP 导入 + 本机助手备用** |
 | 交互层 | ✅ 编辑器吸顶操作条 + 分区锚点 + 发布概览 + Ctrl/Cmd+S；列表行内快捷上下线 / 永久删除；详情页截图灯箱 |
 | 代码仓提交 | ✅ 已推送（最新提交见 `git log -1`；删除 / 压缩 / 构建兜底 / 断言去数据耦合 / UI 重构 / 一句话简介 / GameJolt 导入） |
-| 测试基线 | ✅ typecheck + **test:gamejolt 22** + **build:extension** + **selftest 481** + **smoke 14** + **UI 点击 76 步** + build 全绿；扩展 E2E 另跑 |
-| 已知缺口 | 浏览量仍是静态基数；数据仓未加其他协作者；评论区已按产品决策移除 |
+| 测试基线 | ✅ typecheck + **test:gamejolt 22** + **build:extension** + **selftest 502** + **smoke 14** + **UI 点击 76 步** + build 全绿；扩展 E2E 另跑 |
+| 已知缺口 | 数据仓未加其他协作者；评论区已按产品决策移除 |
 
 > ⚠️ **断言已改成从数据推导期望值**：`selftest` 会在 `data:pull` 之后跑，
 > 所以不允许再写死「6 款」「5 位作者」「封面一定是某个路径」。新增断言时先问一句：
@@ -65,7 +65,7 @@ npm run build:extension # 构建扩展到 extension/dist（Chrome/Edge 加载已
 npm run test:extension # 扩展 E2E：同源抓取 → 图片 → ZIP 下载（需要系统 Chrome）
 npm run gamejolt:helper # 本机助手（127.0.0.1:4317，开发备用；运维主路径是扩展 ZIP）
 npm run smoke          # 只跑 SSR 冒烟（14 条路由）
-npm run selftest       # 只跑断言集（481 项，含静态守卫）
+npm run selftest       # 只跑断言集（502 项，含静态守卫）
 ```
 
 - **部署**：推 `main` 即自动构建发布（`.github/workflows/deploy.yml`，构建前自动 `data:pull`）
@@ -85,6 +85,7 @@ npm run selftest       # 只跑断言集（481 项，含静态守卫）
 | **写路径必须「读最新 → 重放 → 409 重试」** | `db.json` 是**单个文件**，任意两人同时保存都会冲突；敢直接重试是因为重放**永远正确**（改的是字段，不是文本 diff） | README §后台的写入落在哪里 |
 | **图片文件名带时间戳** | 图片会被浏览器/CDN 缓存；换名即换地址，缓存自然失效 | README §图片上传 |
 | **预览复用 `GameDetail` 本身**（注入草稿） | 另写一个"像前台"的预览页迟早分叉，分叉后预览就在骗人 | README §预览功能 |
+| **浏览量走 Abacus，不写数据仓** | 公开站没有安全的写入通道：把写令牌放进前端等于把数据仓交给所有人。计数是易失指标，第三方服务挂了就回退静态基数，站点照常可用 | README §7.1 |
 | **不再提供评论区** | 产品决策：评论需要审核、滥用处理与独立的数据归属；没有这些能力时，一个空评论区只是在制造维护负担 | README §7.2 |
 | **标签与作者合并为一个页面** | 两者都是由作品数据派生的分类维度；分成两页只会让管理员在两张几乎相同的表格之间来回切换 | README §后台路由 |
 | **GameJolt 导入：扩展 ZIP 为主，本机助手为开发备用** | 扩展 content script 运行在 gamejolt.com 页面内，`/site-api` 是同源请求，运维不需要 Node / 终端；图片 CDN 开放跨域，可直接走现有上传链路。ZIP 是本地可审计的交换文件，后台仍负责归一化 / 校验 / 上传，扩展接触不到 GitHub 令牌。游戏资源与网盘链接是策展决定，自动化只做「信息搬运」 | README §7.3 |
@@ -144,12 +145,14 @@ npm run selftest       # 只跑断言集（481 项，含静态守卫）
     加载 `extension/dist/`；同源抓取只成立在 content script（popup/background 是扩展 origin）
 12. **ZIP 是不可信输入**：只认格式/版本/GameJolt 来源，白名单条目 + 大小/条目数限制，
     图片仍走 `createImageBitmap` 与尺寸校验；不要渲染包内 HTML/JS
+13. **Abacus 的 `/hit` 是 GET**：被浏览器 / CDN 缓存一次就少计一次浏览 ——
+    provider 同时用 `cache: 'no-store'` 与时间戳兜底，改计数实现时别删这两道防线
 
 ## 8. 已知缺口与待办
 
 | 项 | 说明 |
 | --- | --- |
-| 浏览量 | `viewCounter.ts` 是适配器 + 静态基数，**未接任何后端**。接真实服务只需实现 `ViewProvider` 并在 `main.ts` 注册 |
+| 浏览量 | 详情页已是 **Abacus 实时计数**，但**依赖第三方**且没有防刷能力（纯静态站拿不到可信访客身份）；`/hit` 自动建的 key 无 admin key、被刷无法重置。列表「热度」排序仍用 `fakeViews` 静态值。详见 README §7.1 |
 | 评论 | 已按产品决策移除：`CommentSection.vue`、`src/config/giscus.ts`、`public/giscus-swiss.css` 与全部相关文案/测试均已删除 |
 | 多管理员 | 数据仓还没加协作者；加人命令见 `admin_phase13_persistence_decision.md` §15 |
 | 数据更新延迟 | 公开页挂载 / 切回时自动同步（通常几秒）；断网时退回构建期快照，最长等 1 小时的定时构建刷新快照 |
@@ -161,13 +164,14 @@ npm run selftest       # 只跑断言集（481 项，含静态守卫）
 
 ```
 npm run verify
-# = typecheck + test:gamejolt(22) + build:extension + selftest(481) + smoke(14) + build
+# = typecheck + test:gamejolt(22) + build:extension + selftest(502) + smoke(14) + build
 ```
 
 - `test:gamejolt`：URL 解析 / 富文本 / 图片选型与尺寸升级 / 网络错误分支 / 扩展 ZIP 打包
   （`node --test`，夹具注入 fetch，不出网）
 - `build:extension`：esbuild 把扩展 content script 打成 IIFE，产出 `extension/dist/`
 - `selftest`：深模块断言 + **静态守卫**（扫源码的三条红线）+ 仓储/持久化/上传契约
+  + 浏览量适配器（请求形状 / 响应解析 / 非法 id / 抛错与超时降级；fetch 用桩，不出网）
 - `smoke`：SSR 渲染 14 条路由（公开 4 + 后台 10），断言外壳分离与关键内容
 - `UI 点击测试`（`scripts/ui-test.mjs`，**已纳入版本管理**，`npm run test:ui`）：
   76 步真实浏览器点击，覆盖计划书 §21 后台专项、§22 前台回归、GameJolt 助手导入与 ZIP 导入

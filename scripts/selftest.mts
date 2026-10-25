@@ -12,6 +12,7 @@ import { useAdminGames } from '../src/composables/useAdminGames'
 import { useGameLibrary } from '../src/composables/useGameLibrary'
 import { runAdminAssertions } from '../src/dev/adminAssertions'
 import { runLibraryAssertions, type Assertion } from '../src/dev/libraryAssertions'
+import { runViewCounterAssertions } from '../src/dev/viewCounterAssertions'
 
 /* ---------------------------------------------------------------------------
    静态守卫（源码规范）
@@ -109,10 +110,12 @@ const staticResults: Assertion[] = [
 
 const libraryResults = await runLibraryAssertions(useGameLibrary())
 const adminResults = await runAdminAssertions(useAdminGames())
+const viewResults = await runViewCounterAssertions()
 
 const GROUPS: { title: string; results: Assertion[] }[] = [
   { title: 'useGameLibrary（前台深模块）', results: libraryResults },
   { title: 'useAdminGames（后台深模块）', results: adminResults },
+  { title: '浏览量服务（Abacus + 降级）', results: viewResults },
   { title: '静态守卫（源码规范）', results: staticResults },
 ]
 

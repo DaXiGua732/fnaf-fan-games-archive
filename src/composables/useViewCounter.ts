@@ -15,12 +15,16 @@ import { getActiveProviderId, isRemoteViewEnabled, trackView } from '../services
  * 两种模式：
  *   - remote：已接入后端，走异步请求，isLoading 参与 UI
  *   - static：未接入后端，**同步**取值，不做无谓的 loading 闪烁（SSR 首帧也能渲染出数字）
+ *
+ * `track: () => false` 用于后台预览：预览复用真实的 GameDetail，但看预览不是公开浏览，
+ * 不能给作品刷浏览量。
  */
 export function useViewCounter(
   gameId: () => string | undefined,
   staticBase: () => number,
+  options: { track?: () => boolean } = {},
 ) {
-  const remoteEnabled = isRemoteViewEnabled()
+  const remoteEnabled = isRemoteViewEnabled() && options.track?.() !== false
 
   const count = ref<number | null>(null)
   const source = ref<'remote' | 'static'>('static')
@@ -61,15 +65,14 @@ export function useViewCounter(
 
   onMounted(load)
   watch(gameId, load)
-  // static 模式下计数来自数据本身：公开页完成运行时同步后 fakeViews 会变，
-  // UI 必须跟着更新。远程模式不要监听它 —— 那会触发一次多余的浏览计数。
+  // static 模式下计数来自数据本身：公开页完成运行时同步后 fakeViews 会变，UI 必须跟着更新。
   if (!remoteEnabled) watch(staticBase, syncStatic)
 
   return {
     count,
     source,
     isLoading,
-    /** 当前生效的数据源标识，static 表示尚未接入后端 */
+    /** 当前生效的数据源标识，static 表示未接入 / 本页不计数 */
     providerId: getActiveProviderId(),
   }
 }

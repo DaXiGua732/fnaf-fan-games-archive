@@ -609,7 +609,7 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 | `npm run build` | 生产构建（base = `/fnaf-fan-games-archive/`），输出到 `dist/` |
 | `npm run preview` | 预览生产产物 |
 | `npm run typecheck` | `vue-tsc --noEmit` 类型检查 |
-| `npm run selftest` | 深模块行为断言（前台 + 后台两套，见 §2.1） |
+| `npm run selftest` | 深模块行为断言（前台 + 后台 + 浏览量三套，见 §2.1） |
 | `npm run smoke` | SSR 冒烟：逐路由真实渲染并断言内容（14 条路由） |
 | `npm run test:gamejolt` | GameJolt 链接解析 / 字段转换 / 扩展打包的单元测试（不联网） |
 | `npm run gamejolt:helper` | 启动 GameJolt 导入助手（只监听 127.0.0.1:4317，见 §7.3） |
@@ -640,21 +640,22 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 
 ### 2.1 `selftest` 的设计要点
 
-断言集放在 `src/dev/`，目前两份：
+断言集放在 `src/dev/`，目前三份：
 
 | 文件 | 覆盖的深模块 |
 | --- | --- |
 | `libraryAssertions.ts` | 前台 `useGameLibrary`（搜索 / 交叉过滤 / 排序 / 分页） |
 | `adminAssertions.ts` | 后台 `useAdminGames`（状态统计 / 筛选 / 排序 / 分页 / 勾选） |
+| `viewCounterAssertions.ts` | 浏览量适配器（请求形状 / 响应解析 / 非法 id / 降级；注入 fetch，不出网） |
 
-两份断言集都由 `scripts/selftest.mts` 在命令行消费（原先公开站的调试台已随
+三份断言集都由 `scripts/selftest.mts` 在命令行消费（原先公开站的调试台已随
 `/debug` 入口一起移除，避免开发页面进入生产包）。
 
 > **后台断言不依赖线上数据内容**：`runAdminAssertions` 启动时先向本地仓储注入
 > 一组合成 fixture（`FIXTURE_GAMES`），再跑状态统计 / 批量 / 标签 / 作者等断言。
 > CI 在 `data:pull` 之后运行，站长随时可能删改真实条目 —— 断言不能把条目标题或 id 编码进去。
 
-`scripts/selftest.mts` 顺序跑两份断言集并分组汇总。
+`scripts/selftest.mts` 顺序跑三份断言集并分组汇总。
 
 > ⚠️ **不要在文档里写死断言条数**（比如"29 项"）。条数每个阶段都在涨，
 > 写死就意味着每加一条断言都要回来改文档，很快就会失真。
@@ -793,7 +794,7 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 │   │   ├── useAdminAuth.ts         # 令牌登录状态
 │   │   ├── useGamePreview.ts       # 草稿 → 预览页的跨标签页传递
 │   │   ├── useSearchField.ts       # 搜索框绑定（避免受控输入回写光标）
-│   │   └── useViewCounter.ts       # 浏览量（remote / static 双模式）
+│   │   └── useViewCounter.ts       # 浏览量（remote / static 双模式；后台预览不计数）
 │   ├── data/
 │   │   └── db.json                 # ★ 构建期单一事实来源：所有游戏数据
 │   ├── repositories/               # ★ 数据访问层（Phase 11）
@@ -804,14 +805,17 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 │   │   └── index.ts                # ★ 当前生效的仓储 —— 唯一的切换点
 │   ├── dev/
 │   │   ├── libraryAssertions.ts    # ★ 前台断言集（命令行消费）
-│   │   └── adminAssertions.ts      # ★ 后台断言集（命令行消费，含合成 fixture）
+│   │   ├── adminAssertions.ts      # ★ 后台断言集（命令行消费，含合成 fixture）
+│   │   └── viewCounterAssertions.ts # ★ 浏览量断言集（注入 fetch 桩，不出网）
 │   ├── layouts/
 │   │   ├── Layout.vue              # 公开站骨架：Header + RouterView + Footer
 │   │   └── AdminLayout.vue         # 后台骨架：后台 Header + 侧栏 + RouterView
 │   ├── router/
 │   │   ├── routes.ts               # 路由表（双 Layout 嵌套，与实例分离便于测试复用）
 │   │   └── index.ts                # createRouter + Hash history
-│   ├── services/viewCounter.ts     # 浏览量适配器（ViewProvider）
+│   ├── services/
+│   │   ├── viewCounter.ts          # 浏览量适配器（ViewProvider）
+│   │   └── abacusViewProvider.ts   # Abacus 实时计数（仅生产构建注册）
 │   ├── styles/index.css            # Tailwind 入口 + 全局硬重置（视觉规范最后防线）
 │   ├── types/
 │   │   ├── game.ts                 # 领域模型 Game / DownloadLink / GameMetrics / GameStatus
@@ -1075,7 +1079,7 @@ grep -o '\.rounded-md\|\.shadow{\|\.font-serif\|\.font-mono' "$CSS" | sort -u  #
   "gallery": ["..."], "videoUrl": "https://...",
   "description": "中文简介...",
   "downloads": [{ "provider": "123云盘", "url": "https://...", "password": "abcd" }],
-  "metrics": { "fakeViews": 12540, "score": 4.8 }
+  "metrics": { "fakeViews": 0, "score": 4.8 }
 }
 ```
 
@@ -1114,24 +1118,31 @@ grep -o '\.rounded-md\|\.shadow{\|\.font-serif\|\.font-mono' "$CSS" | sort -u  #
 
 ## 7. 第三方集成现状
 
-### 7.1 浏览量 —— 适配器模式，**当前未接入后端**
+### 7.1 浏览量 —— 适配器 + Abacus 实时计数
 
-`src/services/viewCounter.ts` 定义了 `ViewProvider { id, read, increment }`。
-当前无 provider，`trackView()` 直接返回 `db.json` 里的 `metrics.fakeViews`，**不发任何网络请求**。
+详情页的浏览量由 [Abacus](https://v2.jasoncameron.dev/abacus/) 实时计数：
+生产构建在 `main.ts` 注册 `createAbacusViewProvider({ namespace: 'fnaf-fan-games-archive' })`，
+每次打开详情页向 `/hit` 发一次请求（自增并返回新值）；失败 / 超时静默降级为
+`db.json` 的 `metrics.fakeViews`（静态基数）。
 
-**接后端只需两步，组件一行都不用改：**
+- **只在生产构建启用**：`npm run dev` / UI 测试不注册 provider，反复打开不会刷线上数字。
+  （`npm run preview` 也是生产构建，会真的计数；本地批量验证请拦截 Abacus 请求。）
+- **后台预览不计数**：预览复用真实 `GameDetail`，`useViewCounter` 以 `track: () => false`
+  跳过自增 —— 否则管理员每预览一次都在刷量。
+- **key = 作品 id**：Abacus 只接受 `[A-Za-z0-9_.-]{3,64}`；不合法 id 直接不发请求。
+- **4 秒超时**：统计不能把页面挂在「载入中…」。
+- **免费、免注册、CORS 开放**，限流 30 次 / 10 秒 / IP；单次浏览只发 1 个请求。
+  计数是易失指标，不写回数据仓；服务不可用时显示静态基数，站点照常可用。
+- **没有防刷能力**：纯静态站拿不到可信的访客身份，数值只作参考（页面文案也这么写）。
+  `/hit` 自动建 key 且不返回 admin key，被刷后无法重置；要可管理的计数得用 `/create`
+  预建 key 并把 admin key 存在数据仓之外。
 
-1. 实现 `ViewProvider`
-2. 在 `src/main.ts` 调 `registerViewProvider(yourProvider)`
+换后端只需实现 `ViewProvider { id, read, increment }`，在 `main.ts` 换一行注册，
+组件不用改。`src/dev/viewCounterAssertions.ts` 用注入的 fetch 桩覆盖请求形状、响应解析、
+非法 id、自增失败读旧值、抛错 / 超时降级 —— **不出网**。
 
-文件末尾注释里有 **Supabase 的完整参考实现与配套 SQL**（用 `on conflict do update` + rpc，
-避免前端"读-改-写"的竞态）。
-
-期望的表结构极简：
-
-```sql
-create table views (game_id text primary key, count integer not null default 0);
-```
+> `metrics.fakeViews` 仍然保留：列表的「热度」排序用它（实时数只在详情页取，
+> 逐个作品拉全量计数会打满免费服务限流），计数服务不可用时也用它兜底。
 
 > 关于两种模式：`useViewCounter` 在 **static 模式下同步取值**（否则 SSR 首帧会永远卡在
 > "载入中"），remote 模式才走异步 + `isLoading`。
@@ -1475,7 +1486,7 @@ npm run verify     # 四道关卡必须全绿
 
 ## 11. 待办
 
-- [ ] **接入浏览量后端** —— 按 §7.1 实现 `ViewProvider`（当前为静态基数，数据是假的）
+- [x] **接入浏览量后端** —— 已接 Abacus 实时计数（§7.1）；计数服务不可用时回退静态基数
 - [ ] 升级 Actions 版本 —— 目前 `actions/checkout@v4` 等仍指向 Node 20，
       有 deprecation annotation（非致命）
 - [ ] 补一个 `README` 之外的 `LICENSE` / 贡献说明（可选）

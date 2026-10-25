@@ -62,7 +62,8 @@ const hasVideo = computed(() => Boolean(game.value?.videoUrl))
 const galleryOpen = ref<number | null>(null)
 
 /**
- * 浏览量统计。当前为静态基数模式；接入后端后 registerViewProvider() 即可切换。
+ * 浏览量：生产环境由 Abacus 实时计数（见 main.ts）；失败 / 未接入时退回静态基数。
+ * 后台预览复用本组件，但预览不算一次公开浏览 —— 否则管理员每看一次预览都在刷量。
  */
 const {
   count: viewCount,
@@ -71,6 +72,7 @@ const {
 } = useViewCounter(
   () => props.id,
   () => game.value?.metrics.fakeViews ?? 0,
+  { track: () => previewGame.value === null },
 )
 
 const viewLabel = computed(() => {
@@ -299,7 +301,7 @@ watchEffect(() => {
             </div>
 
             <p class="font-sans text-xs leading-relaxed text-black/50">
-              评分与浏览量为社区维护的参考值，非官方数据。浏览量为静态基数时表示尚未接入后端统计服务。
+              评分与浏览量为社区维护的参考值，非官方数据。浏览量实时累计；计数服务不可用时退回静态基数。
             </p>
           </aside>
         </div>
