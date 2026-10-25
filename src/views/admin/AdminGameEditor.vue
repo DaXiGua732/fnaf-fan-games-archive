@@ -74,7 +74,7 @@ const game = computed(() => (props.id ? getGameById(props.id) : undefined))
 const notFound = computed(() => !isNew.value && game.value === undefined)
 
 const subheading = computed(() => {
-  if (isNew.value) return '新作品 · id 将在首次保存时生成'
+  if (isNew.value) return '新作品 · 第一次保存后会自动生成 id'
   if (!game.value) return ''
   return `${game.value.id} · ${game.value.title}`
 })
@@ -413,8 +413,8 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
     </h1>
 
     <p class="mt-8 max-w-[62ch] font-sans text-sm leading-relaxed text-black/60">
-      资源库中没有 id 为 <span class="font-bold tracking-[0.2em]">{{ props.id }}</span> 的条目。
-      可能链接已失效，或该作品尚未被收录。
+      游戏库里没有 id 为 <span class="font-bold tracking-[0.2em]">{{ props.id }}</span> 的作品。
+      可能链接已经失效，或者这款作品还没被收录。
     </p>
 
     <RouterLink
@@ -450,7 +450,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
           aria-live="polite"
         >
           <template v-if="saving">正在保存……</template>
-          <template v-else-if="isDirty">未保存的修改 · {{ changedFields.length }} 个字段</template>
+          <template v-else-if="isDirty">未保存的修改 · {{ changedFields.length }} 处</template>
           <template v-else>没有未保存的修改</template>
         </p>
 
@@ -517,7 +517,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
     >
       <p class="swiss-meta font-bold text-[#ff0000]">这个作品有未保存的修改</p>
       <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
-        离开后这些修改会丢失，且无法恢复 —— 它们还没有保存到数据仓。
+        离开后这些修改就没了，也找不回来，因为它们还没保存到数据仓。
       </p>
       <div class="mt-5 flex flex-wrap gap-3">
         <button type="button" :class="ACTION_DANGER" @click="confirmLeave">
@@ -529,10 +529,10 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
 
     <!-- ============ 阶段说明 ============ -->
     <p class="mt-8 max-w-[78ch] font-sans text-xs leading-relaxed text-black/60">
-      保存会通过 GitHub API 提交到数据仓；前台下次打开或切回页面时会自动同步（通常几秒），
-      断网时退回构建期快照。
-      <span class="font-bold text-black">「已上线」要求封面、Banner 与至少一个下载渠道</span>
-      —— 内容没凑齐时先留在草稿。
+      点「保存」会把改动提交到数据仓。前台下次打开或切回页面时会自动同步（一般几秒），
+      断网时会先用网站上原来的数据。
+      <span class="font-bold text-black">想让作品上线，至少要有封面、顶部宣传大图和一条下载渠道</span>；
+      这些还没凑齐时，先把状态留在「草稿」。
     </p>
 
     <!-- ============ 保存结果 ============ -->
@@ -564,9 +564,9 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
       class="mt-8 border border-[#cccccc] border-l-4 border-l-[#ff0000] px-6 py-5"
       role="alert"
     >
-      <p class="swiss-meta font-bold text-[#ff0000]">还有字段未通过校验</p>
+      <p class="swiss-meta font-bold text-[#ff0000]">还有内容没填对</p>
       <p class="mt-2 font-sans text-xs leading-relaxed text-black/70">
-        请修正下方标红的字段后再保存。错误会随输入实时更新。
+        请把下面标红的地方改好再保存。错误提示会随着输入实时更新。
       </p>
     </div>
 
@@ -580,7 +580,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
         保存被拦下了 —— 「已上线」状态还差 {{ publishIssues.length }} 项
       </p>
       <p class="mt-2 font-sans text-xs leading-relaxed text-black/70">
-        缺口清单在右栏「发布设置」区块里。内容没凑齐之前，可以先切回「草稿」保存。
+        缺什么列在右栏「发布设置」里。内容还没凑齐的话，可以先切回「草稿」保存。
       </p>
     </div>
 
@@ -613,7 +613,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
               control-id="f-author"
               required
               :error="shownErrors.author"
-              hint="可从已有作者中选择，或输入新作者"
+              hint="可以从已有作者里选，也可以直接输入新名字"
             >
               <input
                 id="f-author"
@@ -635,7 +635,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
               control-id="f-year"
               required
               :error="shownErrors.releaseYear"
-              hint="4 位年份，如 2019"
+              hint="填 4 位年份，比如 2019"
             >
               <!--
                 ⚠️ 刻意用 type="text" + inputmode="numeric"，不用 type="number"：
@@ -684,7 +684,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
               label="视频 URL"
               control-id="f-video"
               :error="shownErrors.videoUrl"
-              hint="可留空。填了必须是完整链接"
+              hint="可以不填；要填就填完整链接"
             >
               <input
                 id="f-video"
@@ -702,7 +702,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
               control-id="f-short"
               class="md:col-span-2"
               :error="shownErrors.shortDescription"
-              hint="显示在详情页标题下方，建议 40–80 字；留空则不显示"
+              hint="显示在详情页标题下面，建议 40–80 个字；不填就不显示"
             >
               <input
                 id="f-short"
@@ -748,7 +748,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
               label="封面图"
               ratio="aspect-video"
               :error="shownErrors.coverImage"
-              hint="列表卡片与搜索结果使用，建议 16:9 或更方"
+              hint="用在列表卡片和搜索结果里，建议 16:9 或更接近方形"
             />
             <AdminImageSlot
               field="bannerImage"
@@ -757,7 +757,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
               label="Banner 宣传图"
               ratio="aspect-[21/9]"
               :error="shownErrors.bannerImage"
-              hint="详情页顶部大图，建议 21:9 横幅"
+              hint="详情页顶部的大图，建议用 21:9 的横图"
             />
           </div>
         </AdminEditorSection>
@@ -823,12 +823,11 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
       <h2 id="danger-zone-title" class="mt-2 font-sans text-lg font-bold">永久删除这条作品</h2>
 
       <p class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
-        删除会从数据仓移除 <span class="font-bold text-black">{{ game.id }}</span>，
-        并清理只被它引用的上传图片。这一步在后台无法撤销 —— 真要找回，
-        只能去数据仓的 git 历史里 revert。
+        删除会把 <span class="font-bold text-black">{{ game.id }}</span> 从数据仓里移除，
+        并清掉只有它在用的上传图片。后台没法撤销；真要找回来，只能去数据仓的提交历史里回滚。
       </p>
       <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
-        如果只是不想让它在线上出现，用右栏「发布设置 → 下线」即可；下线不删数据，随时能恢复。
+        如果只是不想让它出现在线上，用右栏「发布设置 → 下线」就行。下线不会删数据，随时可以恢复。
       </p>
 
       <div class="mt-5">
@@ -846,14 +845,14 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
         @cancel="cancelDelete"
       >
         <p>
-          将从数据仓移除《{{ game.title }}》（<span class="font-bold tracking-[0.08em]">{{
+          会把《{{ game.title }}》（<span class="font-bold tracking-[0.08em]">{{
             game.id
           }}</span
-          >），并清理只被它引用的上传图片。
+          >）从数据仓里删掉，并清掉只有它在用的上传图片。
         </p>
         <p class="mt-3">
-          此操作不可撤销，后台无法恢复 —— 真要找回，只能去数据仓的 git 历史里 revert。
-          如果只是不想让它在线上出现，用右栏「发布设置 → 下线」即可；下线不删数据，随时能恢复。
+          这一步没法撤销，后台也找不回来。真要找回，只能去数据仓的提交历史里回滚。
+          如果只是不想让它出现在线上，用右栏「发布设置 → 下线」就行；下线不删数据，随时可以恢复。
         </p>
       </AdminConfirmDialog>
     </section>

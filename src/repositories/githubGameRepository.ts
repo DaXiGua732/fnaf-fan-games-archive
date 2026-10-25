@@ -67,7 +67,7 @@ function parseGames(text: string): AdminGame[] {
   }
   const games = (parsed as { games?: unknown } | null)?.games
   if (!Array.isArray(games)) {
-    throw new Error('数据仓的 db.json 结构不对：缺少 games 数组。')
+    throw new Error('数据仓里 db.json 的格式不对：找不到 games 列表。')
   }
   return normalizeGames(games as Game[])
 }
@@ -199,7 +199,7 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
     throw new Error(
       lastError instanceof Error
         ? lastError.message
-        : '数据在短时间内被别处反复改动，已放弃本次提交。请稍后重试。',
+        : '数据在短时间内被别处反复改动，这次提交没有成功。请稍后再试。',
     )
   }
 
@@ -207,7 +207,7 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
 
     await commit((current) => {
       const index = current.findIndex((game) => game.id === id)
-      if (index === -1) throw new Error(`updateGame: 找不到 id 为「${id}」的条目`)
+      if (index === -1) throw new Error(`找不到 id 为「${id}」的作品，可能已经被删掉了。`)
 
       const next = applyPatch(current[index], patch, account?.())
       updated = next
@@ -217,7 +217,7 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
       return { games, summary: `更新《${next.title || id}》的 ${fields || '字段'}` }
     })
 
-    if (!updated) throw new Error(`updateGame: 「${id}」没有产生改动`)
+    if (!updated) throw new Error(`「${id}」没有任何改动。`)
     return updated
   }
 
@@ -262,7 +262,7 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
         }
       })
 
-      if (!created) throw new Error('createGame: 没有产生改动')
+      if (!created) throw new Error('新建作品时没有产生任何改动。')
       return created
     },
 
@@ -298,7 +298,7 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
       // 「一键把线上数据仓覆盖回出厂内容」不是后台该有的能力。
       // 真要回滚，用 git revert —— 历史就在那里，比这个按钮精确得多。
       throw new Error(
-        '远程数据仓不支持「恢复出厂数据」。如需回滚，请在 GitHub 上对数据仓做 revert。',
+        '线上数据仓不支持「恢复出厂数据」。要回滚的话，请在 GitHub 上对数据仓做一次 revert。',
       )
     },
 

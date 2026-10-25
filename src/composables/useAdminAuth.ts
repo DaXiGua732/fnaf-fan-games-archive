@@ -123,11 +123,11 @@ async function login(input: string): Promise<boolean> {
   notice.value = ''
 
   if (!candidate) {
-    notice.value = '请先把令牌粘贴进来。'
+    notice.value = '还没粘贴令牌。'
     return false
   }
   if (!looksLikeToken(candidate)) {
-    notice.value = '这看起来不是 GitHub 的访问令牌（应以 github_pat_ 或 ghp_ 开头）。'
+    notice.value = '这不像 GitHub 令牌；正确的令牌以 github_pat_ 或 ghp_ 开头。'
     return false
   }
 
@@ -153,8 +153,8 @@ async function login(input: string): Promise<boolean> {
       error instanceof GithubApiError
         ? error.message
         : error instanceof Error
-          ? `无法连接 GitHub：${error.message}`
-          : '登录失败'
+          ? `连不上 GitHub：${error.message}`
+          : '登录没有成功，请再试一次。'
     return false
   } finally {
     checking.value = false

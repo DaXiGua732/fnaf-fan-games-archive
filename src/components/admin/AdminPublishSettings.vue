@@ -23,9 +23,9 @@ import AdminField from './AdminField.vue'
 const { draft, publishIssues } = useAdminGameDraftContext()
 
 const STATUS_OPTIONS: { value: GameStatus; hint: string }[] = [
-  { value: 'draft', hint: '前台不可见 —— 适合还没准备好的作品' },
+  { value: 'draft', hint: '前台看不到，适合还没做完的作品' },
   { value: 'published', hint: '前台正常展示' },
-  { value: 'offline', hint: '前台不可见，但数据完整保留 —— 下线用它，不要删数据' },
+  { value: 'offline', hint: '前台看不到，但数据都保留着。想暂时藏起来就选这个，别删数据' },
 ]
 
 const currentHint = computed(
@@ -49,7 +49,7 @@ const CHECKBOX_CLASS =
 <template>
   <div class="flex flex-col gap-8">
     <!-- ============ 状态 ============ -->
-    <AdminField label="状态" hint="发布状态只影响前台的可见性，不会删除任何数据">
+    <AdminField label="状态" hint="状态只决定前台能不能看到这款作品，不会删掉任何数据">
       <div class="flex flex-wrap gap-3">
         <button
           v-for="option in STATUS_OPTIONS"
@@ -82,7 +82,7 @@ const CHECKBOX_CLASS =
         </li>
       </ul>
       <p class="mt-3 font-sans text-xs leading-relaxed text-black/60">
-        草稿状态不受这些限制 —— 内容没凑齐前先留在「草稿」即可。
+        草稿不受这些限制。内容还没凑齐时，先留在「草稿」就好。
       </p>
     </div>
 
@@ -90,7 +90,7 @@ const CHECKBOX_CLASS =
     <AdminField
       label="归档"
       control-id="f-archived"
-      hint="归档只是「收起来」：默认列表不再显示，但不改发布状态"
+      hint="归档只是把它收起来：默认列表里不再显示，但发布状态不变"
     >
       <label class="inline-flex cursor-pointer items-center gap-3">
         <input id="f-archived" v-model="draft.archived" type="checkbox" :class="CHECKBOX_CLASS" />

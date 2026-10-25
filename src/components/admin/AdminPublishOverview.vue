@@ -107,7 +107,7 @@ const lastSaved = computed(() => {
           v-if="draft.status === 'published' && publishIssues.length"
           class="mt-4 font-sans text-xs leading-relaxed text-[#ff0000]"
         >
-          当前是「已上线」状态，但还差 {{ publishIssues.length }} 项——保存会被拦下。
+          现在是「已上线」，但还差 {{ publishIssues.length }} 项；补齐之前无法保存。
         </p>
       </div>
 
@@ -118,7 +118,7 @@ const lastSaved = computed(() => {
           class="group inline-flex w-full items-center justify-between gap-3 border border-black bg-white px-4 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:bg-black hover:text-white"
           @click="emit('preview')"
         >
-          <span>查看草稿效果</span>
+          <span>预览草稿</span>
           <span class="u-arrow" aria-hidden="true">&#8594;</span>
         </button>
 

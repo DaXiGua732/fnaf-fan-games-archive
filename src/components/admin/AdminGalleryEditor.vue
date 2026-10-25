@@ -147,7 +147,7 @@ async function trackFiles(files: FileList | null | undefined): Promise<void> {
       const squeezed = compressed > 0 ? `，其中 ${compressed} 张已自动压缩为 WebP` : ''
       notice.value =
         skipped > 0
-          ? `已上传 ${added} 张${squeezed}，跳过 ${skipped} 张（非图片 / 超 ${maxFileMb}MB / 尺寸不合格 / 超出上限）`
+          ? `已上传 ${added} 张${squeezed}，跳过 ${skipped} 张（不是图片 / 超过 ${maxFileMb}MB / 尺寸不合格 / 超过数量上限）`
           : `已上传 ${added} 张到数据仓${squeezed}`
     }
     return
@@ -197,7 +197,7 @@ async function trackFiles(files: FileList | null | undefined): Promise<void> {
   const added = addImages(accepted)
   notice.value =
     skipped > 0
-      ? `已加入 ${added} 张，跳过 ${skipped} 张（非图片 / 超 ${maxFileMb}MB / 超出上限）`
+      ? `已加入 ${added} 张，跳过 ${skipped} 张（不是图片 / 超过 ${maxFileMb}MB / 超过数量上限）`
       : ''
 }
 
@@ -221,7 +221,7 @@ function addFromInput(): void {
     return
   }
   if (!isValidImageRef(ref)) {
-    notice.value = '请填写站内路径（以 / 开头）或 http(s) 图片地址'
+    notice.value = '请填写网站内的图片路径（以 / 开头），或完整的 http(s) 图片地址'
     return
   }
   if (draftImages.value.includes(ref)) {
@@ -343,15 +343,15 @@ const SMALL_BUTTON =
           uploading
             ? `正在上传第 ${uploadProgress.done} / ${uploadProgress.total} 张……`
             : dragging
-              ? '松手即上传'
-              : '点击选择图片（可多选），或把图片拖到这里'
+              ? '松手就开始上传'
+              : '点击选择图片（可以多选），或者把图片拖到这里'
         }}
       </p>
       <p class="swiss-meta mt-2 text-black/45">
         {{
           storage === 'remote'
-            ? '逐张上传到数据仓，返回的完整地址进本条作品 —— 保存后前台即可使用'
-            : '未登录：文件只做本地预览、不会上传（刷新即失效）'
+            ? '会逐张上传到数据仓，图片地址自动填进这条作品；保存后前台就能看到'
+            : '还没登录：图片只在本地预览，不会上传（刷新就没了）'
         }}
       </p>
       <input
@@ -405,7 +405,7 @@ const SMALL_BUTTON =
       <li v-for="note in ratioNotes" :key="note" class="swiss-meta text-black/60">{{ note }}</li>
     </ul>
     <p v-else class="mt-3 font-sans text-xs text-black/45">
-      {{ draftImages.length }} / {{ IMAGE_LIMITS.maxGallery }} 张 · 顺序即前台展示顺序
+      {{ draftImages.length }} / {{ IMAGE_LIMITS.maxGallery }} 张 · 顺序就是前台展示顺序
     </p>
   </div>
 </template>

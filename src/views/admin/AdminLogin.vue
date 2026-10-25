@@ -48,15 +48,15 @@ const ACTION_PRIMARY =
     <h1 class="font-sans text-2xl font-bold uppercase tracking-tight md:text-3xl">管理登录</h1>
 
     <p class="mt-8 max-w-[68ch] font-sans text-sm leading-relaxed text-black/60">
-      这个后台没有账号密码 —— 凭据是一枚
-      <span class="font-bold text-black">GitHub 细粒度访问令牌</span>，
-      由站长签发给你。它只授权「数据仓」，所以
-      <span class="font-bold text-black">你能改游戏数据，但碰不到任何源代码</span>。
+      后台没有账号密码，登录用的是一枚
+      <span class="font-bold text-black">GitHub 令牌（细粒度访问令牌）</span>，
+      由站长单独发给你。它只允许你修改数据仓里的游戏内容，
+      <span class="font-bold text-black">动不了网站代码</span>。
     </p>
 
     <!-- ============ 怎么拿到令牌 ============ -->
     <section class="mt-10 max-w-[78ch] border border-[#cccccc] px-6 py-5">
-      <p class="swiss-meta text-black/60">第一步 · 拿到令牌（每人一枚，不要共用）</p>
+      <p class="swiss-meta text-black/60">第一步 · 拿到自己的令牌（每人一枚，别共用）</p>
       <ol class="mt-4 flex flex-col gap-3 font-sans text-xs leading-relaxed text-black/70">
         <li>
           1. 打开 GitHub 的
@@ -80,7 +80,7 @@ const ACTION_PRIMARY =
           <span class="font-bold text-black">Contents</span> 设为
           <span class="font-bold text-black">Read and write</span>（其余全部 No access）
         </li>
-        <li>4. 生成后复制那串以 <code class="border border-[#cccccc] px-1">github_pat_</code> 开头的令牌</li>
+        <li>4. 生成后，复制以 <code class="border border-[#cccccc] px-1">github_pat_</code> 开头的那串字符</li>
       </ol>
     </section>
 
@@ -102,7 +102,7 @@ const ACTION_PRIMARY =
 
         <div class="flex flex-wrap items-center gap-4">
           <button type="submit" :class="ACTION_PRIMARY" :disabled="checking">
-            {{ checking ? '校验中…' : '登录' }}
+            {{ checking ? '正在验证…' : '登录' }}
           </button>
           <RouterLink
             to="/"
@@ -117,8 +117,8 @@ const ACTION_PRIMARY =
         {{ notice }}
       </p>
       <p v-else class="mt-4 font-sans text-xs leading-relaxed text-black/45">
-        令牌只会存在这台设备的浏览器里，不会进入代码仓库；点「登出」即清除。
-        校验时会实际读一次数据仓 —— 确认它真的够用，而不是只看格式。
+        令牌只保存在这台设备的浏览器里，不会进入代码仓库；点「登出」就会清除。
+        登录时还会真的读一次数据仓，确认这枚令牌确实能改数据，而不只是格式对。
       </p>
     </section>
   </div>

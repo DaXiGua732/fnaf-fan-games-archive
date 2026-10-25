@@ -238,7 +238,7 @@ const CHECKBOX_CLASS =
               <button
                 type="button"
                 class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:text-[#ff0000]"
-                :title="`预览 ${game.title}（包含未上线的条目）`"
+                :title="`预览 ${game.title}（草稿和已下线也能看）`"
                 @click="openPreview(game)"
               >
                 预览 &#8599;
@@ -253,7 +253,7 @@ const CHECKBOX_CLASS =
                     : 'text-black/60 hover:text-[#ff0000]'
                 "
                 :disabled="Boolean(busyId)"
-                :title="`立即${toggleLabel(game)}（会提交到数据仓）`"
+                :title="`马上${toggleLabel(game)}（会保存到数据仓）`"
                 @click="toggleVisibility(game)"
               >
                 {{ busyId === game.id ? '处理中…' : toggleLabel(game) }}
@@ -276,7 +276,7 @@ const CHECKBOX_CLASS =
           <td :colspan="COLUMN_COUNT" class="px-6 py-20 md:px-8 md:py-24">
             <p class="font-sans text-xl font-bold uppercase tracking-tight">No Results</p>
             <p class="mt-5 max-w-[56ch] font-sans text-sm leading-relaxed text-black/60">
-              当前筛选条件下没有匹配的游戏。调整关键词或状态筛选，或使用工具栏的「清除全部条件」。
+              没有找到符合条件的游戏。换个关键词、调整筛选，或者点工具栏的「清除全部条件」。
             </p>
           </td>
         </tr>
@@ -295,14 +295,14 @@ const CHECKBOX_CLASS =
       @cancel="cancelDelete"
     >
       <p>
-        将从数据仓的 <span class="font-bold text-black">db.json</span> 中移除《{{
-          deleteTarget?.title
-        }}》（<span class="font-bold tracking-[0.08em]">{{ deleteTarget?.id }}</span
-        >），并清理只被它引用的上传图片。
+        会把《{{ deleteTarget?.title }}》（<span class="font-bold tracking-[0.08em]">{{
+          deleteTarget?.id
+        }}</span
+        >）从数据仓里删掉，并清掉只有它在用的上传图片。
       </p>
       <p class="mt-3">
-        此操作不可撤销，删除后条目不存在，无法通过筛选找回；前台下次打开或切回页面时
-        会自动同步（通常几秒）。
+        这一步没法撤销，删掉后也找不回来。前台下次打开或切回页面时会自动同步（一般几秒），
+        到时候它就会消失。
       </p>
     </AdminConfirmDialog>
     <!-- ============ 删除成功（就地确认） ============ -->
@@ -317,10 +317,10 @@ const CHECKBOX_CLASS =
           <p class="font-sans text-sm font-bold">已永久删除《{{ deleteDone.title }}》</p>
           <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/65">
             <template v-if="deleteDone.imagesCleaned > 0">
-              同时清理了 {{ deleteDone.imagesCleaned }} 张只被它引用的上传图片。
+              顺手删掉了 {{ deleteDone.imagesCleaned }} 张只有它在用的上传图片。
             </template>
-            <template v-else>它没有专属的上传图片需要清理。</template>
-            数据仓已提交；前台下次打开或切回页面时就会同步消失。
+            <template v-else>没有需要清理的专属图片。</template>
+            已经提交到数据仓，前台下次打开或切回页面时就会消失。
           </p>
         </div>
         <button

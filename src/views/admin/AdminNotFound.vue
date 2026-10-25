@@ -19,7 +19,7 @@ const route = useRoute()
     </h1>
 
     <p class="mt-8 max-w-[60ch] font-sans text-sm leading-relaxed text-black/60">
-      该后台路径不存在，可能是链接失效或地址打错。请从左侧分区导航进入对应模块。
+      这个后台地址不存在，可能是链接过期了，或者地址打错了。请从左侧导航进入需要的功能。
     </p>
 
     <p class="swiss-meta mb-4 mt-12 text-black/45">请求的路径</p>

@@ -581,12 +581,12 @@ async function uploadImage(
 async function deleteGame(id: string): Promise<DeleteOutcome> {
   const target = getGameById(id)
   if (!target) {
-    throw new Error('要删除的作品不存在 —— 可能已被别处删除，请刷新后重试。')
+    throw new Error('要删除的作品不存在，可能已经被别人删掉了。刷新页面后再试一次。')
   }
 
   const previousImages = imagesOf(target)
   const removed = await adminGameRepository.value.deleteGame(id)
-  if (!removed) throw new Error('数据里已经没有这条作品，未产生删除提交。')
+  if (!removed) throw new Error('数据里已经没有这条作品了，所以这次没有删除任何内容。')
 
   clearSelection()
   // 第二个参数为空：这条作品已经不在数据里，剩下的引用关系全在其它作品上

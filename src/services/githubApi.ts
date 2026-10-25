@@ -44,13 +44,13 @@ function describeError(status: number, detail: string): string {
     case 401:
       return '令牌无效或已过期。请到 GitHub 重新生成一个再登录。'
     case 403:
-      return '这枚令牌没有执行该操作的权限。请确认它已授权数据仓，且 Contents 权限为 Read and write。'
+      return '这枚令牌没有权限做这件事。请确认它已经授权数据仓，并且 Contents 权限设为 Read and write。'
     case 404:
-      return '找不到数据仓或其中的文件。请确认令牌已授权数据仓，且仓库里存在 db.json。'
+      return '找不到数据仓或里面的文件。请确认令牌已经授权数据仓，并且仓库里有 db.json。'
     case 409:
-      return '数据刚刚被别处改动过（冲突）。已经重新读取，请再试一次。'
+      return '数据刚被别处改过（冲突）。已经重新读取，请再试一次。'
     case 422:
-      return '请求被 GitHub 拒绝，通常是提交内容不合法。'
+      return 'GitHub 拒绝了这次提交，通常是内容格式不合法。'
     default:
       return `GitHub 返回 ${status}${detail ? `：${detail}` : ''}`
   }

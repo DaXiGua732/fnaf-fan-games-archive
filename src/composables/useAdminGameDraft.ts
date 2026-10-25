@@ -299,7 +299,7 @@ export function validateDraft(draft: GameDraft): DraftErrors {
     if (ref.length > IMAGE_LIMITS.maxLength) {
       errors[field] = `图片地址不能超过 ${IMAGE_LIMITS.maxLength} 个字符`
     } else if (!isValidImageRef(ref)) {
-      errors[field] = '请填写站内路径（以 / 开头）或 http(s) 图片地址'
+      errors[field] = '请填写网站内的图片路径（以 / 开头），或完整的 http(s) 图片地址'
     }
   }
 

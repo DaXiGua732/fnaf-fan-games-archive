@@ -198,7 +198,7 @@ async function onApply(): Promise<void> {
   if (!fetched || applying.value) return
 
   if (storage.value !== 'remote') {
-    error.value = '未登录 / 本机模式：图片无法上传。请先登录后再导入。'
+    error.value = '还没登录（或正在用本地数据）：图片传不上去，请登录后再导入。'
     return
   }
 
@@ -292,9 +292,9 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
 <template>
   <div>
     <p class="max-w-[78ch] font-sans text-xs leading-relaxed text-black/60">
-      自动抓取标题、作者、年份、引擎、简介与图片。
-      <span class="font-bold text-black">游戏文件不在自动导入范围内</span>
-      —— 下载渠道仍需你手动下载、上传并填写。
+      会自动填好标题、作者、年份、引擎、简介和图片。
+      <span class="font-bold text-black">游戏文件不在自动导入范围内</span>，
+      下载渠道还得你自己下载、上传并填写。
     </p>
 
     <!-- 方式一：浏览器扩展导出的 ZIP（运维主路径） -->
@@ -303,10 +303,10 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
       @dragover.prevent
       @drop.prevent="onDrop"
     >
-      <p class="swiss-meta font-bold text-black">方式一 · 扩展导出的 ZIP（推荐）</p>
+      <p class="swiss-meta font-bold text-black">方式一 · 用扩展导出的 ZIP（推荐）</p>
       <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/60">
-        在 GameJolt 作品页点右下角「导出到 FNAF 档案」，再把下载的 ZIP 拖到这里。
-        不需要 Node、不需要保持任何本机进程开启。
+        打开 GameJolt 的作品页，点右下角的「导出到 FNAF 档案」，再把下载好的 ZIP 拖到这里。
+        不用装 Node，也不用一直开着电脑上的程序。
       </p>
       <div class="mt-4 flex flex-wrap items-center gap-3">
         <input
@@ -329,15 +329,15 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
         <span v-if="zipName" class="font-sans text-xs text-black/60">
           已读取：{{ zipName }}
         </span>
-        <span v-if="zipLoading" class="swiss-meta text-black/45">正在校验和解压…</span>
+        <span v-if="zipLoading" class="swiss-meta text-black/45">正在检查并解压…</span>
       </div>
     </div>
 
     <!-- 方式二：本机助手（开发 / 调试备用） -->
     <p class="mt-4 max-w-[78ch] border border-[#cccccc] bg-[#f9f9f9] px-4 py-3 font-sans text-xs leading-relaxed text-black/60">
-      方式二 · 本机助手（开发备用）：在项目目录运行
+      方式二 · 本机助手（开发调试用）：在项目目录运行
       <code class="font-mono text-[11px] font-bold text-black">npm run gamejolt:helper</code>
-      ，保持窗口开启，再粘贴链接抓取。助手只代理 GameJolt 元数据，不会接触数据仓令牌。
+      ，窗口别关，然后粘贴链接抓取。助手只负责读取 GameJolt 的公开信息，碰不到数据仓的令牌。
     </p>
 
     <div class="mt-3 flex flex-wrap items-stretch gap-3">
@@ -446,11 +446,11 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
           v-if="storage !== 'remote'"
           class="mt-3 font-sans text-xs leading-relaxed text-[#ff0000]"
         >
-          未登录：可以预览，但图片不会上传。请先登录后再导入。
+          还没登录：可以先预览，但图片不会上传。请登录后再导入。
         </p>
         <p v-else class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-black/60">
-          会覆盖标题、作者、年份、引擎、简介与标签；图片会立即上传到数据仓。
-          <span class="font-bold text-black">下载渠道和发布设置不会改动。</span>
+          会覆盖标题、作者、年份、引擎、简介和标签，图片会马上传到数据仓。
+          <span class="font-bold text-black">下载渠道和发布设置不会动。</span>
         </p>
       </div>
     </div>
@@ -465,7 +465,7 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
       <p class="swiss-meta text-black/60">导入结果</p>
       <p class="mt-2 font-sans text-sm font-bold">{{ resultText }}</p>
       <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
-        还需要点右上角「保存」才会写入数据仓。游戏下载资源请手动补充。
+        别忘了点右上角「保存」，改动才会写进数据仓。游戏下载资源还需要你手动补上。
       </p>
       <ul v-if="result.notes.length" class="mt-3 space-y-1">
         <li

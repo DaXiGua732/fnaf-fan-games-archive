@@ -39,10 +39,10 @@ const backTo = computed(() =>
     <div class="border border-[#ff0000] px-6 py-5" role="status">
       <p class="swiss-meta font-bold text-[#ff0000]">预览 · 未保存</p>
       <p class="mt-2 max-w-[78ch] font-sans text-sm leading-relaxed text-black/70">
-        下面就是<span class="font-bold text-black">前台详情页的真实渲染结果</span>，
-        用的是编辑页里<span class="font-bold text-black">当前（可能还没保存）</span>的内容。
-        <span class="font-bold text-black">它不会对外可见，也不会写进数据仓</span> ——
-        想真正生效，回编辑页点「保存」。
+        下面就是<span class="font-bold text-black">前台详情页的真实样子</span>，
+        用的是编辑页里<span class="font-bold text-black">当前的内容（可能还没保存）</span>。
+        <span class="font-bold text-black">这个页面只有你能看到，也不会写进数据仓</span>；
+        想让它真正生效，回编辑页点「保存」。
       </p>
       <div class="mt-4 flex flex-wrap items-center gap-6">
         <RouterLink
@@ -65,8 +65,8 @@ const backTo = computed(() =>
     <div v-if="!game" class="mt-8 border border-[#cccccc] px-6 py-5">
       <p class="swiss-meta text-black/60">没有可预览的内容</p>
       <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
-        预览内容只存在这一次浏览里（刷新或直接打开这个地址都会丢）——
-        请回到编辑页点「预览」重新打开。
+        预览内容只在这一次打开里有效，刷新或直接打开这个地址都会丢失。
+        请回到编辑页，点「预览」重新打开。
       </p>
     </div>
 

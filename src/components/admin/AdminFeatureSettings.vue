@@ -31,7 +31,7 @@ const INPUT_CLASS =
     <AdminField
       label="首页推荐位"
       control-id="f-featured"
-      hint="标记后，前台选择「推荐」排序时会优先展示"
+      hint="勾上以后，前台按「推荐」排序时会优先显示它"
     >
       <label class="inline-flex cursor-pointer items-center gap-3">
         <input id="f-featured" v-model="draft.featured" type="checkbox" :class="CHECKBOX_CLASS" />
@@ -43,7 +43,7 @@ const INPUT_CLASS =
       label="排序权重"
       control-id="f-sort-order"
       :error="sortError"
-      hint="推荐排序中的优先级，整数，越大越靠前；留空表示 0"
+      hint="数字越大排得越前，填整数，留空按 0 算。只在「推荐」排序里起作用"
     >
       <input
         id="f-sort-order"

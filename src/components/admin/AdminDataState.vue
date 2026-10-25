@@ -22,9 +22,9 @@ const { ready, loadError, reload } = useAdminGames()
     role="status"
     aria-live="polite"
   >
-    <p class="swiss-meta text-black/60">数据加载中</p>
+    <p class="swiss-meta text-black/60">正在读取数据</p>
     <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
-      正在从数据仓读取最新数据……
+      正在从数据仓读取最新内容，请稍等……
     </p>
   </div>
 

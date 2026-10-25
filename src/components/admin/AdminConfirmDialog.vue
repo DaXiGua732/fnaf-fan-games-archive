@@ -81,7 +81,7 @@ onUnmounted(() => {
         aria-describedby="admin-confirm-desc"
       >
         <header class="border-b border-black px-6 py-4">
-          <p class="swiss-meta text-black/45">二次确认</p>
+          <p class="swiss-meta text-black/45">再确认一次</p>
           <h2 id="admin-confirm-title" class="mt-2 font-sans text-xl font-bold">{{ title }}</h2>
         </header>
 
@@ -110,7 +110,7 @@ onUnmounted(() => {
             :disabled="busy"
             @click="emit('confirm')"
           >
-            {{ busy ? '删除中…' : confirmLabel }}
+            {{ busy ? '正在删除…' : confirmLabel }}
           </button>
         </footer>
       </div>

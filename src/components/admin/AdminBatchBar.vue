@@ -53,9 +53,9 @@ const ACTIONS: BatchActionDef[] = [
 /** 危险动作的后果说明。写清楚**会发生什么**，而不是笼统地问「确定吗」 */
 const DANGER_NOTES: Partial<Record<BatchActionId, string>> = {
   unpublish:
-    '下线后这些作品会立即从前台消失（前台只展示已上线作品）。数据仍保留在后台，可随时重新上线。',
+    '下线后，这些作品会马上从网站上消失（前台只展示已上线的作品）。数据还在后台，随时可以重新上线。',
   archive:
-    '归档后这些作品会从默认列表与状态筛选里收起，需要切到「已归档」才看得到。归档不改发布状态，取消归档也不会自动重新上线。',
+    '归档后，这些作品会从默认列表和状态筛选里收起来，要切到「已归档」才看得到。归档不会改变发布状态，取消归档也不会自动重新上线。',
 }
 
 const {
@@ -225,7 +225,7 @@ function chipClass(active: boolean): string {
 <template>
   <!-- ============ 未选择：一行细提示 ============ -->
   <section v-if="selectedCount === 0" class="border border-[#cccccc] px-6 py-4">
-    <p class="swiss-meta text-black/45">未选择任何作品 · 勾选表格左侧复选框后可批量操作</p>
+    <p class="swiss-meta text-black/45">还没选中作品 · 勾选表格左边的方框，就能一次处理多款作品</p>
   </section>
 
   <!-- ============ 已选择 ============ -->
@@ -268,7 +268,7 @@ function chipClass(active: boolean): string {
     <!-- ---------- 添加标签 ---------- -->
     <div v-if="panel === 'add-tags'" class="border-t border-black px-6 py-5">
       <label class="swiss-meta mb-3 block text-black/60" for="admin-batch-tags">
-        添加标签 · 应用到 {{ selectedCount }} 项（多个标签用逗号分隔）
+        添加标签 · 应用到 {{ selectedCount }} 项（多个标签用逗号隔开）
       </label>
       <input
         id="admin-batch-tags"
@@ -281,7 +281,7 @@ function chipClass(active: boolean): string {
       />
 
       <div v-if="availableTags.length" class="mt-5">
-        <p class="swiss-meta mb-3 text-black/60">快捷填入已有标签</p>
+        <p class="swiss-meta mb-3 text-black/60">从目录里点选已有标签</p>
         <div class="flex flex-wrap gap-3">
           <button
             v-for="tag in availableTags"
@@ -296,7 +296,7 @@ function chipClass(active: boolean): string {
         </div>
       </div>
       <p v-else class="swiss-meta mt-4 text-black/35">
-        目录中还没有任何标签，直接输入新标签名即可
+        目录里还没有标签，直接输入新名字就行
       </p>
 
       <p v-if="parsedTags.length" class="mt-4 font-sans text-xs text-black/60">
@@ -347,9 +347,9 @@ function chipClass(active: boolean): string {
       </template>
 
       <p v-else class="max-w-[74ch] font-sans text-xs leading-relaxed text-black/60">
-        所选作品没有共同的标签，因此没有可批量移除的目标。只有
+        所选作品没有共同的标签，所以没有能一起移除的标签。只有
         <span class="font-bold text-black">所有</span>
-        选中项都拥有的标签才会出现在这里 —— 否则移除操作对其中一部分就是空操作。
+        选中作品都有的标签才会列在这里；否则对其中一部分作品来说，点了也不会有变化。
       </p>
     </div>
 
@@ -369,7 +369,7 @@ function chipClass(active: boolean): string {
       />
 
       <div class="mt-5">
-        <p class="swiss-meta mb-3 text-black/60">选择现有作者</p>
+        <p class="swiss-meta mb-3 text-black/60">或者从现有作者里选</p>
         <div class="flex flex-wrap gap-3">
           <button
             v-for="author in availableAuthors"

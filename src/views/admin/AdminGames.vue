@@ -87,8 +87,8 @@ const pageSizeValue = computed<string>({
     </div>
 
     <p class="mt-8 max-w-[68ch] font-sans text-sm leading-relaxed text-black/60">
-      管理本站收录的所有游戏资源。支持关键词搜索、状态 / 作者 / 标签筛选与多种排序，
-      勾选后可对多款作品执行批量操作；点表格行内的「编辑」进入单条编辑页。
+      这里管理网站上收录的所有游戏。可以搜索，按状态、作者、标签筛选，也能一次勾选多款作品批量处理；
+      点表格里的「编辑」就能修改单款作品。
     </p>
 
     <!-- ============ 删除结果 ============ -->
@@ -106,9 +106,9 @@ const pageSizeValue = computed<string>({
           </p>
           <p class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
             <template v-if="lastDelete.imagesCleaned > 0">
-              同时清理了 {{ lastDelete.imagesCleaned }} 张只被它引用的上传图片。
+              顺手删掉了 {{ lastDelete.imagesCleaned }} 张只有它在用的上传图片。
             </template>
-            <template v-else>它没有专属的上传图片需要清理。</template>
+            <template v-else>没有需要清理的专属图片。</template>
             {{ STORAGE_NOTICE[lastDelete.storage] }}
           </p>
         </div>
@@ -128,18 +128,18 @@ const pageSizeValue = computed<string>({
         class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-6 py-4 [&::-webkit-details-marker]:hidden"
       >
         <p class="swiss-meta text-black/60">
-          数据现状 ·
+          数据存在哪里 ·
           <span class="font-bold text-black">
             {{
               storage === 'remote'
-                ? '数据仓（改动会提交到数据仓）'
+                ? '线上数据仓（改动会保存到线上）'
                 : storage === 'local'
-                  ? '本机浏览器（不写线上）'
-                  : '仅内存（刷新即丢）'
+                  ? '这台设备的浏览器（不影响线上）'
+                  : '临时内存（刷新就没了）'
             }}
           </span>
         </p>
-        <span class="swiss-meta text-black/35">展开 / 收起说明</span>
+        <span class="swiss-meta text-black/35">展开 / 收起</span>
       </summary>
 
       <div class="border-t border-[#cccccc] px-6 py-5">
@@ -147,23 +147,23 @@ const pageSizeValue = computed<string>({
       <!-- 三种写入位置各说各的实话，不能笼统写「已保存」 -->
       <template v-if="storage === 'remote'">
         <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
-          数据来自 <span class="font-bold text-black">数据仓</span>。你的改动会通过 GitHub API
-          <span class="font-bold text-black">提交到数据仓</span> —— 那是线上真实数据。
-          前台下次打开或切回页面时会自动同步最新数据（通常几秒）；断网 / 数据仓不可达时退回构建期快照。
-          提交历史就是完整的回滚手段。
+          这里显示的是 <span class="font-bold text-black">数据仓</span> 里的最新内容。
+          你的改动会直接 <span class="font-bold text-black">提交到数据仓</span>，线上用的就是这份数据。
+          前台下次打开或切回页面时会自动同步（一般几秒内）；如果断网或数据仓暂时打不开，
+          就先用网站上原来的数据。改错了，可以去数据仓的提交历史里回滚。
         </p>
         <p class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
-          多人同时编辑时，提交若撞车会自动重读最新内容再重放你的改动，无需手工处理。
+          如果两个人同时保存，系统会重新读一遍最新内容，再把你的改动应用上去，不需要你手动处理。
         </p>
       </template>
 
       <p v-else class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
         {{
           storage === 'local'
-            ? 'db.json 是出厂数据。你在后台做的改动保存在这台设备的浏览器里 —— 刷新不丢，但它不是线上正式数据，也不会写回代码仓库。'
-            : '当前浏览器不允许写入本地存储（隐私模式或配额已满），改动只存在内存里 —— 刷新页面即恢复原状。'
+            ? '后台现在用的是本地自带的演示数据（db.json）。你的改动只保存在这台设备的浏览器里，刷新不会丢，但不会影响线上，也不会进到代码仓库。'
+            : '浏览器不让我们写本地存储（可能是隐私模式，或存储空间满了），所以改动只存在内存里，刷新页面就恢复原样。'
         }}
-        清掉浏览器数据、或者用下面的「恢复出厂数据」都能回到出厂状态。
+        想回到最初的内容，点下面的「恢复出厂数据」就行。
       </p>
 
       <!-- 「恢复出厂数据」只在本地模式下有意义：远程模式下它等于用出厂内容覆盖线上数据仓 -->
@@ -188,10 +188,10 @@ const pageSizeValue = computed<string>({
         role="alert"
         aria-live="assertive"
       >
-        <p class="swiss-meta font-bold text-[#ff0000]">确认恢复出厂数据？</p>
+        <p class="swiss-meta font-bold text-[#ff0000]">确定恢复出厂数据？</p>
         <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
-          所有作品会变回 db.json 里的内容 ——
-          <span class="font-bold text-black">你在后台做过的全部改动都会丢失，且无法撤销。</span>
+          所有作品都会变回 db.json 里的内容 ——
+          <span class="font-bold text-black">你在后台做过的改动会全部丢失，而且无法撤销。</span>
         </p>
         <div class="mt-4 flex flex-wrap gap-3">
           <button
@@ -246,7 +246,7 @@ const pageSizeValue = computed<string>({
             v-if="lastOutcome.failed > 0 && lastOutcome.error"
             class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-[#ff0000]"
           >
-            失败原因：{{ lastOutcome.error }}。已成功的条目不会回滚；可以重试失败的条目。
+            失败原因：{{ lastOutcome.error }}。已经改好的部分不会退回，你可以只重试失败的那些。
           </p>
           <p class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
             {{ STORAGE_NOTICE[lastOutcome.storage] }}
@@ -267,7 +267,7 @@ const pageSizeValue = computed<string>({
       <div>
         <h2 class="font-sans text-2xl font-bold uppercase tracking-tight">收录作品</h2>
         <p class="swiss-meta mt-2 text-black/60" aria-live="polite">
-          命中 {{ total }} 款 · 第 {{ currentPage }} / {{ totalPages }} 页
+          找到 {{ total }} 款 · 第 {{ currentPage }} / {{ totalPages }} 页
         </p>
       </div>
 

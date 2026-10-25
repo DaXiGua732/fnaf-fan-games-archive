@@ -213,7 +213,7 @@ const URL_INPUT =
     <p v-if="uploading" class="swiss-meta mt-2 text-black/60" role="status">上传中……</p>
 
     <p v-else-if="uploadedJustNow" class="swiss-meta mt-2 text-black/60" role="status">
-      已上传到数据仓 —— Pages 大约 1 分钟后才会提供这张图，期间预览可能显示不出来
+      已上传到数据仓。网站大约 1 分钟后才会显示这张新图，这期间预览可能是空的
     </p>
 
     <p v-if="uploadNote && !uploading" class="swiss-meta mt-2 text-black/60">
@@ -221,7 +221,7 @@ const URL_INPUT =
     </p>
 
     <p v-else-if="isLocal" class="swiss-meta mt-2 font-bold text-[#ff0000]">
-      本地临时预览 · 未上传（刷新即失效）
+      只是本地预览，还没上传（刷新就没了）
     </p>
 
     <p v-if="ratioNotice && !uploading" class="swiss-meta mt-2 text-black/60">
@@ -247,17 +247,17 @@ const URL_INPUT =
       <p class="font-sans text-xs font-bold">
         {{
           uploading
-            ? '正在上传到数据仓……'
+            ? '正在上传……'
             : dragging
-              ? '松手即上传'
-              : '点击选择文件，或把图片拖到这里'
+              ? '松手就开始上传'
+              : '点击选择文件，或者把图片拖到这里'
         }}
       </p>
       <p class="swiss-meta mt-2 text-black/45">
         {{
           storage === 'remote'
-            ? `文件会上传到数据仓，完整地址写进本条作品。单张不超过 ${maxFileMb} MB；上传前会自动缩到合适尺寸并转成 WebP（GIF / SVG 保持原样）`
-            : '未登录：文件只做本地预览、不会上传（刷新即失效）'
+            ? `文件会传到数据仓，图片地址会自动填进这条作品。单张不能超过 ${maxFileMb} MB；上传前会自动缩小并转成 WebP（GIF 和 SVG 保持原样）`
+            : '还没登录：图片只在本地预览，不会上传（刷新就没了）'
         }}
       </p>
       <input

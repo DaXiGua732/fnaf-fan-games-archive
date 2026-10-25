@@ -453,7 +453,7 @@ await step('Phase 2 · 列表默认展示全部作品', async () => {
   await go('/admin/games', '收录作品')
   const n = await rowCount()
   assert(n === TOTAL_COUNT, `应有 ${TOTAL_COUNT} 行，实际 ${n}`)
-  await need('未选择任何作品')
+  await need('还没选中作品')
   await need('已上线')
   await shot('04-admin-games')
 })
@@ -824,7 +824,7 @@ await step('Phase 6 · 标签页搜索', async () => {
   await go('/admin/taxonomy', '标签与作者')
   await page.fill('#tag-search', '3d')
   await page.waitForTimeout(300)
-  await need('命中 1 /')
+  await need('找到 1 /')
   await page.fill('#tag-search', 'zzz')
   await page.waitForTimeout(300)
   await need('没有匹配的标签')
@@ -923,11 +923,11 @@ await step('Phase 7 · 封面与图库带出真实数据', async () => {
 await step('Phase 7 · 封面地址校验：非法拒绝、合法通过', async () => {
   await page.fill('#f-cover-url', 'nope')
   await page.waitForTimeout(300)
-  await need('请填写站内路径（以 / 开头）或 http(s) 图片地址')
+  await need('请填写网站内的图片路径（以 / 开头），或完整的 http(s) 图片地址')
   await shot('22-cover-error')
   await page.fill('#f-cover-url', TEST_GAME.coverImage ?? '')
   await page.waitForTimeout(300)
-  await needNot('请填写站内路径（以 / 开头）或 http(s) 图片地址')
+  await needNot('请填写网站内的图片路径（以 / 开头），或完整的 http(s) 图片地址')
 })
 
 await step('Phase 7 · 图库上移改变顺序、下移还原', async () => {
@@ -957,7 +957,7 @@ await step('Phase 7 · 图库地址校验与增删', async () => {
   await page.fill('#gallery-url', 'not a path')
   await btn('加入图片').click()
   await page.waitForTimeout(300)
-  await need('请填写站内路径（以 / 开头）或 http(s) 图片地址')
+  await need('请填写网站内的图片路径（以 / 开头），或完整的 http(s) 图片地址')
 
   await page.fill('#gallery-url', '/images/ui-test-gallery.png')
   await btn('加入图片').click()
@@ -1260,7 +1260,7 @@ await step('永久删除 · 二次确认后删除，回到列表且条目消失'
   // 再搜同一条 → 表格进入空状态（空状态本身也占一行，所以断言文案而不是行数）
   await page.fill('#admin-search', 'UI Test Sample')
   await page.waitForTimeout(600)
-  await need('当前筛选条件下没有匹配的游戏')
+  await need('没有找到符合条件的游戏')
   await shot('45-deleted')
 })
 
@@ -1332,7 +1332,7 @@ await step('Phase 16 · 后台改状态会提交到数据仓（开发环境前�
    ====================================================================== */
 await step('Phase 12 · 提示条如实说明改动写到了哪里', async () => {
   await go('/admin/games', '收录作品')
-  await need('数据现状')
+  await need('数据存在哪里')
   // 远程模式下说明的是「提交到数据仓」，不再说「存在这台设备的浏览器里」
   await need('数据仓')
   await needNot('这台设备的浏览器')
@@ -1362,13 +1362,13 @@ await step('Phase 12 · 改动在真刷新之后仍然存在', async () => {
 
 await step('Phase 16 · 远程模式下不提供「恢复出厂数据」', async () => {
   await go('/admin/games', '收录作品')
-  await need('数据现状')
+  await need('数据存在哪里')
   await need('数据仓')
 
   // ⚠️ 这个按钮在远程模式下必须消失：它等于「用出厂内容覆盖线上数据仓」，
   //    不是后台该有的能力。要回滚请对数据仓做 git revert。
   await needNot('恢复出厂数据')
-  await need('提交到数据仓')
+  await need('改动会保存到线上')
   await shot('36-remote-no-reset')
 })
 

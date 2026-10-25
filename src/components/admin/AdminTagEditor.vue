@@ -109,7 +109,7 @@ function pick(tag: string): void {
 
     <p v-if="notice" class="mt-3 font-sans text-xs text-[#ff0000]" role="alert">{{ notice }}</p>
     <p v-else class="mt-3 font-sans text-xs text-black/45">
-      {{ draftTags.length }} / {{ TAG_LIMITS.maxPerGame }} 个标签 · 输入一个目录里没有的名字即可创建新标签
+      {{ draftTags.length }} / {{ TAG_LIMITS.maxPerGame }} 个标签 · 输入一个目录里没有的名字，就会新建一个标签
     </p>
 
     <!-- ============ 候选 ============ -->

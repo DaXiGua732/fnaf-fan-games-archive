@@ -1077,7 +1077,7 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   check(
     '封面 · 相对路径报错',
     validateDraft(imgDraft).coverImage,
-    '请填写站内路径（以 / 开头）或 http(s) 图片地址',
+    '请填写网站内的图片路径（以 / 开头），或完整的 http(s) 图片地址',
   )
   imgDraft.coverImage = ''
   imgDraft.bannerImage = '/images/' + 'x'.repeat(IMAGE_LIMITS.maxLength)

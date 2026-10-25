@@ -180,8 +180,8 @@ const TILE_BUTTON =
       否则一行出错时用户会在同一屏里看到两遍完全相同的句子，分不清哪句是「提示」哪句是「报错」。
     -->
     <p v-else class="mt-3 font-sans text-xs text-black/45">
-      {{ draftDownloads.length }} / {{ DOWNLOAD_LIMITS.maxPerGame }} 个渠道 · 顺序即前台展示顺序 ·
-      下载地址需以 http 或 https 开头
+      {{ draftDownloads.length }} / {{ DOWNLOAD_LIMITS.maxPerGame }} 个渠道 · 顺序就是前台展示顺序 ·
+      下载地址要以 http 或 https 开头
     </p>
   </div>
 </template>

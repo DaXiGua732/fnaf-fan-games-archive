@@ -199,18 +199,18 @@ const RENAME_INPUT =
     </div>
 
     <p class="mt-8 max-w-[78ch] font-sans text-sm leading-relaxed text-black/60">
-      标签和作者都不是独立的表，而是挂在每条作品上的字符串。
-      因此「重命名」的本质是<span class="font-bold text-black">改掉所有引用它的作品</span>；
-      作者是必填字段，只能改名或合并，没有删除。
+      标签和作者没有单独的数据表，它们只是写在每款作品上的名字。
+      所以「重命名」实际上是把<span class="font-bold text-black">所有用到这个名字的作品一起改掉</span>；
+      作者是必填项，只能改名或合并，不能删。
     </p>
 
-    <!-- ============ 数据现状 ============ -->
+    <!-- ============ 创建时间说明 ============ -->
     <div class="mt-8 border border-[#cccccc] border-l-4 border-l-black px-6 py-5">
-      <p class="swiss-meta text-black/60">数据现状</p>
+      <p class="swiss-meta text-black/60">关于创建时间</p>
       <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
-        数据源里的标签<span class="font-bold text-black">没有独立存储，也没有创建时间</span>。
-        「创建时间」列只记录本次会话中由后台首次引入的标签，其余显示「—」——
-        不为了填满一列而伪造日期。
+        标签<span class="font-bold text-black">没有单独存起来，也没有记录创建时间</span>。
+        「创建时间」这一列只显示这次打开后台后新加的标签，其他标签显示「—」。
+        我们不会为了填满这一列而编一个日期。
       </p>
     </div>
 
@@ -266,8 +266,8 @@ const RENAME_INPUT =
       >
         <p class="swiss-meta font-bold text-[#ff0000]">确认删除标签「{{ pendingDeleteTag }}」？</p>
         <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
-          该标签当前被 {{ pendingDeleteUsage }} 款作品使用，删除后会从这些作品上一并摘掉。
-          作品本身不会被删除，但 <span class="font-bold text-black">这个操作影响多条记录</span>。
+          现在有 {{ pendingDeleteUsage }} 款作品在用这个标签。删除后，它会从这些作品上一起消失；
+          作品本身不会被删，但 <span class="font-bold text-black">这个操作会同时改动多条作品</span>。
         </p>
         <div class="mt-5 flex flex-wrap gap-3">
           <button type="button" :class="DANGER_BUTTON" :disabled="working" @click="confirmDeleteTag">
@@ -303,7 +303,7 @@ const RENAME_INPUT =
       </div>
 
       <p class="swiss-meta mb-4 mt-8 text-black/60">
-        标签列表 · 命中 {{ visibleTags.length }} / {{ allTags.length }}
+        标签列表 · 找到 {{ visibleTags.length }} / {{ allTags.length }}
       </p>
 
       <div class="overflow-x-auto border border-black">
@@ -356,7 +356,7 @@ const RENAME_INPUT =
                     v-else-if="tagRenamePreview && tagRenamePreview !== tag.name"
                     class="mt-2 font-sans text-xs text-black/50"
                   >
-                    将重命名为「{{ tagRenamePreview }}」，并同步更新所有使用它的作品
+                    会改成「{{ tagRenamePreview }}」，所有用到它的作品也会一起改
                   </p>
                 </template>
 
@@ -399,7 +399,7 @@ const RENAME_INPUT =
                 <p class="mt-5 max-w-[56ch] font-sans text-sm leading-relaxed text-black/60">
                   {{
                     allTags.length === 0
-                      ? '目录中还没有任何标签。到作品编辑页的「标签」区块添加即可。'
+                      ? '还没有任何标签。到作品编辑页的「标签」区块添加就行。'
                       : '没有匹配的标签，换个关键词试试。'
                   }}
                 </p>
@@ -423,8 +423,8 @@ const RENAME_INPUT =
       </div>
 
       <p class="mt-6 max-w-[78ch] font-sans text-sm leading-relaxed text-black/60">
-        作者是作品的必填字段，所以没有删除操作。重命名会同时改掉所有使用该名字的作品；
-        输入一个已存在的名字就是合并。
+        作者是每款作品都必须填的内容，所以没有删除。改名会同时改掉所有用这个名字的作品；
+        输入一个已经存在的名字，就等于把两边合并。
       </p>
 
       <!-- 搜索 -->
@@ -451,7 +451,7 @@ const RENAME_INPUT =
       </div>
 
       <p class="swiss-meta mb-4 mt-8 text-black/60">
-        作者列表 · 命中 {{ visibleAuthors.length }} / {{ allAuthors.length }}
+        作者列表 · 找到 {{ visibleAuthors.length }} / {{ allAuthors.length }}
       </p>
 
       <div class="overflow-x-auto border border-black">
@@ -511,8 +511,8 @@ const RENAME_INPUT =
                     v-else-if="authorRenamePreview && authorRenamePreview !== author.name"
                     class="mt-2 font-sans text-xs text-black/50"
                   >
-                    将改名为「{{ authorRenamePreview }}」，影响 {{ editingAuthorUsage }} 款作品；
-                    若已存在同名作者则合并。
+                    会改成「{{ authorRenamePreview }}」，影响 {{ editingAuthorUsage }} 款作品；
+                    如果已经有同名作者，两边会合并。
                   </p>
                 </template>
 
@@ -538,7 +538,7 @@ const RENAME_INPUT =
               <td colspan="3" class="px-6 py-20 md:px-8 md:py-24">
                 <p class="font-sans text-xl font-bold uppercase tracking-tight">No Results</p>
                 <p class="mt-5 max-w-[56ch] font-sans text-sm leading-relaxed text-black/60">
-                  {{ allAuthors.length === 0 ? '目录中还没有任何作者。' : '没有匹配的作者，换个关键词试试。' }}
+                  {{ allAuthors.length === 0 ? '还没有任何作者。' : '没有匹配的作者，换个关键词试试。' }}
                 </p>
               </td>
             </tr>

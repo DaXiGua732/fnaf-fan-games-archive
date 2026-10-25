@@ -170,7 +170,7 @@ function tabClass(active: boolean): string {
       v-if="availableTags.length === 0"
       class="border-t border-[#cccccc] px-5 py-2 swiss-meta text-black/35 md:px-6"
     >
-      数据中暂无标签，标签筛选不可用
+      还没有任何标签，所以暂时不能按标签筛选
     </p>
   </section>
 </template>
