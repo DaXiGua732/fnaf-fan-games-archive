@@ -305,13 +305,13 @@ await resetLocalData()
 /* ======================================================================
    〇、主题系统 —— 模式 / 强调色 / 持久化 / 深色首屏
    ====================================================================== */
-await step('主题 · 切夜间 + KAITO，颜色与设置都持久化', async () => {
+await step('主题 · 切夜间 + KAITO蓝，颜色与设置都持久化', async () => {
   await go('/', 'FNAF Fan Games')
   const themeButton = page.getByRole('button', { name: '主题', exact: true }).first()
 
   await themeButton.click()
   await page.getByRole('button', { name: '夜间', exact: true }).click()
-  await page.getByRole('button', { name: 'KAITO', exact: true }).click()
+  await page.getByRole('button', { name: 'KAITO蓝', exact: true }).click()
   // body 的颜色过渡是 150ms，等它落定再读 computed style
   await page.waitForTimeout(250)
 
@@ -339,10 +339,10 @@ await step('主题 · 切夜间 + KAITO，颜色与设置都持久化', async ()
   assert(persisted.mode === 'dark', `刷新后 data-mode 应为 dark，实际 ${persisted.mode}`)
   assert(persisted.theme === 'kaito', `刷新后 data-theme 应为 kaito，实际 ${persisted.theme}`)
 
-  // 复位到默认浅色 + 初音未来，保证后续截图与对比度断言稳定
+  // 复位到默认浅色 + 初音蓝，保证后续截图与对比度断言稳定
   await page.getByRole('button', { name: '主题', exact: true }).first().click()
   await page.getByRole('button', { name: '日间', exact: true }).click()
-  await page.getByRole('button', { name: '初音未来', exact: true }).click()
+  await page.getByRole('button', { name: '初音蓝', exact: true }).click()
   await page.keyboard.press('Escape')
   const reset = await page.evaluate(() => ({
     mode: document.documentElement.dataset.mode,
@@ -350,6 +350,65 @@ await step('主题 · 切夜间 + KAITO，颜色与设置都持久化', async ()
   }))
   assert(reset.mode === 'light' && reset.theme === 'miku', '主题应复位为 light/miku')
   await shot('02-theme')
+})
+
+await step('主题 · 自定义色值：应用、首屏恢复、切回预设', async () => {
+  await go('/', 'FNAF Fan Games')
+  await page.getByRole('button', { name: '主题', exact: true }).first().click()
+  await page.getByLabel('自定义色值').fill('#7A5CFF')
+  await page.getByRole('button', { name: '应用', exact: true }).click()
+  await page.waitForTimeout(200)
+
+  const applied = await page.evaluate(() => ({
+    theme: document.documentElement.dataset.theme,
+    surface: getComputedStyle(document.documentElement)
+      .getPropertyValue('--accent-surface-rgb')
+      .trim(),
+    stored: localStorage.getItem('fnaf-archive:theme-custom:v1'),
+  }))
+  assert(applied.theme === 'custom', `data-theme 应为 custom，实际 ${applied.theme}`)
+  assert(
+    applied.surface === '122 92 255',
+    `自定义色应写入 --accent-surface-rgb，实际 ${applied.surface}`,
+  )
+  assert(applied.stored === '#7a5cff', `自定义色应持久化为 #7a5cff，实际 ${applied.stored}`)
+  await shot('02b-theme-custom')
+
+  // 刷新后由 index.html 的内联脚本在任何样式之前恢复自定义变量
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(250)
+  const persisted = await page.evaluate(() => ({
+    theme: document.documentElement.dataset.theme,
+    surface: getComputedStyle(document.documentElement)
+      .getPropertyValue('--accent-surface-rgb')
+      .trim(),
+  }))
+  assert(persisted.theme === 'custom', `刷新后 data-theme 应为 custom，实际 ${persisted.theme}`)
+  assert(
+    persisted.surface === '122 92 255',
+    `刷新后自定义色应保留，实际 ${persisted.surface}`,
+  )
+
+  // 非法色值：显示提示，不改变当前主题
+  await page.getByRole('button', { name: '主题', exact: true }).first().click()
+  await page.getByLabel('自定义色值').fill('#12')
+  await page.getByRole('button', { name: '应用', exact: true }).click()
+  const errorText = await page.locator('#theme-panel [role="alert"]').innerText()
+  assert(errorText.includes('#RGB'), `非法色值应提示格式，实际「${errorText}」`)
+  const unchanged = await page.evaluate(
+    () => document.documentElement.dataset.theme,
+  )
+  assert(unchanged === 'custom', `非法输入不应切换主题，实际 ${unchanged}`)
+
+  // 切回预设色：内联变量必须被移除，否则自定义色会覆盖预设色
+  await page.getByRole('button', { name: '初音蓝', exact: true }).click()
+  const back = await page.evaluate(() => ({
+    theme: document.documentElement.dataset.theme,
+    inline: document.documentElement.style.getPropertyValue('--accent-surface-rgb'),
+  }))
+  assert(back.theme === 'miku', `应切回 miku，实际 ${back.theme}`)
+  assert(back.inline === '', `切回预设后不应残留内联变量，实际「${back.inline}」`)
+  await page.keyboard.press('Escape')
 })
 
 /* ======================================================================

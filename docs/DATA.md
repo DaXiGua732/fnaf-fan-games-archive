@@ -148,7 +148,8 @@ npm run check:data -- --strict          # 有 error 时退出码 1（默认总�
 | --- | --- |
 | `fnaf-archive:admin-catalog:v1` | 本地模式的作品存档（`localGameRepository.ts`） |
 | `fnaf-archive:taxonomy:v1` | 本地模式的词表（不改旧作品存档格式） |
-| `fnaf-archive:theme-mode:v1` / `fnaf-archive:theme-accent:v1` | 主题（见 [`DESIGN.md`](DESIGN.md)） |
+| `fnaf-archive:theme-mode:v1` / `fnaf-archive:theme-accent:v1` | 主题模式与强调色 id（见 [`DESIGN.md`](DESIGN.md)） |
+| `fnaf-archive:theme-custom:v1` | 自定义强调色 `#rrggbb`（切回预设色时保留） |
 | `fnaf-archive:admin-token:v1` | 后台 GitHub 令牌 |
 | `fnaf-archive:preview:v1` | 草稿 → 预览页的一次性交接（读完即清） |
 | `fnaf-archive:resource-requests:v1` | 催资源本机模式的请求 + 投票明细 |

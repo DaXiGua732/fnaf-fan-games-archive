@@ -23,7 +23,7 @@
     --overlay-rgb: 10 10 9;
     --on-accent-rgb: 26 26 24;
 
-    /* 默认强调色：初音未来（与 data-theme='miku' 相同，保证未设置属性时也正确） */
+    /* 默认强调色：初音蓝（与 data-theme='miku' 相同，保证未设置属性时也正确） */
     --accent-rgb: 37 126 120;
     --accent-surface-rgb: 57 197 187;
     --accent-bright-rgb: 57 197 187;

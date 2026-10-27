@@ -1,21 +1,34 @@
 import { computed, ref, type ComputedRef } from 'vue'
+import {
+  DEFAULT_CUSTOM_COLOR,
+  deriveThemeVars,
+  parseHexColor,
+} from '../utils/themeColor'
 
 /**
  * 站点主题系统
  *
  * 三种「模式偏好」：跟随系统 / 日间 / 夜间；
- * 六种强调色取 V家歌姬的代表色：初音未来 / 镜音铃 / 镜音连 /
- * 巡音流歌 / MEIKO / KAITO。
+ * 六种预设强调色取 V家歌姬的代表色（初音蓝 / 镜音橙 / 镜音黄 / 巡音粉 /
+ * MEIKO红 / KAITO蓝），外加一种自定义色（自由取色或输入色值）。
  *
  * 设计约束：
  *  - 模块级单例 —— 公开站与后台共享同一份状态。
  *  - 所有 document / window / localStorage 访问都带 SSR / Node 守卫，
  *    因为冒烟测试会在 Node 里真实渲染组件（没有 DOM）。
  *  - 首屏防闪白由 index.html 里的内联脚本负责；本模块只负责应用内切换、
- *    跨标签页同步与系统主题变化。两处使用同一组 storage key。
+ *    跨标签页同步与系统主题变化。两处使用同一组 storage key，且自定义色的
+ *    推导算法必须保持等价（见 utils/themeColor.ts）。
  */
 
-export type ThemeAccent = 'miku' | 'rin' | 'len' | 'luka' | 'meiko' | 'kaito'
+export type ThemeAccent =
+  | 'miku'
+  | 'rin'
+  | 'len'
+  | 'luka'
+  | 'meiko'
+  | 'kaito'
+  | 'custom'
 export type ThemeMode = 'light' | 'dark'
 export type ModePreference = 'system' | 'light' | 'dark'
 
@@ -26,17 +39,18 @@ export interface ThemeAccentOption {
   readonly swatch: string
 }
 
-/** ⚠️ 这两个字符串必须与 index.html 内联脚本中的完全一致 */
+/** ⚠️ 这三个字符串必须与 index.html 内联脚本中的完全一致 */
 export const THEME_MODE_STORAGE_KEY = 'fnaf-archive:theme-mode:v1'
 export const THEME_ACCENT_STORAGE_KEY = 'fnaf-archive:theme-accent:v1'
+export const THEME_CUSTOM_STORAGE_KEY = 'fnaf-archive:theme-custom:v1'
 
 export const THEME_ACCENTS: readonly ThemeAccentOption[] = [
-  { id: 'miku', label: '初音未来', swatch: '#39c5bb' },
-  { id: 'rin', label: '镜音铃', swatch: '#f2a900' },
-  { id: 'len', label: '镜音连', swatch: '#ffe211' },
-  { id: 'luka', label: '巡音流歌', swatch: '#ff9ec4' },
-  { id: 'meiko', label: 'MEIKO', swatch: '#c8102e' },
-  { id: 'kaito', label: 'KAITO', swatch: '#3366cc' },
+  { id: 'miku', label: '初音蓝', swatch: '#39c5bb' },
+  { id: 'rin', label: '镜音橙', swatch: '#f2a900' },
+  { id: 'len', label: '镜音黄', swatch: '#ffe211' },
+  { id: 'luka', label: '巡音粉', swatch: '#ff9ec4' },
+  { id: 'meiko', label: 'MEIKO红', swatch: '#c8102e' },
+  { id: 'kaito', label: 'KAITO蓝', swatch: '#3366cc' },
 ]
 
 const DEFAULT_ACCENT: ThemeAccent = 'miku'
@@ -52,6 +66,7 @@ const PAPER_THEME_COLORS: Record<ThemeMode, string> = {
    模块级单例状态
    --------------------------------------------------------------------------- */
 const accent = ref<ThemeAccent>(DEFAULT_ACCENT)
+const customColor = ref<string>(DEFAULT_CUSTOM_COLOR)
 const modePreference = ref<ModePreference>(DEFAULT_PREFERENCE)
 const systemPrefersDark = ref(false)
 const mode = computed<ThemeMode>(() =>
@@ -68,7 +83,8 @@ let storageListenerAttached = false
    --------------------------------------------------------------------------- */
 export function isThemeAccent(value: unknown): value is ThemeAccent {
   return (
-    typeof value === 'string' && THEME_ACCENTS.some((option) => option.id === value)
+    value === 'custom' ||
+    (typeof value === 'string' && THEME_ACCENTS.some((option) => option.id === value))
   )
 }
 
@@ -121,6 +137,11 @@ export function readAccent(): ThemeAccent {
   return isThemeAccent(stored) ? stored : DEFAULT_ACCENT
 }
 
+/** 自定义色始终读出来（切换回预设色时不丢，下次选「自定义」还在） */
+export function readCustomColor(): string {
+  return parseHexColor(readStored(THEME_CUSTOM_STORAGE_KEY)) ?? DEFAULT_CUSTOM_COLOR
+}
+
 function readSystemPrefersDark(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return false
@@ -135,14 +156,45 @@ function readSystemPrefersDark(): boolean {
 /**
  * 把模式与强调色写到根元素和浏览器主题色上。
  * 只操作 documentElement / meta，不触碰任何布局样式。
+ *
+ * 预设色由 CSS 的 [data-theme] 提供变量；自定义色没有对应的 CSS 块，
+ * 因此在这里现算四个变量并以内联 style 覆盖；切回预设色时再移除覆盖。
  */
-export function applyTheme(themeMode: ThemeMode, themeAccent: ThemeAccent): void {
+export function applyTheme(
+  themeMode: ThemeMode,
+  themeAccent: ThemeAccent,
+  custom: string = DEFAULT_CUSTOM_COLOR,
+): void {
   if (typeof document === 'undefined') return
 
   const root = document.documentElement
   root.dataset.mode = themeMode
   root.dataset.theme = themeAccent
   root.style.colorScheme = themeMode
+
+  const vars =
+    themeAccent === 'custom'
+      ? deriveThemeVars(parseHexColor(custom) ?? DEFAULT_CUSTOM_COLOR, themeMode)
+      : null
+  const properties: readonly [string, string][] = vars
+    ? [
+        ['--accent-rgb', vars.accent],
+        ['--accent-surface-rgb', vars.surface],
+        ['--accent-bright-rgb', vars.bright],
+        ['--on-accent-rgb', vars.onAccent],
+      ]
+    : []
+  for (const [name, value] of properties) root.style.setProperty(name, value)
+  if (!vars) {
+    for (const name of [
+      '--accent-rgb',
+      '--accent-surface-rgb',
+      '--accent-bright-rgb',
+      '--on-accent-rgb',
+    ]) {
+      root.style.removeProperty(name)
+    }
+  }
 
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
   meta?.setAttribute('content', PAPER_THEME_COLORS[themeMode])
@@ -154,7 +206,7 @@ export function applyTheme(themeMode: ThemeMode, themeAccent: ThemeAccent): void
 function onSystemThemeChange(event: MediaQueryListEvent): void {
   systemPrefersDark.value = event.matches
   if (modePreference.value === 'system') {
-    applyTheme(mode.value, accent.value)
+    applyTheme(mode.value, accent.value, customColor.value)
   }
 }
 
@@ -181,21 +233,26 @@ function syncSystemMediaListener(): void {
 function syncFromStorage(): void {
   const nextPreference = readModePreference()
   const nextAccent = readAccent()
+  const nextCustom = readCustomColor()
   const changed =
-    nextPreference !== modePreference.value || nextAccent !== accent.value
+    nextPreference !== modePreference.value ||
+    nextAccent !== accent.value ||
+    nextCustom !== customColor.value
 
   modePreference.value = nextPreference
   accent.value = nextAccent
+  customColor.value = nextCustom
   syncSystemMediaListener()
 
-  if (changed) applyTheme(mode.value, accent.value)
+  if (changed) applyTheme(mode.value, accent.value, customColor.value)
 }
 
 function onStorageChange(event: StorageEvent): void {
   if (
     event.key !== null &&
     event.key !== THEME_MODE_STORAGE_KEY &&
-    event.key !== THEME_ACCENT_STORAGE_KEY
+    event.key !== THEME_ACCENT_STORAGE_KEY &&
+    event.key !== THEME_CUSTOM_STORAGE_KEY
   ) {
     return
   }
@@ -215,9 +272,10 @@ export function initTheme(): void {
 
   modePreference.value = readModePreference()
   accent.value = readAccent()
+  customColor.value = readCustomColor()
   systemPrefersDark.value = readSystemPrefersDark()
 
-  applyTheme(mode.value, accent.value)
+  applyTheme(mode.value, accent.value, customColor.value)
   syncSystemMediaListener()
 
   if (typeof window !== 'undefined' && !storageListenerAttached) {
@@ -236,23 +294,40 @@ function setMode(next: ModePreference): void {
     systemPrefersDark.value = readSystemPrefersDark()
   }
   syncSystemMediaListener()
-  applyTheme(mode.value, accent.value)
+  applyTheme(mode.value, accent.value, customColor.value)
 }
 
 function setAccent(next: ThemeAccent): void {
   if (!isThemeAccent(next)) return
   accent.value = next
   writeStored(THEME_ACCENT_STORAGE_KEY, next)
-  applyTheme(mode.value, accent.value)
+  applyTheme(mode.value, accent.value, customColor.value)
+}
+
+/**
+ * 应用自定义色并切换到「自定义」。
+ * 返回 false 表示色值非法（UI 据此显示提示），此时不改动任何状态。
+ */
+function setCustomAccent(next: string): boolean {
+  const normalized = parseHexColor(next)
+  if (!normalized) return false
+  customColor.value = normalized
+  accent.value = 'custom'
+  writeStored(THEME_CUSTOM_STORAGE_KEY, normalized)
+  writeStored(THEME_ACCENT_STORAGE_KEY, 'custom')
+  applyTheme(mode.value, accent.value, customColor.value)
+  return true
 }
 
 export interface ThemeAPI {
   mode: ComputedRef<ThemeMode>
   accent: typeof accent
+  customColor: typeof customColor
   modePreference: typeof modePreference
   systemPrefersDark: typeof systemPrefersDark
   setMode: (next: ModePreference) => void
   setAccent: (next: ThemeAccent) => void
+  setCustomAccent: (next: string) => boolean
   accents: readonly ThemeAccentOption[]
 }
 
@@ -261,10 +336,12 @@ export function useTheme(): ThemeAPI {
   return {
     mode,
     accent,
+    customColor,
     modePreference,
     systemPrefersDark,
     setMode,
     setAccent,
+    setCustomAccent,
     accents: THEME_ACCENTS,
   }
 }

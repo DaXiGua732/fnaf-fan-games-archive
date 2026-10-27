@@ -21,16 +21,47 @@ const MODE_OPTIONS: readonly { id: ModePreference; label: string }[] = [
 ]
 
 const route = useRoute()
-const { accent, modePreference, accents, setMode, setAccent } = useTheme()
+const { accent, customColor, modePreference, accents, setMode, setAccent, setCustomAccent } =
+  useTheme()
 
 const root = ref<HTMLElement | null>(null)
 const panel = ref<HTMLElement | null>(null)
 const trigger = ref<HTMLButtonElement | null>(null)
 const isOpen = ref(false)
 
+const hexDraft = ref(customColor.value)
+const hexError = ref('')
+
 const selectedAccent = computed(() =>
   accents.find((option) => option.id === accent.value),
 )
+/** 触发按钮上的色块：预设色用固定 swatch，自定义用当前自定义色 */
+const swatchColor = computed(() =>
+  accent.value === 'custom' ? customColor.value : selectedAccent.value?.swatch,
+)
+
+watch(customColor, (value) => {
+  hexDraft.value = value
+})
+
+function onColorPick(event: Event): void {
+  const value = (event.target as HTMLInputElement).value
+  setCustomAccent(value)
+  hexError.value = ''
+}
+
+function onHexInput(event: Event): void {
+  hexDraft.value = (event.target as HTMLInputElement).value
+  hexError.value = ''
+}
+
+function applyHex(): void {
+  if (!setCustomAccent(hexDraft.value)) {
+    hexError.value = '请输入 #RGB 或 #RRGGBB'
+    return
+  }
+  hexError.value = ''
+}
 
 function focusPanel(): void {
   void nextTick(() => {
@@ -120,7 +151,7 @@ onUnmounted(() => {
     >
       <span
         class="h-3 w-3 shrink-0 border border-ink/25"
-        :style="selectedAccent ? { backgroundColor: selectedAccent.swatch } : undefined"
+        :style="swatchColor ? { backgroundColor: swatchColor } : undefined"
         aria-hidden="true"
       />
       <span class="sr-only sm:not-sr-only">主题</span>
@@ -170,7 +201,53 @@ onUnmounted(() => {
           />
           <span>{{ option.label }}</span>
         </button>
+        <button
+          type="button"
+          :class="[accentClass('custom'), 'col-span-2']"
+          :aria-pressed="accent === 'custom'"
+          @click="setAccent('custom')"
+        >
+          <span
+            class="h-3 w-3 shrink-0 border border-ink/25"
+            :style="{ backgroundColor: customColor }"
+            aria-hidden="true"
+          />
+          <span>自定义</span>
+        </button>
       </div>
+
+      <!-- 自定义色：原生取色器 + 色值输入，两者都立即生效 -->
+      <div class="mt-2 flex items-start gap-2">
+        <input
+          type="color"
+          :value="customColor"
+          aria-label="自定义颜色"
+          class="h-8 w-10 shrink-0 cursor-pointer border border-line bg-paper p-0"
+          @input="onColorPick"
+        />
+        <input
+          :value="hexDraft"
+          type="text"
+          inputmode="text"
+          autocomplete="off"
+          spellcheck="false"
+          aria-label="自定义色值"
+          placeholder="#RRGGBB"
+          class="min-w-0 flex-1 border border-line bg-paper px-2 py-1.5 font-sans text-[11px] uppercase tracking-[0.08em] text-ink transition-colors duration-150 ease-out placeholder:text-ink/35 focus:border-accent focus:outline-none"
+          @input="onHexInput"
+          @keydown.enter.prevent="applyHex"
+        />
+        <button
+          type="button"
+          class="border border-ink px-2.5 py-1.5 font-sans text-[10px] font-bold uppercase tracking-[0.12em] transition-colors duration-150 ease-out hover:border-accent hover:text-accent"
+          @click="applyHex"
+        >
+          应用
+        </button>
+      </div>
+      <p v-if="hexError" class="mt-1 font-sans text-[10px] text-accent" role="alert">
+        {{ hexError }}
+      </p>
 
       <p class="mt-4 border-t border-line pt-3 font-sans text-[11px] leading-relaxed text-ink/70">
         主题只保存在这台设备上，不会同步到其他设备。

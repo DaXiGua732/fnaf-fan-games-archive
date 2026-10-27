@@ -5,6 +5,11 @@ import {
   resolveMode,
   THEME_ACCENTS,
 } from '../composables/useTheme'
+import {
+  DEFAULT_CUSTOM_COLOR,
+  deriveThemeVars,
+  parseHexColor,
+} from '../utils/themeColor'
 
 /**
  * 主题系统的纯函数断言。
@@ -27,9 +32,10 @@ export function runThemeAssertions(): Assertion[] {
   check('resolveMode · light 不受系统深色影响', resolveMode('light', true), 'light')
   check('resolveMode · dark 不受系统浅色影响', resolveMode('dark', false), 'dark')
 
-  // isThemeAccent：接受六种合法值，拒绝其它输入
+  // isThemeAccent：接受六种预设 + 自定义，拒绝其它输入
   const accentIds = THEME_ACCENTS.map((option) => option.id)
-  check('isThemeAccent · 接受全部六个 accent', accentIds.every(isThemeAccent), true)
+  check('isThemeAccent · 接受全部六个预设 accent', accentIds.every(isThemeAccent), true)
+  check('isThemeAccent · 接受 custom', isThemeAccent('custom'), true)
   check('isThemeAccent · 拒绝 green', isThemeAccent('green'), false)
   check('isThemeAccent · 拒绝旧版 red', isThemeAccent('red'), false)
   check('isThemeAccent · 拒绝空字符串', isThemeAccent(''), false)
@@ -56,10 +62,32 @@ export function runThemeAssertions(): Assertion[] {
   check('THEME_ACCENTS · 色块数量与主题数量一致', swatches.length, accentIds.length)
   check('THEME_ACCENTS · 色块不重复', new Set(swatches).size, swatches.length)
   check(
-    'THEME_ACCENTS · 默认色是初音未来',
-    THEME_ACCENTS[0].id,
-    'miku',
+    'THEME_ACCENTS · 标签是颜色而不是歌姬名',
+    THEME_ACCENTS.map((option) => option.label).join(','),
+    '初音蓝,镜音橙,镜音黄,巡音粉,MEIKO红,KAITO蓝',
   )
+
+  // 自定义色：解析与派生
+  check('parseHexColor · 接受 #RRGGBB 并小写化', parseHexColor('#39C5BB'), '#39c5bb')
+  check('parseHexColor · 接受 3 位与省略 #', parseHexColor('f00'), '#ff0000')
+  check('parseHexColor · 接受首尾空白', parseHexColor('  #7A5CFF '), '#7a5cff')
+  check('parseHexColor · 拒绝两位色值', parseHexColor('#12'), null)
+  check('parseHexColor · 拒绝非字符串', parseHexColor(0x39c5bb), null)
+  check('DEFAULT_CUSTOM_COLOR · 是合法色值', parseHexColor(DEFAULT_CUSTOM_COLOR), DEFAULT_CUSTOM_COLOR)
+
+  const lightYellow = deriveThemeVars('#ffe211', 'light')
+  check('deriveThemeVars · surface 原样使用输入色', lightYellow.surface, '255 226 17')
+  check('deriveThemeVars · 亮色用墨色前景', lightYellow.onAccent, '26 26 24')
+  check('deriveThemeVars · 浅色模式把亮色压暗成可读文字色', lightYellow.accent !== lightYellow.surface, true)
+
+  const lightNavy = deriveThemeVars('#111111', 'light')
+  check('deriveThemeVars · 暗色用纸白前景', lightNavy.onAccent, '250 250 248')
+  check('deriveThemeVars · 已经够暗的文字色不再改动', lightNavy.accent, lightNavy.surface)
+
+  const darkYellow = deriveThemeVars('#ffe211', 'dark')
+  check('deriveThemeVars · 深色模式亮色可直接做文字色', darkYellow.accent, darkYellow.surface)
+  const darkNavy = deriveThemeVars('#111111', 'dark')
+  check('deriveThemeVars · 深色模式把暗色提亮成可读文字色', darkNavy.accent !== darkNavy.surface, true)
 
   return results
 }

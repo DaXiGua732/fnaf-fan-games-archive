@@ -23,7 +23,7 @@
 
 ## 2. 设计系统速查
 
-- **色彩（浅色默认值）**：纸 `#fafaf8` / 墨 `#1a1a18` / 强调 `#257e78`（默认初音未来，
+- **色彩（浅色默认值）**：纸 `#fafaf8` / 墨 `#1a1a18` / 强调 `#257e78`（默认初音蓝，
   其余歌姬色见 §4）/ 辅助线 `#d4d4d0` / 浅层表面 `#f2f2ef`。
   深色模式整体替换变量（纸 `#141413` / 墨 `#e8e8e4`）。
 - **网格**：12 列衍生，常用 `grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8`
@@ -90,45 +90,63 @@ grep -o '\.rounded-md\|\.shadow{\|\.font-serif\|\.font-mono' "$CSS" | sort -u  #
 **模式偏好**：跟随系统（默认）/ 日间 / 夜间。跟随系统时监听 `prefers-color-scheme`，
 系统变化实时生效；切到日间 / 夜间后移除监听。
 
-**强调色**：6 种，取自 V家歌姬代表色（默认初音未来）：
+**强调色**：6 种预设（默认初音蓝）加 1 种自定义色：
 
-| id | 歌姬 | 代表色 |
+| id | 名称 | 代表色 |
 | --- | --- | --- |
-| `miku` | 初音未来 | `#39c5bb` |
-| `rin` | 镜音铃 | `#f2a900` |
-| `len` | 镜音连 | `#ffe211` |
-| `luka` | 巡音流歌 | `#ff9ec4` |
-| `meiko` | MEIKO | `#c8102e` |
-| `kaito` | KAITO | `#3366cc` |
+| `miku` | 初音蓝 | `#39c5bb` |
+| `rin` | 镜音橙 | `#f2a900` |
+| `len` | 镜音黄 | `#ffe211` |
+| `luka` | 巡音粉 | `#ff9ec4` |
+| `meiko` | MEIKO红 | `#c8102e` |
+| `kaito` | KAITO蓝 | `#3366cc` |
+| `custom` | 自定义 | 用户选定 |
 
 代表色**直接用作 `accent-surface`**（Hero、悬停底色等大面积色块），选择器色块也用它；
 `on-accent` 按代表色亮度在黑 / 白之间二选一。`accent` 用于正文 / 边框 / 小面积悬停，
 必须是同色相的加深版本（与 paper 保持 >= 4.5:1）—— 代表色本身对纸色太浅，
 直接当文字色会看不清。深色模式下 `accent-surface` 仍是同一个代表色，
-只有 `accent` 提亮。取色只改 `src/styles/index.css`。
+只有 `accent` 提亮。预设色的取色只改 `src/styles/index.css`。
+
+**自定义色**：切换器里提供原生取色器与 `#RGB` / `#RRGGBB` 输入框，两者都立即生效；
+非法色值只提示、不改当前主题。因为自定义色没有对应的 CSS 块，四个变量由
+`src/utils/themeColor.ts` 现算后以内联 `style` 写到根元素：
+
+- `surface` 原样使用输入色
+- `on-accent` 在黑 / 白中选对比度更高的
+- `accent` 向黑（浅色模式）或向白（深色模式）移动到 4.6:1
+- `accent-bright` 向白移动到 4.5:1（面向页脚 / 灯箱的反色底）
+
+切回预设色时必须移除这四个内联变量，否则自定义色会继续覆盖预设色。
+`index.html` 的内联脚本有一份**等价实现**（首帧要在 Vue 之前应用），改算法必须两边一起改。
+
+> 自由取色的固有边界：如果用户选了中间调（黑 / 白前景都到不了 4.5:1），
+> `on-accent` 只能二选一取对比度更高的那个，**不会**为了达标而改掉用户选的颜色。
 
 **作用范围**：公开站与后台共用同一份设置（模块级单例），**只保存在当前设备**。
 切换器在 `Layout.vue` 与 `AdminLayout.vue` 里都挂了一份。
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/styles/index.css` | `:root` 下的 CSS 变量；`data-mode` / `data-theme` 切换模式与强调色 |
+| `src/styles/index.css` | `:root` 下的预设色 CSS 变量；`data-mode` / `data-theme` 切换 |
 | `tailwind.config.js` | 把变量映射成语义工具类（`ink` / `paper` / `line` / `surface` / `accent` …） |
-| `src/composables/useTheme.ts` | 模块级单例：读写本机偏好、解析系统模式、跨标签页同步 |
-| `src/components/ThemeSwitcher.vue` | 顶部「主题」下拉；Esc / 外部点击 / 路由变化关闭 |
-| `index.html` | 样式与 Vue 之前的内联脚本：先按 storage 设置根元素属性，避免深色模式首屏闪白 |
-| `src/dev/themeAssertions.ts` | 模式解析 / 强调色白名单 / 主题清单的纯函数断言 |
+| `src/utils/themeColor.ts` | 自定义色解析与四个变量的派生（纯函数，可断言） |
+| `src/composables/useTheme.ts` | 模块级单例：读写本机偏好、应用变量、跨标签页同步 |
+| `src/components/ThemeSwitcher.vue` | 顶部「主题」下拉：模式 / 预设色 / 自定义取色 |
+| `index.html` | 样式与 Vue 之前的等价内联实现：首屏按 storage 应用，避免闪白 |
+| `src/dev/themeAssertions.ts` | 模式解析 / 色值白名单 / 自定义色解析与派生的纯函数断言 |
 
 **storage key（内联脚本与 `useTheme.ts` 必须完全一致）**：
 
 ```
 fnaf-archive:theme-mode:v1      # system | light | dark
-fnaf-archive:theme-accent:v1    # miku | rin | len | luka | meiko | kaito
+fnaf-archive:theme-accent:v1    # miku | rin | len | luka | meiko | kaito | custom
+fnaf-archive:theme-custom:v1    # 自定义色 #rrggbb（切回预设色时保留）
 ```
 
-`selftest` 有一条静态守卫比对两处；内联脚本在 `localStorage` 不可用时按「跟随系统」降级。
+`selftest` 有一条静态守卫比对 key；内联脚本在 `localStorage` 不可用时按「跟随系统」降级。
 旧版的 `red / blue / teal / pink / purple` 已不是合法值：`readAccent()` 与内联脚本都会回退到
-默认的 `miku`（不改 storage key，旧值就地失效，不会残留一个不生效的 accent）。
+默认的 `miku`（不改 storage key，旧值就地失效）。
 
 ### 语义 token
 

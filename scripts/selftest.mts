@@ -178,9 +178,11 @@ const staticResults: Assertion[] = [
   ),
   guard(
     '静态守卫 · 主题启动脚本与 useTheme 使用同一组 key',
-    ['fnaf-archive:theme-mode:v1', 'fnaf-archive:theme-accent:v1'].filter(
-      (key) => !INDEX_HTML.includes(key),
-    ),
+    [
+      'fnaf-archive:theme-mode:v1',
+      'fnaf-archive:theme-accent:v1',
+      'fnaf-archive:theme-custom:v1',
+    ].filter((key) => !INDEX_HTML.includes(key)),
     'index.html 的防闪白脚本必须读取与 useTheme 相同的 storage key',
   ),
   guard(
