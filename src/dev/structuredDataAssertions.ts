@@ -1392,6 +1392,158 @@ async function testLocalRelationPersistence(results: Assertion[]): Promise<void>
 
 
 /* ---------------------------------------------------------------------------
+   9. 记录身份安全：缺失 / 非法 / 重复 id 时 fail-closed
+   --------------------------------------------------------------------------- */
+
+function identityFixtures(): { label: string; games: unknown[]; duplicateId?: string }[] {
+  const alpha = { ...RAW_GAMES[0], relations: [] }
+  const beta = { ...RAW_GAMES[1] }
+  const gamma = { ...RAW_GAMES[2] }
+  return [
+    { label: '缺失 id', games: [alpha, { ...beta, id: undefined }] },
+    { label: '空白 id', games: [alpha, { ...beta, id: '   ' }] },
+    { label: '非字符串 id', games: [alpha, { ...beta, id: 42 }] },
+    { label: '首尾空白 id', games: [alpha, { ...beta, id: ' fixture-beta ' }] },
+    {
+      label: '重复 id',
+      duplicateId: 'dup',
+      games: [
+        alpha,
+        {
+          ...beta,
+          id: 'dup',
+          title: 'Dup One',
+          relations: [{ type: 'related', targetId: 'fixture-alpha' }],
+        },
+        {
+          ...gamma,
+          id: 'dup',
+          title: 'Dup Two',
+          relations: [{ type: 'related', targetId: 'missing-dup' }],
+        },
+      ],
+    },
+  ]
+}
+
+async function testCatalogIdentitySafety(results: Assertion[]): Promise<void> {
+  for (const fixture of identityFixtures()) {
+    const state = await createRemoteStub(fixture.games as unknown as AdminGame[])
+    const repo = createGitHubGameRepository({ token: 'fixture-token' })
+
+    try {
+      await waitReady(repo)
+      const contentBefore = state.content
+      const storeBefore = JSON.stringify(repo.games.value)
+      const actions: { label: string; run: () => Promise<unknown> }[] = [
+        { label: '标题编辑', run: () => repo.updateGame('fixture-alpha', { title: 'Nope' }) },
+        { label: '新建作品', run: () => repo.createGame({ title: 'Nope' }) },
+        { label: '删除作品', run: () => repo.deleteGame('fixture-alpha') },
+        {
+          label: '词表新建',
+          run: () => repo.createVocabularyEntry('mechanics', { name: 'Nope' }),
+        },
+      ]
+      if (fixture.duplicateId) {
+        actions.push({
+          label: '重复 id 编辑',
+          run: () => repo.updateGame(fixture.duplicateId as string, { title: 'Nope' }),
+        })
+      }
+
+      for (const action of actions) {
+        const putsBefore = state.putCount
+        const message = await asyncErrorOf(action.run())
+        check(
+          results,
+          `身份安全 · ${fixture.label} · ${action.label}被拒绝`,
+          message.includes('拒绝写入'),
+          true,
+        )
+        check(
+          results,
+          `身份安全 · ${fixture.label} · ${action.label}错误可定位`,
+          message.includes('id'),
+          true,
+        )
+        check(
+          results,
+          `身份安全 · ${fixture.label} · ${action.label}零提交`,
+          state.putCount,
+          putsBefore,
+        )
+      }
+      check(
+        results,
+        `身份安全 · ${fixture.label} · 数据仓原文未被改写`,
+        state.content,
+        contentBefore,
+      )
+      check(
+        results,
+        `身份安全 · ${fixture.label} · 内存目录未被改写`,
+        JSON.stringify(repo.games.value),
+        storeBefore,
+      )
+    } finally {
+      state.restore()
+    }
+  }
+}
+
+async function testLocalCatalogIdentitySafety(results: Assertion[]): Promise<void> {
+  for (const fixture of identityFixtures()) {
+    const storage = memoryStorage()
+    storage.setItem(STORAGE_KEY, JSON.stringify(fixture.games))
+    const repo = createLocalGameRepository({ storage })
+    const gamesBefore = storage.data.get(STORAGE_KEY)
+    const taxonomyBefore = storage.data.get(TAXONOMY_STORAGE_KEY)
+    const storeBefore = JSON.stringify(repo.games.value)
+    const actions: { label: string; run: () => Promise<unknown> }[] = [
+      { label: '标题编辑', run: () => repo.updateGame('fixture-alpha', { title: 'Nope' }) },
+      { label: '新建作品', run: () => repo.createGame({ title: 'Nope' }) },
+      { label: '删除作品', run: () => repo.deleteGame('fixture-alpha') },
+      { label: '词表新建', run: () => repo.createVocabularyEntry('mechanics', { name: 'Nope' }) },
+    ]
+    if (fixture.duplicateId) {
+      actions.push({
+        label: '重复 id 编辑',
+        run: () => repo.updateGame(fixture.duplicateId as string, { title: 'Nope' }),
+      })
+    }
+
+    for (const action of actions) {
+      const message = await asyncErrorOf(action.run())
+      check(
+        results,
+        `本地身份安全 · ${fixture.label} · ${action.label}被拒绝`,
+        message.includes('拒绝写入'),
+        true,
+      )
+      check(
+        results,
+        `本地身份安全 · ${fixture.label} · ${action.label}不写存档`,
+        storage.data.get(STORAGE_KEY),
+        gamesBefore,
+      )
+      check(
+        results,
+        `本地身份安全 · ${fixture.label} · ${action.label}不写词表`,
+        storage.data.get(TAXONOMY_STORAGE_KEY),
+        taxonomyBefore,
+      )
+    }
+    check(
+      results,
+      `本地身份安全 · ${fixture.label} · 内存目录未被改写`,
+      JSON.stringify(repo.games.value),
+      storeBefore,
+    )
+  }
+}
+
+
+/* ---------------------------------------------------------------------------
    入口
    --------------------------------------------------------------------------- */
 
@@ -1410,6 +1562,8 @@ export async function runStructuredDataAssertions(): Promise<Assertion[]> {
   await testGitHubGameSavePreservesBrokenTaxonomy(results)
   await testGitHubRelationPersistence(results)
   await testLocalRelationPersistence(results)
+  await testCatalogIdentitySafety(results)
+  await testLocalCatalogIdentitySafety(results)
 
   return results
 }

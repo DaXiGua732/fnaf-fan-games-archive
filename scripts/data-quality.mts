@@ -20,7 +20,8 @@ function argumentValue(prefix: string): string {
   return hit ? hit.slice(prefix.length) : ''
 }
 
-const file = argumentValue('--file=') || DEFAULT_FILE
+const explicitFile = argumentValue('--file=')
+const file = explicitFile || DEFAULT_FILE
 const asJson = process.argv.includes('--json')
 const strict = process.argv.includes('--strict')
 
@@ -39,7 +40,12 @@ if (asJson) {
   console.log(JSON.stringify(report, null, 2))
 } else {
   const { counts } = report
-  console.log(`资料质量检查 · ${report.source}`)
+  console.log(
+    `资料质量检查 · ${report.source}` +
+      (explicitFile
+        ? ''
+        : '（当前 checkout 的构建快照；是否为数据仓最新内容取决于最近一次 data:pull）'),
+  )
   console.log(
     `作品 ${counts.games} 条（可见 ${counts.visible} / 隐藏 ${counts.hidden}） · ` +
       `词条 ${counts.taxonomyEntries} 个 · 未分类 ${counts.unclassified} 条`,

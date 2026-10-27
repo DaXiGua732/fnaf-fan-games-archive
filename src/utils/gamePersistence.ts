@@ -16,6 +16,7 @@
  */
 import type { AdminGame, GamePatch } from '../types/admin'
 import type { VocabularyCollection } from '../types/taxonomy'
+import { isRecord } from './guards'
 import { rawRelationTargetId } from './relations'
 
 /**
@@ -88,4 +89,69 @@ export function removeRelationTarget(
     (relation) => rawRelationTargetId(relation) !== targetId,
   )
   return kept.length === record.relations.length ? null : { ...record, relations: kept }
+}
+
+/** 身份校验的消息要能看出「第几条、实际是什么」，不能只报“id 不合法” */
+function describeIdentityValue(value: unknown): string {
+  if (value === null) return 'null'
+  if (Array.isArray(value)) return '数组'
+  return `类型 ${typeof value}`
+}
+
+/**
+ * 检查作品数组的**记录身份**是否可靠。
+ *
+ * 写入路径按 id 定位原始记录；一旦 id 缺失、空白、带首尾空白或重复，
+ * 就无法确定一条 patch 应该落在哪条原始 JSON 上。此时继续写会覆盖、复制
+ * 或丢失未编辑的记录 —— 所以仓储必须在提交前整体拒绝，而不是猜。
+ *
+ * 返回空数组表示 id 齐全、唯一且格式稳定。
+ */
+export function findCatalogIdentityIssues(games: readonly unknown[]): string[] {
+  const issues: string[] = []
+  const firstIndexById = new Map<string, number>()
+
+  games.forEach((entry, index) => {
+    if (!isRecord(entry)) {
+      issues.push(`games[${index}] 不是对象（实际为 ${describeIdentityValue(entry)}）`)
+      return
+    }
+    const id = entry.id
+    if (id === undefined) {
+      issues.push(`games[${index}] 缺少 id`)
+      return
+    }
+    if (typeof id !== 'string') {
+      issues.push(`games[${index}] 的 id 不是字符串（实际为 ${describeIdentityValue(id)}）`)
+      return
+    }
+    if (!id.trim()) {
+      issues.push(`games[${index}] 的 id 为空白`)
+      return
+    }
+    if (id !== id.trim()) {
+      issues.push(`games[${index}] 的 id「${id}」首尾包含空白`)
+      return
+    }
+    const firstIndex = firstIndexById.get(id)
+    if (firstIndex !== undefined) {
+      issues.push(`games[${index}] 的 id「${id}」与 games[${firstIndex}] 重复`)
+      return
+    }
+    firstIndexById.set(id, index)
+  })
+
+  return issues
+}
+
+/** 统一的拒绝写入文案；失败时必须**零副作用**，所以调用方要在任何写操作之前抛出 */
+export function catalogIdentityErrorMessage(issues: readonly string[]): string {
+  const shown = issues.slice(0, 8)
+  const rest = issues.length - shown.length
+  return (
+    '作品记录的身份不可靠，已拒绝写入，避免覆盖、复制或丢失原始数据。' +
+    '请先在数据源（数据仓 db.json / 本机存档）中修复 id 后重试：' +
+    shown.join('；') +
+    (rest > 0 ? `；另有 ${rest} 项` : '')
+  )
 }

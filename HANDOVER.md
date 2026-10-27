@@ -22,14 +22,14 @@
 | 项 | 状态 |
 | --- | --- |
 | 原计划书 20 个阶段 | ✅ **全部完成**（0–20，Phase 20 测试由贯穿全程的门禁体系覆盖） |
-| 结构化资料库升级 | ✅ **Phase 0–6 全部完成**：数据层、词表与编辑器、前台索引 + URL、八组组合筛选、作品关系、只读质量检查；已加固异常输入处理与关系持久化 |
+| 结构化资料库升级 | ✅ **Phase 0–6 全部完成**：数据层、词表与编辑器、前台索引 + URL、八组组合筛选、作品关系、只读质量检查；已加固异常输入处理、原始 ID 安全边界与关系持久化 |
 | 线上部署 | ✅ 此前版本已部署；本轮改动已通过完整 `npm run verify`（含 build），发布状态以远程仓库 / Actions 为准 |
 | 后台能力 | ✅ 增删改查 / 批量 / 标签与作者合并管理 / 图片上传（自动 WebP 压缩）/ 预览 / 永久删除 / 操作署名 / **GameJolt 扩展 ZIP 导入 + 本机助手备用** |
 | 前台能力 | ✅ **主题系统**（跟随系统 / 日间 / 夜间 + 5 种低饱和强调色）与首页公开**「催资源」榜**（Supabase 全站共享或本机模式） |
 | 交互层 | ✅ 编辑器吸顶操作条 + 分区锚点 + 发布概览 + Ctrl/Cmd+S；列表行内快捷上下线 / 永久删除；详情页截图灯箱；主题下拉 + 催资源弹窗 |
 | 数据架构 | ✅ 游戏目录仍以 **GitHub 数据仓 `db.json`** 为唯一事实来源；`taxonomy` 与 `games` 同文件、同一提交；Supabase **只**承载公开请求榜，不参与构建，也不存游戏数据 |
 | 代码仓提交 | 最新已推送提交见 `git log -1`；主题 / 催资源 / 结构化 Phase 1–6 改动是否已提交以 `git status` 为准 |
-| 测试基线 | ✅ 完整 `npm run verify` 通过（含 build；UI 点击单独跑）；**typecheck 通过、test:catalog 3/3、selftest 945/945、smoke 16/16、UI 点击 99/99**；`test:gamejolt` 仍为 22 项 |
+| 测试基线 | ✅ 完整 `npm run verify` 通过（含严格资料检查与 build；UI 点击单独跑）；**typecheck 通过、test:catalog 3/3、test:data-quality 1/1、selftest 1115/1115、smoke 16/16、UI 点击 99/99**；`test:gamejolt` 仍为 22 项 |
 | 已知缺口 | 数据仓未加其他协作者；评论区已按产品决策移除；催资源 SQL **尚未在真实 Supabase 项目执行**；远程榜最多 50 条；本机模式数据不会自动迁移到 Supabase；client id 不是反滥用；质量检查只报告，分类与关系仍需管理员按资料逐条录入 |
 
 > ⚠️ **断言已改成从数据推导期望值**：`selftest` 会在 `data:pull` 之后跑，
@@ -128,8 +128,9 @@ npm run build:extension # 构建扩展到 extension/dist（Chrome/Edge 加载已
 npm run test:extension # 扩展 E2E：同源抓取 → 图片 → ZIP 下载（需要系统 Chrome）
 npm run gamejolt:helper # 本机助手（127.0.0.1:4317，开发备用；运维主路径是扩展 ZIP）
 npm run smoke          # 只跑 SSR 冒烟（16 条路由）
-npm run selftest       # 只跑断言集（945 项，含八组断言 + 静态守卫）
+npm run selftest       # 只跑断言集（1115 项，含八组断言 + 静态守卫）
 npm run check:data     # 只读资料质量检查（默认 src/data/db.json；支持 --file / --json / --strict）
+npm run test:data-quality # check:data --strict 的退出码契约（合成夹具，不碰生产数据）
 ```
 
 **催资源（可选，Supabase）**：
@@ -282,11 +283,13 @@ npm run check:data     # 只读资料质量检查（默认 src/data/db.json；�
 
 ```
 npm run verify
-# = typecheck + test:gamejolt(22) + test:catalog(3) + build:extension + selftest(945) + smoke(16) + build
+# = typecheck + test:gamejolt(22) + test:catalog(3) + test:data-quality(1)
+#   + build:extension + selftest(1115) + check:data --strict + smoke(16) + build
 ```
 
 > ✅ 本轮完整 `npm run verify` 已通过（end-to-end，含 build）：`typecheck` 通过、
-> `test:catalog` 3/3、`selftest` 945/945、`smoke` 16/16；UI 点击测试另行运行，99/99。
+> `test:catalog` 3/3、`test:data-quality` 1/1、`selftest` 1115/1115、`smoke` 16/16；
+> `check:data --strict` 在当前快照 error 0；UI 点击测试另行运行，99/99。
 
 - `test:gamejolt`：URL 解析 / 富文本 / 图片选型与尺寸升级 / 网络错误分支 / 扩展 ZIP 打包
   （`node --test`，夹具注入 fetch，不出网）
@@ -299,13 +302,23 @@ npm run verify
   + 结构化字段 / 词表 / 关系与两套仓储的原子写入 / 409 重放（storage 与 fetch 均用桩，不出网）
   + 关系持久化（无关字段编辑 / 显式关系编辑 / 删除清理 / 词表合并，原始数据不被静默改写）
   + 筛选 URL 的解析 / 序列化 / 签名
-  + 资料质量检查（异常输入不崩溃且明确报告、只读性、未分类 / 失效词条 / 关系异常 / 重复项 / 缺图缺下载）
+  + 资料质量检查（异常输入不崩溃且明确报告、只读性、Game 契约字段 / 可选字段 / 枚举 / 时间戳、
+    未分类 / 失效词条 / 关系异常 / 重复项 / 缺图缺下载）
+  + 原始 ID 安全（缺失 / 空白 / 非法 / 重复 id 时远程与本地一致地拒绝写入，零提交 / 零落盘）
 - `smoke`：SSR 渲染 16 条路由（公开 5 + 后台 11），断言外壳分离与关键内容
 - `UI 点击测试`（`scripts/ui-test.mjs`，**已纳入版本管理**，`npm run test:ui`）：
   **99 步真实浏览器点击**，覆盖计划书 §21 后台专项、§22 前台回归、GameJolt 助手导入与 ZIP 导入，
   以及本轮的主题持久化、本机模式催资源提交 / +1 / 自动已收录
 - `npm run test:extension`：扩展 E2E（同源抓取 → 下载图片 → 打包 ZIP），需要系统 Chrome，
   **不进 verify / CI**，改扩展代码时本地跑
+- `test:data-quality`：真实执行 `npm run check:data -- --file=... --strict`，
+  断言“无 error 退出 0、有 error 退出 1”（临时合成夹具，不读写生产数据）
+- `check:data --strict`：已纳入 `npm run verify` 与部署 workflow；只对 error 失败，
+  warning 允许存在。检查的是 `data:pull` 之后的快照；拉取失败时日志会明确说明
+  “本次检查的是旧快照，不是数据仓最新内容”
+- `test:ui`（99 步真实浏览器点击）**未纳入 CI / verify**：需要常驻 `npm run dev` 与
+  系统 Chrome，单次约 3 分钟；本 workflow 每小时兜底重建，交互回归不纳入部署门禁。
+  人工执行：另开终端 `npm run dev`，再跑 `npm run test:ui`
 - **催资源 SQL / 真实 Supabase 行为不在自动化门禁内**，必须按 README §7.4 手动验证
 - **公开站回归**：Phase 19 曾用逐字节基线；快照属 `.tmp/` 临时产物，不纳入版本管理，
   需要时重新构建一份即可

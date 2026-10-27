@@ -75,8 +75,43 @@ const RAW_TEXT_LIST_FIELDS = [
   { field: 'platforms', code: 'invalid-platforms', label: '平台' },
   { field: 'gameplayTypes', code: 'invalid-gameplay-types', label: '玩法类型' },
   { field: 'mechanics', code: 'invalid-mechanics', label: '游戏机制' },
+  { field: 'gallery', code: 'invalid-gallery', label: '截图列表' },
 ] as const
 
+/**
+ * `Game` 契约里必须存在且为字符串的字段。
+ * 缺失 / 类型错误是 error；空字符串单独报 warning —— 它是“合法但没有内容”，
+ * 与“字段根本不存在”是两种需要不同处理的情况。
+ */
+const REQUIRED_TEXT_FIELDS = [
+  { field: 'ipSeries', label: 'IP 系列', missing: 'missing-ip-series', invalid: 'invalid-ip-series', empty: 'empty-ip-series' },
+  { field: 'engine', label: '开发引擎', missing: 'missing-engine', invalid: 'invalid-engine', empty: 'empty-engine' },
+  { field: 'description', label: '简介', missing: 'missing-description', invalid: 'invalid-description', empty: 'empty-description' },
+] as const
+
+const GAME_STATUSES: Record<string, true> = { draft: true, published: true, offline: true }
+
+function isHttpUrlOrEmpty(value: unknown): boolean {
+  return typeof value === 'string' && (!value.trim() || /^https?:\/\/\S+$/i.test(value.trim()))
+}
+
+function isTimestampValue(value: unknown): boolean {
+  return typeof value === 'string' && (value === '' || !Number.isNaN(Date.parse(value)))
+}
+
+/** 可选字段：缺失合法；存在时必须满足类型 / 枚举 / 格式约束 */
+const OPTIONAL_FIELD_RULES = [
+  { field: 'shortDescription', label: '一句话简介', code: 'invalid-short-description', expected: '字符串', valid: (value: unknown) => typeof value === 'string' },
+  { field: 'videoUrl', label: '视频地址', code: 'invalid-video-url', expected: 'http(s) 链接或空字符串', valid: isHttpUrlOrEmpty },
+  { field: 'sourceUrl', label: '来源页', code: 'invalid-source-url', expected: 'http(s) 链接或空字符串', valid: isHttpUrlOrEmpty },
+  { field: 'status', label: '发布状态', code: 'invalid-status', expected: 'draft / published / offline', valid: (value: unknown) => typeof value === 'string' && GAME_STATUSES[value] === true },
+  { field: 'featured', label: '首页推荐标记', code: 'invalid-featured', expected: '布尔值', valid: (value: unknown) => typeof value === 'boolean' },
+  { field: 'archived', label: '归档标记', code: 'invalid-archived', expected: '布尔值', valid: (value: unknown) => typeof value === 'boolean' },
+  { field: 'sortOrder', label: '排序权重', code: 'invalid-sort-order', expected: '有限数字', valid: (value: unknown) => typeof value === 'number' && Number.isFinite(value) },
+  { field: 'createdAt', label: '创建时间', code: 'invalid-created-at', expected: 'ISO 时间字符串或空字符串', valid: isTimestampValue },
+  { field: 'updatedAt', label: '更新时间', code: 'invalid-updated-at', expected: 'ISO 时间字符串或空字符串', valid: isTimestampValue },
+  { field: 'publishedAt', label: '发布时间', code: 'invalid-published-at', expected: 'ISO 时间字符串或空字符串', valid: isTimestampValue },
+]
 
 /** 大小写 / 空白归一化后找重复项；返回出现次数 > 1 的原值 */
 function duplicateValues(values: unknown): string[] {
@@ -110,6 +145,10 @@ function readTextList(value: unknown): string[] {
 function describeValue(value: unknown): string {
   if (value === null) return 'null'
   if (Array.isArray(value)) return '数组'
+  if (typeof value === 'string') {
+    const shown = value.length > 40 ? `${value.slice(0, 40)}…` : value
+    return `字符串「${shown}」`
+  }
   return `类型 ${typeof value}`
 }
 
@@ -185,6 +224,9 @@ export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
       return
     }
     const id = entry.id.trim()
+    if (entry.id !== id) {
+      add('warning', 'game-id-whitespace', `作品 id「${entry.id}」首尾包含空白`, id)
+    }
     if (rawById.has(id)) {
       add('error', 'game-duplicate-id', `作品 id「${id}」重复`, id)
       return
@@ -276,7 +318,7 @@ export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
         game.id,
       )
     } else if (!rawGame.title.trim()) {
-      add('error', 'missing-title', `作品「${game.id}」没有标题`, game.id)
+      add('error', 'empty-title', `作品「${game.id}」的标题为空字符串`, game.id)
     }
 
     if (rawGame.author === undefined) {
@@ -289,7 +331,23 @@ export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
         game.id,
       )
     } else if (!rawGame.author.trim()) {
-      add('error', 'missing-author', `作品《${label}》没有作者`, game.id)
+      add('error', 'empty-author', `作品《${label}》的作者为空字符串`, game.id)
+    }
+
+    for (const rule of REQUIRED_TEXT_FIELDS) {
+      const value = rawGame[rule.field]
+      if (value === undefined) {
+        add('error', rule.missing, `作品《${label}》缺少${rule.label}字段`, game.id)
+      } else if (typeof value !== 'string') {
+        add(
+          'error',
+          rule.invalid,
+          `作品《${label}》的${rule.label}不是字符串（实际为 ${describeValue(value)}）`,
+          game.id,
+        )
+      } else if (!value.trim()) {
+        add('warning', rule.empty, `作品《${label}》的${rule.label}为空字符串`, game.id)
+      }
     }
 
     if (rawGame.coverImage === undefined) {
@@ -348,6 +406,56 @@ export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
       })
     }
 
+    if (rawGame.gallery === undefined) {
+      add('warning', 'missing-gallery', `作品《${label}》没有截图列表字段`, game.id)
+    }
+
+    const metrics = rawGame.metrics
+    if (metrics === undefined) {
+      add('error', 'missing-metrics', `作品《${label}》缺少 metrics 字段`, game.id)
+    } else if (!isRecord(metrics)) {
+      add(
+        'error',
+        'invalid-metrics',
+        `作品《${label}》的 metrics 不是对象（实际为 ${describeValue(metrics)}）`,
+        game.id,
+      )
+    } else {
+      const fakeViews = metrics.fakeViews
+      if (typeof fakeViews !== 'number' || !Number.isFinite(fakeViews)) {
+        add(
+          'error',
+          'invalid-fake-views',
+          `作品《${label}》的 metrics.fakeViews 不是有限数字（实际为 ${describeValue(fakeViews)}）`,
+          game.id,
+        )
+      } else if (fakeViews < 0) {
+        add(
+          'warning',
+          'implausible-fake-views',
+          `作品《${label}》的 metrics.fakeViews 为负数（${fakeViews}）`,
+          game.id,
+        )
+      }
+
+      const score = metrics.score
+      if (typeof score !== 'number' || !Number.isFinite(score)) {
+        add(
+          'error',
+          'invalid-score',
+          `作品《${label}》的 metrics.score 不是有限数字（实际为 ${describeValue(score)}）`,
+          game.id,
+        )
+      } else if (score < 0 || score > 5) {
+        add(
+          'warning',
+          'implausible-score',
+          `作品《${label}》的 metrics.score ${score} 不在 0–5 之间`,
+          game.id,
+        )
+      }
+    }
+
     for (const { field, code, label: fieldLabel } of RAW_TEXT_LIST_FIELDS) {
       const value = rawGame[field]
       if (value === undefined) continue
@@ -386,6 +494,19 @@ export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
         `作品《${label}》的发行年份 ${year} 不在 ${YEAR_MIN}–${YEAR_MAX} 之间`,
         game.id,
       )
+    }
+
+    for (const rule of OPTIONAL_FIELD_RULES) {
+      const value = rawGame[rule.field]
+      if (value === undefined) continue
+      if (!rule.valid(value)) {
+        add(
+          'error',
+          rule.code,
+          `作品《${label}》的${rule.label}不合法（期望 ${rule.expected}，实际为 ${describeValue(value)}）`,
+          game.id,
+        )
+      }
     }
 
     // 开发状态：原始值非法（归一化会静默回退 unknown）

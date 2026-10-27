@@ -194,6 +194,7 @@ export function runDataQualityAssertions(): Assertion[] {
       { ...cleanGame(), id: '   ' },
       { ...cleanGame(), id: 'dup' },
       { ...cleanGame(), id: 'dup' },
+      { ...cleanGame(), id: ' padded ' },
     ],
     taxonomy: cleanTaxonomy(),
   })
@@ -203,15 +204,18 @@ export function runDataQualityAssertions(): Assertion[] {
     2,
   )
   check('重复 id · 报 game-duplicate-id', codes(idReport).includes('game-duplicate-id'), true)
-  check('重复 id · 只检查第一条', idReport.counts.games, 1)
+  check('首尾空白 id · 报 game-id-whitespace', codes(idReport).includes('game-id-whitespace'), true)
+  check('重复 id · 只检查第一条', idReport.counts.games, 2)
 
   const textCases = analyzeCatalog({
     games: [
       { ...cleanGame(), id: 'title-missing', title: undefined },
       { ...cleanGame(), id: 'title-null', title: null },
       { ...cleanGame(), id: 'title-number', title: 3 },
+      { ...cleanGame(), id: 'title-empty', title: '   ' },
       { ...cleanGame(), id: 'author-missing', author: undefined },
       { ...cleanGame(), id: 'author-null', author: null },
+      { ...cleanGame(), id: 'author-empty', author: '' },
     ],
     taxonomy: cleanTaxonomy(),
   })
@@ -231,8 +235,18 @@ export function runDataQualityAssertions(): Assertion[] {
     1,
   )
   check(
+    '标题为空 · empty-title',
+    textCases.issues.filter((issue) => issue.code === 'empty-title').length,
+    1,
+  )
+  check(
     '作者类型错误 · invalid-author',
     textCases.issues.filter((issue) => issue.code === 'invalid-author').length,
+    1,
+  )
+  check(
+    '作者为空 · empty-author',
+    textCases.issues.filter((issue) => issue.code === 'empty-author').length,
     1,
   )
 
@@ -324,15 +338,168 @@ export function runDataQualityAssertions(): Assertion[] {
   check('年份类型错误 · invalid-year', codes(yearCases).includes('invalid-year'), true)
   check('年份越界 · implausible-year', codes(yearCases).includes('implausible-year'), true)
 
+  const requiredCases = analyzeCatalog({
+    games: [
+      { ...cleanGame(), id: 'ip-missing', ipSeries: undefined },
+      { ...cleanGame(), id: 'engine-null', engine: null },
+      { ...cleanGame(), id: 'desc-number', description: 5 },
+      { ...cleanGame(), id: 'ip-empty', ipSeries: '   ' },
+    ],
+    taxonomy: cleanTaxonomy(),
+  })
+  check('缺少 IP 系列 · missing-ip-series', codes(requiredCases).includes('missing-ip-series'), true)
+  check('引擎类型错误 · invalid-engine', codes(requiredCases).includes('invalid-engine'), true)
+  check('简介类型错误 · invalid-description', codes(requiredCases).includes('invalid-description'), true)
+  check('IP 系列为空 · empty-ip-series', codes(requiredCases).includes('empty-ip-series'), true)
+
+  const galleryCases = analyzeCatalog({
+    games: [
+      { ...cleanGame(), id: 'gallery-missing', gallery: undefined },
+      { ...cleanGame(), id: 'gallery-string', gallery: 'shots' },
+      { ...cleanGame(), id: 'gallery-items', gallery: ['/a.png', 3] },
+    ],
+    taxonomy: cleanTaxonomy(),
+  })
+  check('截图列表缺失 · missing-gallery', codes(galleryCases).includes('missing-gallery'), true)
+  check(
+    '截图列表类型错误 · invalid-gallery 逐条',
+    galleryCases.issues.filter((issue) => issue.code === 'invalid-gallery').length,
+    2,
+  )
+
+  const metricsCases = analyzeCatalog({
+    games: [
+      { ...cleanGame(), id: 'metrics-missing', metrics: undefined },
+      { ...cleanGame(), id: 'metrics-null', metrics: null },
+      { ...cleanGame(), id: 'metrics-array', metrics: [] },
+      { ...cleanGame(), id: 'metrics-bad', metrics: { fakeViews: 'x', score: Infinity } },
+      { ...cleanGame(), id: 'metrics-range', metrics: { fakeViews: -1, score: 9 } },
+      { ...cleanGame(), id: 'metrics-empty', metrics: {} },
+    ],
+    taxonomy: cleanTaxonomy(),
+  })
+  check('metrics 缺失 · missing-metrics', codes(metricsCases).includes('missing-metrics'), true)
+  check(
+    'metrics 非对象 · invalid-metrics 逐条',
+    metricsCases.issues.filter((issue) => issue.code === 'invalid-metrics').length,
+    2,
+  )
+  check('fakeViews 类型错误 · invalid-fake-views', codes(metricsCases).includes('invalid-fake-views'), true)
+  check('score 类型错误 · invalid-score', codes(metricsCases).includes('invalid-score'), true)
+  check('fakeViews 为负 · implausible-fake-views', codes(metricsCases).includes('implausible-fake-views'), true)
+  check('score 越界 · implausible-score', codes(metricsCases).includes('implausible-score'), true)
+
+  const optionalInvalid = analyzeCatalog({
+    games: [
+      {
+        ...cleanGame(),
+        id: 'optional-invalid',
+        shortDescription: 5,
+        videoUrl: 'not-a-url',
+        sourceUrl: 7,
+        status: 'live',
+        featured: 'yes',
+        archived: 1,
+        sortOrder: 'top',
+        createdAt: 5,
+        updatedAt: 'not-a-date',
+        publishedAt: null,
+      },
+    ],
+    taxonomy: cleanTaxonomy(),
+  })
+  const optionalCodes = codes(optionalInvalid)
+  for (const code of [
+    'invalid-short-description',
+    'invalid-video-url',
+    'invalid-source-url',
+    'invalid-status',
+    'invalid-featured',
+    'invalid-archived',
+    'invalid-sort-order',
+    'invalid-created-at',
+    'invalid-updated-at',
+    'invalid-published-at',
+  ]) {
+    check(`可选字段类型错误 · ${code}`, optionalCodes.includes(code), true)
+  }
+
+  const optionalValid = analyzeCatalog({
+    games: [
+      {
+        ...cleanGame(),
+        id: 'optional-valid',
+        shortDescription: '一句话简介',
+        videoUrl: 'https://example.com/video',
+        sourceUrl: 'https://example.com/source',
+        status: 'draft',
+        featured: true,
+        archived: false,
+        sortOrder: 2,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '',
+        publishedAt: '',
+      },
+    ],
+    taxonomy: cleanTaxonomy(),
+  })
+  check(
+    '可选字段合法 · 不误报',
+    optionalValid.issues.filter((issue) => issue.gameId === 'optional-valid').length,
+    0,
+  )
+
+  const mixedContract = analyzeCatalog({
+    games: [
+      { ...cleanGame(), id: 'contract-clean' },
+      {
+        ...cleanGame(),
+        id: 'contract-bad',
+        title: null,
+        metrics: null,
+        gallery: 'shots',
+      },
+    ],
+    taxonomy: cleanTaxonomy(),
+  })
+  check('契约混合 · 正常记录仍被计数', mixedContract.counts.games, 2)
+  check(
+    '契约混合 · 正常记录不误报',
+    mixedContract.issues.some((issue) => issue.gameId === 'contract-clean'),
+    false,
+  )
+  check(
+    '契约混合 · 异常记录问题齐全',
+    ['invalid-title', 'invalid-metrics', 'invalid-gallery'].every((code) =>
+      mixedContract.issues.some((issue) => issue.code === code && issue.gameId === 'contract-bad'),
+    ),
+    true,
+  )
+
   const weird = {
     games: [
       {
         id: 'weird',
         title: null,
         author: 7,
+        ipSeries: 5,
+        engine: null,
+        description: 7,
+        gallery: 'shots',
+        metrics: null,
         downloads: null,
         tags: 3,
         relations: [null],
+        status: 'live',
+        featured: 'yes',
+        archived: 1,
+        sortOrder: 'top',
+        createdAt: 5,
+        updatedAt: 'not-a-date',
+        publishedAt: null,
+        shortDescription: 5,
+        videoUrl: 'not-a-url',
+        sourceUrl: 7,
       },
     ],
     taxonomy: null,

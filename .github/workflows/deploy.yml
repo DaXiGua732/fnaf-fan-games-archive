@@ -56,6 +56,11 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      # 数据完整性门禁：只对 error 失败（warning 仍允许）。检查的是
+      # 上一步 data:pull 之后的快照；拉取失败时脚本会明确告警「本次用的是旧快照」。
+      - name: Data quality check (strict)
+        run: npm run check:data -- --strict
+
       # 纯解析 / 网络层测试，用注入的 fetch 夹具，不发真实请求
       - name: GameJolt import tests
         run: npm run test:gamejolt
@@ -64,11 +69,19 @@ jobs:
       - name: Catalog document tests
         run: npm run test:catalog
 
+      # CLI 退出码契约：无 error → 0，有 error → 1（合成夹具，不碰生产数据）
+      - name: Data quality CLI tests
+        run: npm run test:data-quality
+
       - name: Build browser extension
         run: npm run build:extension
 
       - name: Deep module self-test
         run: npm run selftest
+
+      # test:ui（99 步真实浏览器点击）依赖 `npm run dev` 常驻 + 系统 Chrome，
+      # 单次约 3 分钟；本 workflow 每小时兜底重建，交互回归不纳入部署门禁。
+      # 人工执行：另开终端 `npm run dev`，再跑 `npm run test:ui`（见 README / HANDOVER）。
 
       - name: SSR smoke test
         run: npm run smoke

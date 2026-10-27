@@ -549,6 +549,20 @@ Phase 6 增加只读资料质量检查 `npm run check:data`，并完成跨模块
 - 回归测试覆盖无关字段编辑、显式关系编辑、删除目标、词表合并，以及异常输入与只读性；
   两套仓储使用同一套 `src/utils/gamePersistence.ts` 语义。
 
+**第二轮加固：原始 ID 安全与 Game 契约（2026-10-27）**：
+- 远程仓与本地存档共用 `findCatalogIdentityIssues()`：缺失 / 空白 / 首尾空白 /
+  非字符串 / 重复 id 时，任何目录写入都在提交 / 落盘前被拒绝，错误信息指出
+  `games[n]` 的具体问题。失败零提交、零写入；不会把异常记录归一化、复制或丢失。
+  本机模式的「恢复出厂数据」是显式修复入口，会把数据换回出厂快照。
+- `analyzeCatalog()` 按 `src/types/game.ts` 补齐契约检查：`ipSeries` / `engine` /
+  `description` 缺失与类型错误、`gallery` 数组、`metrics` 及 `fakeViews` / `score`、
+  以及 `shortDescription` / `videoUrl` / `sourceUrl` / `status` / `featured` /
+  `archived` / `sortOrder` / 三个时间戳字段的类型、枚举与格式约束。
+  可选字段缺失不误报；未知扩展字段继续允许。
+- `check:data --strict` 与 `test:data-quality` 已纳入 `npm run verify` 和部署 workflow；
+  只对 error 失败，warning 保留人工判断。`data:pull` 的成功 / 失败日志会说明
+  随后的检查针对最新拉取内容还是仓库里的旧快照。
+
 > 结构化资料库的 Phase 0–6 已全部完成。**没有**批量标注任何作品 ——
 > 分类与关系必须由管理员按资料逐条录入；质量检查只负责把问题列出来。
 >
@@ -723,37 +737,44 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 | `npm run smoke` | SSR 冒烟：逐路由真实渲染并断言内容（16 条路由） |
 | `npm run test:gamejolt` | GameJolt 链接解析 / 字段转换 / 扩展打包的单元测试（不联网） |
 | `npm run test:catalog` | 数据仓文档解析 / 序列化测试（保留 `taxonomy` 等未知顶层字段） |
+| `npm run test:data-quality` | `check:data --strict` 的退出码契约（合成夹具；无 error → 0，有 error → 1） |
 | `npm run gamejolt:helper` | 启动 GameJolt 导入助手（只监听 127.0.0.1:4317，见 §7.3） |
 | `npm run build:extension` | 构建 Chrome / Edge 扩展到 `extension/dist/` |
 | `npm run test:extension` | 扩展端到端测试（需系统 Chrome；会先构建扩展） |
 | `npm run test:ui` | Playwright 真实浏览器点击测试（需先另开终端 `npm run dev`） |
 | `npm run assets` | 按 `db.json` 重新生成占位图到 `public/images/` |
-| `npm run verify` | `typecheck` + `test:gamejolt` + `test:catalog` + `build:extension` + `selftest` + `smoke` + `build` |
+| `npm run verify` | `typecheck` + `test:gamejolt` + `test:catalog` + `test:data-quality` + `build:extension` + `selftest` + `check:data --strict` + `smoke` + `build` |
 | `npm run check:data` | **只读**资料质量检查：默认读 `src/data/db.json`，支持 `--file=` / `--json` / `--strict` |
 
 ---
 
-## 2. 质量门禁：为什么有七道关卡
+## 2. 质量门禁：自动化关卡
 
-本项目开发期间**无法在浏览器里手动点击验证**，所以用七个自动化关卡替代人工验收。
-`npm run verify` 必须全绿才允许提交，CI 里也会跑同样七步（见 `.github/workflows/deploy.yml`）。
+本项目开发期间**无法在浏览器里手动点击验证**，所以用自动化关卡替代人工验收。
+`npm run verify` 必须全绿才允许提交；CI 部署前会跑同一组检查（见 `.github/workflows/deploy.yml`）。
 
 | 关卡 | 覆盖什么 | 抓不到什么 |
 | --- | --- | --- |
 | `typecheck` | 类型错误、拼写错误的属性名 | 运行时逻辑 |
 | `test:gamejolt` | GameJolt 链接解析 / 富文本转换 / 图片选择 / 网络降级 / 扩展 ZIP 打包 | 真实接口改版（靠失败提示兜底） |
 | `test:catalog` | 数据仓文档的解析 / 序列化；未知顶层字段与 `taxonomy` 必须原样保留 | 真实 GitHub 并发（由 selftest 的 409 桩覆盖） |
+| `test:data-quality` | `check:data --strict` 的退出码语义：error 必须真的让门禁失败 | 真实生产数据内容（用合成夹具） |
 | `build:extension` | 扩展能否打包、manifest / 图标 / 依赖是否齐全 | 真实浏览器里的扩展行为 |
-| `selftest` | 深模块的搜索/过滤/排序/分页逻辑是否正确；主题解析、催资源去重/匹配/仓储契约；结构化字段 / 词表 / 关系 / 仓储契约 | UI |
+| `selftest` | 深模块的搜索/过滤/排序/分页逻辑是否正确；主题解析、催资源去重/匹配/仓储契约；结构化字段 / 词表 / 关系 / 仓储契约；异常输入与原始 ID 安全 | UI |
+| `check:data --strict` | 当前快照是否存在结构性数据 error（warning 不阻断） | 数据仓是否拉取成功（由 `data:pull` 日志区分） |
 | `smoke` | 每个路由能否真实渲染出 DOM（**防白屏**） | 样式是否正确 |
 | `build` | 生产构建能否通过、代码分割是否正常 | — |
 
+> `npm run test:ui` 依赖常驻 `npm run dev` 与系统 Chrome，单次约 3 分钟；它验证交互而不是
+> 构建 / 数据完整性，且部署 workflow 每小时兜底重建，因此**不纳入 verify / CI**。
+> 人工执行：另开终端 `npm run dev`，再跑 `npm run test:ui`（见 §2.2）。
+>
 > `npm run test:extension` 用系统 Chrome 跑扩展的端到端流程（抓取 → 下载图片 → 打包 ZIP），
-> 因为它依赖本机浏览器，**不进 CI / verify**；改了扩展代码就本地跑一次。
+> 同样**不进 CI / verify**；改了扩展代码就本地跑一次。
 
 ### 2.1 `selftest` 的设计要点
 
-断言集放在 `src/dev/`，目前六份：
+断言集放在 `src/dev/`，目前八份：
 
 | 文件 | 覆盖的深模块 |
 | --- | --- |
@@ -778,8 +799,9 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 > 一组合成 fixture（`FIXTURE_GAMES`），再跑状态统计 / 批量 / 标签 / 作者等断言。
 > CI 在 `data:pull` 之后运行，站长随时可能删改真实条目 —— 断言不能把条目标题或 id 编码进去。
 
-> 截至 2026-10-27 结构化资料 Phase 6 收尾：`selftest` **880/880**、`test:catalog` **3/3**、
-> `smoke` **16/16**、UI 点击测试 **99/99**，完整 `npm run verify` 通过（含 build）。
+> 截至 2026-10-27：`selftest` **1115/1115**、`test:catalog` **3/3**、`test:data-quality` **1/1**、
+> `smoke` **16/16**、UI 点击测试 **99/99**，`check:data --strict` 在当前快照 error 0；
+> 完整 `npm run verify` 通过（含 build）。
 > 条数会随断言增长，后续以运行输出为准 —— 这也是下面提醒不要写死条数的原因。
 
 > ⚠️ **不要在文档里写死断言条数**（比如"29 项"）。条数每个阶段都在涨，
@@ -1843,7 +1865,7 @@ Chrome / Edge 的 `content_scripts` **不支持** `"type": "module"`，直接写
 ### 收尾清单（每次改动）
 
 ```bash
-npm run verify     # 七道关卡必须全绿
+npm run verify     # 全部自动化关卡必须全绿（含 check:data --strict）
 # 若改了样式，再跑 §5.3 的产物 CSS 审计
 # 然后按 §8.3 发布
 ```

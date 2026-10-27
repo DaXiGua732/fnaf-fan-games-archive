@@ -66,7 +66,8 @@ async function fetchRemoteText() {
 function fail(message) {
   console.warn(`\n⚠️  数据同步失败：${message}`)
   console.warn('   已保留仓库里那份快照继续构建 —— 站点不会因此发布失败，')
-  console.warn('   但这一次发布用的是**上一次同步到**的数据。\n')
+  console.warn('   但这一次发布用的是**上一次同步到**的数据。')
+  console.warn('   因此随后的 check:data 检查的是这个旧快照，不是数据仓最新内容。\n')
   process.exit(0)
 }
 
@@ -97,4 +98,7 @@ writeFileSync(TARGET, serializeCatalogDocument(document.raw, document.games))
 const taxonomyNote = document.raw.taxonomy
   ? `，含分类词表`
   : '（数据仓还没有 taxonomy，前台使用内置初始词表）'
-console.log(`✅ 已从数据仓同步 ${document.games.length} 条作品${taxonomyNote} → ${TARGET}`)
+console.log(
+  `✅ 已从数据仓同步 ${document.games.length} 条作品${taxonomyNote} → ${TARGET}` +
+    '（随后的 check:data 检查的就是这份最新拉取内容）',
+)

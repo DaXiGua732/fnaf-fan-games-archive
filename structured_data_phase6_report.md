@@ -32,9 +32,14 @@ npm run check:data -- --strict             # 有 error 时退出码 1（默认�
 | 类别 | 代码 | 级别 |
 | --- | --- | --- |
 | 结构 | `catalog-root-invalid` / `catalog-games-missing` / `game-invalid` / `game-duplicate-id` | error |
-| 必填 | `missing-title` / `missing-author` / `invalid-title` / `invalid-author` | error |
-| 资料完整度 | `missing-cover` / `missing-banner` / `missing-downloads` | warning |
-| 资料类型 | `invalid-cover` / `invalid-banner` / `invalid-downloads` / `invalid-download` | error |
+| 身份 | `game-id-whitespace` | warning |
+| 必填 | `missing-title` / `missing-author` / `invalid-title` / `invalid-author` / `empty-title` / `empty-author` | error |
+| 必填（Game 契约） | `missing-ip-series` / `missing-engine` / `missing-description` / `invalid-ip-series` / `invalid-engine` / `invalid-description` | error |
+| 必填但为空 | `empty-ip-series` / `empty-engine` / `empty-description` | warning |
+| 资料完整度 | `missing-cover` / `missing-banner` / `missing-downloads` / `missing-gallery` | warning |
+| 资料类型 | `invalid-cover` / `invalid-banner` / `invalid-downloads` / `invalid-download` / `invalid-gallery` | error |
+| 指标 | `missing-metrics` / `invalid-metrics` / `invalid-fake-views` / `invalid-score` | error |
+| 指标范围 | `implausible-fake-views` / `implausible-score` | warning |
 | 分类 | `unclassified` / `unknown-vocabulary` | warning / error |
 | 标签 | `tag-overlaps-vocabulary` / `duplicate-tag` / `duplicate-alt-title` / `duplicate-platform` | warning |
 | 关系 | `relation-self` / `relation-dangling` / `relation-invalid-type` / `relation-invalid-target` / `relation-duplicate` / `relation-empty-target` / `relation-not-array` | error |
@@ -42,6 +47,7 @@ npm run check:data -- --strict             # 有 error 时退出码 1（默认�
 | 关系 | `relation-target-hidden` | info（后台保留、前台不展示） |
 | 字段 | `invalid-development-status` / `implausible-year` | warning |
 | 字段类型 | `invalid-year` / `invalid-tags` / `invalid-alt-titles` / `invalid-platforms` / `invalid-gameplay-types` / `invalid-mechanics` | error |
+| 可选字段 | `invalid-short-description` / `invalid-video-url` / `invalid-source-url` / `invalid-status` / `invalid-featured` / `invalid-archived` / `invalid-sort-order` / `invalid-created-at` / `invalid-updated-at` / `invalid-published-at` | error |
 | 词表 | `taxonomy-missing` / `unused-vocabulary` | info |
 | 词表 | `taxonomy-unusable` | error |
 | 词表 | `taxonomy-issue` / `overlapping-vocabulary` | warning |
@@ -110,8 +116,8 @@ Phase 6 没有引入新的查询或写入路径，回归范围覆盖此前各阶
 2. 检查基于数据文件本身，不做跨数据仓 / 历史提交比较。
 3. 生产数据仍没有任何玩法 / 机制 / 平台标注与作品关系，这是**资料缺失**，
    不是代码缺陷；需要按证据人工录入。
-4. `check:data` 未纳入 `npm run verify`：真实数据可能长期带有 warning，
-   不应让部署门禁因资料完整度失败；需要严格检查时用 `--strict`。
+4. `check:data --strict` 已纳入 `npm run verify` 与部署 workflow：只对 error 阻断，
+   warning 仍允许存在；检查对象是 `data:pull` 之后的快照（拉取失败时日志会说明用的是旧快照）。
 5. 真实 GitHub / Supabase 行为仍未做网络级测试，沿用此前的桩与手动运维流程。
 
 ## 7. 结构化资料库升级总结
@@ -154,3 +160,31 @@ Phase 0–6 按设计完成，没有批量修改生产数据，没有引入新�
 异常输入与只读性、场景 A（无关字段编辑）、场景 B（显式关系编辑与非法输入拒绝）、
 场景 C（删除目标只清理入边）、场景 D（词表合并 / 改名不触碰关系），
 远程仓使用假 `fetch`，本地仓使用内存存档，均不出网。
+
+## 9. 第二轮加固（2026-10-27）：原始 ID 安全、Game 契约与门禁
+
+1. **记录身份不可靠时 fail-closed**
+   `src/utils/gamePersistence.ts` 新增 `findCatalogIdentityIssues()`，统一检查
+   缺失 / 空白 / 首尾空白 / 非字符串 / 重复 id。远程仓在 `commit()` 里、任何
+   `putFile` 之前拒绝；本地仓在所有目录写入（作品增删改、上下线、词表操作）之前拒绝。
+   错误信息指出 `games[n]` 的具体问题；失败不产生提交、不修改本机存档 / 词表。
+   本机模式的「恢复出厂数据」是显式修复入口。
+
+2. **`Game` 契约字段补全**
+   `analyzeCatalog()` 新增 `ipSeries` / `engine` / `description` 的缺失、类型与空值检查；
+   `gallery` 字符串数组；`metrics` 对象及 `fakeViews` / `score` 的有限数值与范围；
+   `shortDescription` / `videoUrl` / `sourceUrl` / `status` / `featured` / `archived` /
+   `sortOrder` / `createdAt` / `updatedAt` / `publishedAt` 的类型、枚举与格式检查。
+   可选字段缺失不误报；未知扩展字段继续保留；检查器仍只读且逐条隔离。
+
+3. **验证门禁**
+   - `npm run verify` 新增 `test:data-quality` 与 `check:data --strict`。
+   - 部署 workflow 新增「Data quality CLI tests」与「Data quality check (strict)」。
+   - `check:data --strict` 只对 error 失败，warning 继续人工判断；检查对象是
+     `data:pull` 之后的快照，拉取失败时日志明确标注“本次检查的是旧快照”。
+   - `test:ui` 仍需常驻 dev server + 系统 Chrome（约 3 分钟），且 workflow 每小时
+     兜底重建；交互回归不纳入部署门禁，人工命令为 `npm run dev` + `npm run test:ui`。
+
+回归结果（本轮）：`selftest` **1115/1115**（资料质量组 93/93，结构化资料组 321/321）、
+`test:data-quality` **1/1**、`test:catalog` 3/3、`test:gamejolt` 22/22、`smoke` 16/16、
+UI 点击 99/99；当前快照 `check:data --strict` 为 error 0 · warning 7 · info 14。

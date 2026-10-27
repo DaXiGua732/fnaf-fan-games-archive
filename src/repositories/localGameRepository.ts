@@ -31,8 +31,11 @@ import { applyPatch, createGameFrom } from '../utils/gameFactory'
 import {
   buildGameWritePatch,
   buildVocabularyWritePatches,
+  catalogIdentityErrorMessage,
+  findCatalogIdentityIssues,
   removeRelationTarget,
 } from '../utils/gamePersistence'
+import { isRecord } from '../utils/guards'
 import {
   normalizeRelations,
   sameRelations,
@@ -76,18 +79,24 @@ export const TAXONOMY_STORAGE_KEY = 'fnaf-archive:taxonomy:v1'
 interface CatalogState {
   games: AdminGame[]
   records: Map<string, Record<string, unknown>>
+  /**
+   * 记录身份问题（缺失 / 空白 / 非法 / 重复 id）。
+   * 非空时**任何写入都要拒绝** —— 按 id 匹配原始记录已不可靠。
+   */
+  identityIssues: string[]
 }
 
-/** 原始记录按 id 索引；形态不合法的条目留给归一化 / 质量检查去报告 */
+/** 原始记录按 id 索引；非法 / 重复 id 不进入映射（写入会被整体拒绝） */
 function indexRecords(rawGames: unknown[]): Map<string, Record<string, unknown>> {
   const records = new Map<string, Record<string, unknown>>()
+  const seen = new Set<string>()
   for (const entry of rawGames) {
-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue
-    const record = entry as Record<string, unknown>
-    if (typeof record.id !== 'string' || !record.id.trim()) continue
-    // 键保持原始 id（不 trim）：`normalizeGame()` 也不改 id，
-    // 这样持久化时 `game.id` 一定能命中对应记录。
-    records.set(record.id, record)
+    if (!isRecord(entry)) continue
+    const id = entry.id
+    if (typeof id !== 'string' || !id.trim() || id !== id.trim() || seen.has(id)) continue
+    seen.add(id)
+    // 键保持原始 id：`normalizeGame()` 也不改 id，持久化时才能命中对应记录
+    records.set(id, entry)
   }
   return records
 }
@@ -95,7 +104,11 @@ function indexRecords(rawGames: unknown[]): Map<string, Record<string, unknown>>
 /** 出厂数据（db.json）—— 只在首次访问与「恢复出厂」时用 */
 function seedCatalog(): CatalogState {
   const raw = structuredClone(db.games) as unknown[]
-  return { games: normalizeGames(raw as Game[]), records: indexRecords(raw) }
+  return {
+    games: normalizeGames(raw.filter(isRecord) as unknown as Game[]),
+    records: indexRecords(raw),
+    identityIssues: findCatalogIdentityIssues(raw),
+  }
 }
 
 /** 归一化记录的直接落盘形态：新记录没有原始 JSON，只能整条写入 */
@@ -147,7 +160,12 @@ function readStoredCatalog(backend: StorageLike | null): CatalogState | null {
     }
     // 走一遍归一化：存档可能是旧版本写的，缺的字段要补齐。
     // 同时保留原始记录，写回时未编辑的作品不会被归一化结果覆盖。
-    return { games: normalizeGames(parsed as Game[]), records: indexRecords(parsed) }
+    // 非对象记录无法归一化，但身份检查会让所有写入被拒绝，原始存档不会被改写。
+    return {
+      games: normalizeGames(parsed.filter(isRecord) as unknown as Game[]),
+      records: indexRecords(parsed),
+      identityIssues: findCatalogIdentityIssues(parsed),
+    }
   } catch {
     console.warn('[localGameRepository] 本地存档解析失败，已退回出厂数据')
     return null
@@ -206,6 +224,8 @@ export function createLocalGameRepository(
    * 这样普通编辑不会顺手清掉未编辑作品上的历史异常关系。
    */
   const records = initial.records
+  /** 当前数据源的记录身份问题；非空时所有目录写入都必须拒绝（reset 除外） */
+  let identityIssues = initial.identityIssues
   const storedTaxonomy = readStoredTaxonomy(backend)
   const taxonomyStore = ref<Taxonomy>(storedTaxonomy?.taxonomy ?? seedTaxonomy())
   const taxonomyIssues = ref<string[]>(storedTaxonomy?.issues ?? [])
@@ -273,6 +293,13 @@ export function createLocalGameRepository(
     }
   }
 
+  /** 记录身份不可靠时，任何目录写入都必须在修改内存 / 本机存档之前失败 */
+  function assertWritableCatalog(): void {
+    if (identityIssues.length > 0) {
+      throw new Error(catalogIdentityErrorMessage(identityIssues))
+    }
+  }
+
   function indexOf(id: string): number {
     return store.value.findIndex((game) => game.id === id)
   }
@@ -292,6 +319,7 @@ export function createLocalGameRepository(
   }
 
   async function updateGame(id: string, patch: GamePatch): Promise<AdminGame> {
+    assertWritableCatalog()
     const index = indexOf(id)
     // 显式抛错，不静默新建一条 —— 否则「保存」失败会被伪装成成功
     if (index === -1) throw new Error(`updateGame: 找不到 id 为「${id}」的条目`)
@@ -346,12 +374,14 @@ export function createLocalGameRepository(
       // 再由前台同步逻辑拉到最新 —— 避免把「服务端数据」写成本机存档。
       // 用 JSON 深拷贝而不是 structuredClone：调用方可能传 Vue 响应式代理，
       // structuredClone 遇到 Proxy 会抛 DataCloneError。
-      const nextGames = normalizeGames(JSON.parse(JSON.stringify(games)))
+      const cloned = JSON.parse(JSON.stringify(games)) as unknown[]
+      identityIssues = findCatalogIdentityIssues(cloned)
+      const nextGames = normalizeGames(cloned.filter(isRecord) as unknown as Game[])
       store.value = nextGames
       // hydrate 的数据本身就是归一化后的外部快照，没有可保留的原始 JSON；
       // 重建记录，避免下一次本地保存把过期的出厂原始数据写回去。
       records.clear()
-      for (const game of nextGames) records.set(game.id, recordOf(game))
+      for (const [id, record] of indexRecords(cloned)) records.set(id, record)
       if (taxonomy) {
         const normalized = normalizeTaxonomy(taxonomy)
         taxonomyStore.value = normalized.taxonomy
@@ -370,6 +400,7 @@ export function createLocalGameRepository(
     },
 
     async createGame(patch) {
+      assertWritableCatalog()
       const created = createGameFrom(store.value, patch)
 
       // id 是创建时才生成的，所以关系校验必须放在它之后：
@@ -392,6 +423,7 @@ export function createLocalGameRepository(
     updateGame,
 
     async deleteGame(id) {
+      assertWritableCatalog()
       const index = indexOf(id)
       if (index === -1) return false
 
@@ -428,12 +460,14 @@ export function createLocalGameRepository(
       store.value = seed.games
       records.clear()
       for (const [id, record] of seed.records) records.set(id, record)
+      identityIssues = seed.identityIssues
       taxonomyStore.value = seedTaxonomy()
       taxonomyIssues.value = []
       persist()
     },
 
     async createVocabularyEntry(collection, input) {
+      assertWritableCatalog()
       const result = createVocabularyEntryIn(taxonomyStore.value, collection, input)
       taxonomyStore.value = result.taxonomy
       taxonomyIssues.value = []
@@ -442,6 +476,7 @@ export function createLocalGameRepository(
     },
 
     async updateVocabularyEntry(collection, id, patch) {
+      assertWritableCatalog()
       const result = updateVocabularyEntryIn(taxonomyStore.value, collection, id, patch)
       taxonomyStore.value = result.taxonomy
       taxonomyIssues.value = []
@@ -450,6 +485,7 @@ export function createLocalGameRepository(
     },
 
     async mergeVocabularyEntries(collection, sourceId, targetId) {
+      assertWritableCatalog()
       const result = mergeVocabularyEntriesIn(
         taxonomyStore.value,
         store.value,
@@ -469,6 +505,7 @@ export function createLocalGameRepository(
     },
 
     async deleteVocabularyEntry(collection, id, options = {}) {
+      assertWritableCatalog()
       const result = deleteVocabularyEntryIn(
         taxonomyStore.value,
         store.value,

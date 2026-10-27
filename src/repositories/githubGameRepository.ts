@@ -51,8 +51,11 @@ import { applyPatch, createGameFrom, slugify } from '../utils/gameFactory'
 import {
   buildGameWritePatch,
   buildVocabularyWritePatches,
+  catalogIdentityErrorMessage,
+  findCatalogIdentityIssues,
   removeRelationTarget,
 } from '../utils/gamePersistence'
+import { isRecord } from '../utils/guards'
 import {
   normalizeRelations,
   sameRelations,
@@ -78,6 +81,11 @@ interface CatalogDocument {
   raw: Record<string, unknown>
   /** 原始作品记录，按 id 索引；持久化时未编辑的记录原样写回 */
   originals: Map<string, Record<string, unknown>>
+  /**
+   * 记录身份问题（缺失 / 空白 / 非法 / 重复 id）。
+   * 非空时**任何写入都要拒绝** —— 按 id 匹配原始记录已不可靠。
+   */
+  identityIssues: string[]
   games: AdminGame[]
   taxonomy: Taxonomy
   taxonomyIssues: string[]
@@ -136,19 +144,24 @@ function parseCatalog(text: string): CatalogDocument {
   }
 
   const originals = new Map<string, Record<string, unknown>>()
+  const seenIds = new Set<string>()
   for (const entry of games) {
-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue
-    const record = entry as Record<string, unknown>
-    if (typeof record.id !== 'string' || !record.id.trim()) continue
+    if (!isRecord(entry)) continue
+    const id = entry.id
+    if (typeof id !== 'string' || !id.trim() || id !== id.trim() || seenIds.has(id)) continue
+    seenIds.add(id)
     // 键保持原始 id：归一化不改 id，持久化时 `game.id` 才能命中该记录
-    originals.set(record.id, record)
+    originals.set(id, entry)
   }
 
   const normalized = normalizeTaxonomy(raw.taxonomy)
   return {
     raw,
     originals,
-    games: normalizeGames(games as Game[]),
+    identityIssues: findCatalogIdentityIssues(games),
+    // 非对象记录无法归一化，但不在这里丢弃原始数组：写入已因身份问题被拒绝，
+    // 读取侧只需要能展示其余合法记录即可。
+    games: normalizeGames(games.filter(isRecord) as unknown as Game[]),
     taxonomy: normalized.taxonomy,
     taxonomyIssues: normalized.issues,
   }
@@ -278,6 +291,12 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
     for (let attempt = 1; attempt <= MAX_CONFLICT_RETRY; attempt += 1) {
       const { text, sha } = await fetchFile(repositoryRef, token)
       const current = parseCatalog(text)
+
+      // 写前先确认 id 能唯一指向原始记录。身份不可靠时继续写会覆盖 / 复制
+      // 未编辑的数据；这里在任何 putFile 之前直接拒绝（零提交）。
+      if (current.identityIssues.length > 0) {
+        throw new Error(catalogIdentityErrorMessage(current.identityIssues))
+      }
 
       const intent = plan(current)
       if (intent === null) {
