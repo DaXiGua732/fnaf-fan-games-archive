@@ -105,7 +105,7 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: 'year', label: '年份' },
 ]
 
-/** 选中态：深色背景 + 红色边框（规范允许的两种选中表现合并使用） */
+/** 选中态：深色背景 + 强调色边框（规范允许的两种选中表现合并使用） */
 function chipClass(active: boolean): string {
   return [
     'rounded-none border px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em]',

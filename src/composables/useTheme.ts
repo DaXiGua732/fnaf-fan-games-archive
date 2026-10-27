@@ -4,7 +4,8 @@ import { computed, ref, type ComputedRef } from 'vue'
  * 站点主题系统
  *
  * 三种「模式偏好」：跟随系统 / 日间 / 夜间；
- * 五种低饱和强调色：赤红 / 靛蓝 / 青绿 / 藕粉 / 紫灰。
+ * 六种低饱和强调色取 V家歌姬的代表色：初音未来 / 镜音铃 / 镜音连 /
+ * 巡音流歌 / MEIKO / KAITO。
  *
  * 设计约束：
  *  - 模块级单例 —— 公开站与后台共享同一份状态。
@@ -14,7 +15,7 @@ import { computed, ref, type ComputedRef } from 'vue'
  *    跨标签页同步与系统主题变化。两处使用同一组 storage key。
  */
 
-export type ThemeAccent = 'red' | 'blue' | 'teal' | 'pink' | 'purple'
+export type ThemeAccent = 'miku' | 'rin' | 'len' | 'luka' | 'meiko' | 'kaito'
 export type ThemeMode = 'light' | 'dark'
 export type ModePreference = 'system' | 'light' | 'dark'
 
@@ -30,14 +31,15 @@ export const THEME_MODE_STORAGE_KEY = 'fnaf-archive:theme-mode:v1'
 export const THEME_ACCENT_STORAGE_KEY = 'fnaf-archive:theme-accent:v1'
 
 export const THEME_ACCENTS: readonly ThemeAccentOption[] = [
-  { id: 'red', label: '赤红', swatch: '#a94a4a' },
-  { id: 'blue', label: '靛蓝', swatch: '#4a6d8c' },
-  { id: 'teal', label: '青绿', swatch: '#3f6f63' },
-  { id: 'pink', label: '藕粉', swatch: '#9c5a72' },
-  { id: 'purple', label: '紫灰', swatch: '#6f5a8c' },
+  { id: 'miku', label: '初音未来', swatch: '#39c5bb' },
+  { id: 'rin', label: '镜音铃', swatch: '#f2a900' },
+  { id: 'len', label: '镜音连', swatch: '#ffe211' },
+  { id: 'luka', label: '巡音流歌', swatch: '#ff9ec4' },
+  { id: 'meiko', label: 'MEIKO', swatch: '#c8102e' },
+  { id: 'kaito', label: 'KAITO', swatch: '#3366cc' },
 ]
 
-const DEFAULT_ACCENT: ThemeAccent = 'red'
+const DEFAULT_ACCENT: ThemeAccent = 'miku'
 const DEFAULT_PREFERENCE: ModePreference = 'system'
 
 /** 浏览器地址栏 / UA 主题色：与 CSS 中两种模式的 paper 一致 */

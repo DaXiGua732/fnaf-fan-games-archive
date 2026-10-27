@@ -23,14 +23,15 @@
 
 ## 2. 设计系统速查
 
-- **色彩（浅色默认值）**：纸 `#fafaf8` / 墨 `#1a1a18` / 强调赤红 `#a94a4a` /
-  辅助线 `#d4d4d0` / 浅层表面 `#f2f2ef`。深色模式整体替换变量（纸 `#141413` / 墨 `#e8e8e4`）。
+- **色彩（浅色默认值）**：纸 `#fafaf8` / 墨 `#1a1a18` / 强调 `#2b6b70`（默认初音未来，
+  其余歌姬色见 §4）/ 辅助线 `#d4d4d0` / 浅层表面 `#f2f2ef`。
+  深色模式整体替换变量（纸 `#141413` / 墨 `#e8e8e4`）。
 - **网格**：12 列衍生，常用 `grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8`
 - **动效上限**：`duration-150 ease-out`
 - **留白优先**：用大间距（`py-24`、`mb-12`）而非分隔线建立层级
 - **`.swiss-meta`**：`text-[11px] uppercase tracking-[0.18em]`，用于年份 / 作者 / 元信息
 
-**组件写法参考**：`Button.vue`（箭头位移用 `.u-arrow`）、`Card.vue`（左边框悬停变红，
+**组件写法参考**：`Button.vue`（箭头位移用 `.u-arrow`）、`Card.vue`（左边框悬停变强调色，
 左侧常驻 `border-l-4 border-l-transparent` 以避免布局抖动）。
 
 ## 3. 三层强制机制
@@ -86,11 +87,26 @@ grep -o '\.rounded-md\|\.shadow{\|\.font-serif\|\.font-mono' "$CSS" | sort -u  #
 **它只改颜色，不改形状。** 圆角、阴影、渐变、对齐、字体、间距与动效上限全部不变 ——
 主题把颜色从组件里抽成一层语义变量。
 
-- **模式偏好**：跟随系统（默认）/ 日间 / 夜间。跟随系统时监听 `prefers-color-scheme`，
-  系统变化实时生效；切到日间 / 夜间后移除监听。
-- **强调色**：赤红（默认）/ 靛蓝 / 青绿 / 藕粉 / 紫灰，五种低饱和色。
-- **作用范围**：公开站与后台共用同一份设置（模块级单例），**只保存在当前设备**。
-  切换器在 `Layout.vue` 与 `AdminLayout.vue` 里都挂了一份。
+**模式偏好**：跟随系统（默认）/ 日间 / 夜间。跟随系统时监听 `prefers-color-scheme`，
+系统变化实时生效；切到日间 / 夜间后移除监听。
+
+**强调色**：6 种，取自 V家歌姬代表色（默认初音未来）：
+
+| id | 歌姬 | 代表色 |
+| --- | --- | --- |
+| `miku` | 初音未来 | `#39c5bb` |
+| `rin` | 镜音铃 | `#f2a900` |
+| `len` | 镜音连 | `#ffe211` |
+| `luka` | 巡音流歌 | `#ff9ec4` |
+| `meiko` | MEIKO | `#c8102e` |
+| `kaito` | KAITO | `#3366cc` |
+
+代表色只用于选择器色块；界面里的 `accent` / `accent-surface` / `accent-bright`
+是在代表色基础上低饱和 / 加深（浅色）或提亮（深色）后的值，必须同时满足
+paper 与 on-accent 的对比度。取色只改 `src/styles/index.css`。
+
+**作用范围**：公开站与后台共用同一份设置（模块级单例），**只保存在当前设备**。
+切换器在 `Layout.vue` 与 `AdminLayout.vue` 里都挂了一份。
 
 | 文件 | 职责 |
 | --- | --- |
@@ -105,10 +121,12 @@ grep -o '\.rounded-md\|\.shadow{\|\.font-serif\|\.font-mono' "$CSS" | sort -u  #
 
 ```
 fnaf-archive:theme-mode:v1      # system | light | dark
-fnaf-archive:theme-accent:v1    # red | blue | teal | pink | purple
+fnaf-archive:theme-accent:v1    # miku | rin | len | luka | meiko | kaito
 ```
 
 `selftest` 有一条静态守卫比对两处；内联脚本在 `localStorage` 不可用时按「跟随系统」降级。
+旧版的 `red / blue / teal / pink / purple` 已不是合法值：`readAccent()` 与内联脚本都会回退到
+默认的 `miku`（不改 storage key，旧值就地失效，不会残留一个不生效的 accent）。
 
 ### 语义 token
 

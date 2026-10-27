@@ -15,7 +15,7 @@ import { useAdminAuth } from '../../composables/useAdminAuth'
  * 点一次等于白跳一次。改为一句说明，把注意力留给登录。
  *
  * Swiss 约束复查点：
- *  - 激活态用「常驻 2px 透明左边框 → 激活变红」，与公开站导航同款抖动规避手法
+ *  - 激活态用「常驻 2px 透明左边框 → 激活变强调色」，与公开站导航同款抖动规避手法
  *  - 只有 1px 边框与留白做层级，无底色块、无阴影、无圆角
  */
 interface AdminNavItem {

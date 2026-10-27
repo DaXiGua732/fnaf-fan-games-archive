@@ -27,10 +27,11 @@ export function runThemeAssertions(): Assertion[] {
   check('resolveMode · light 不受系统深色影响', resolveMode('light', true), 'light')
   check('resolveMode · dark 不受系统浅色影响', resolveMode('dark', false), 'dark')
 
-  // isThemeAccent：接受五种合法值，拒绝其它输入
+  // isThemeAccent：接受六种合法值，拒绝其它输入
   const accentIds = THEME_ACCENTS.map((option) => option.id)
-  check('isThemeAccent · 接受全部五个 accent', accentIds.every(isThemeAccent), true)
+  check('isThemeAccent · 接受全部六个 accent', accentIds.every(isThemeAccent), true)
   check('isThemeAccent · 拒绝 green', isThemeAccent('green'), false)
+  check('isThemeAccent · 拒绝旧版 red', isThemeAccent('red'), false)
   check('isThemeAccent · 拒绝空字符串', isThemeAccent(''), false)
   check('isThemeAccent · 拒绝 null', isThemeAccent(null), false)
   check('isThemeAccent · 拒绝数字', isThemeAccent(1), false)
@@ -45,15 +46,20 @@ export function runThemeAssertions(): Assertion[] {
   check('isModePreference · 拒绝 empty', isModePreference(''), false)
   check('isModePreference · 拒绝 null', isModePreference(null), false)
 
-  // 主题清单本身：恰好五个、id 与顺序固定、色块不重复
+  // 主题清单本身：恰好六个、id 与顺序固定、色块不重复
   check(
-    'THEME_ACCENTS · 恰好包含五个固定 id',
+    'THEME_ACCENTS · 恰好包含六个固定 id',
     accentIds.join(','),
-    'red,blue,teal,pink,purple',
+    'miku,rin,len,luka,meiko,kaito',
   )
   const swatches = THEME_ACCENTS.map((option) => option.swatch)
   check('THEME_ACCENTS · 色块数量与主题数量一致', swatches.length, accentIds.length)
   check('THEME_ACCENTS · 色块不重复', new Set(swatches).size, swatches.length)
+  check(
+    'THEME_ACCENTS · 默认色是初音未来',
+    THEME_ACCENTS[0].id,
+    'miku',
+  )
 
   return results
 }

@@ -305,13 +305,13 @@ await resetLocalData()
 /* ======================================================================
    〇、主题系统 —— 模式 / 强调色 / 持久化 / 深色首屏
    ====================================================================== */
-await step('主题 · 切夜间 + 靛蓝，颜色与设置都持久化', async () => {
+await step('主题 · 切夜间 + KAITO，颜色与设置都持久化', async () => {
   await go('/', 'FNAF Fan Games')
   const themeButton = page.getByRole('button', { name: '主题', exact: true }).first()
 
   await themeButton.click()
   await page.getByRole('button', { name: '夜间', exact: true }).click()
-  await page.getByRole('button', { name: '靛蓝', exact: true }).click()
+  await page.getByRole('button', { name: 'KAITO', exact: true }).click()
   // body 的颜色过渡是 150ms，等它落定再读 computed style
   await page.waitForTimeout(250)
 
@@ -322,7 +322,7 @@ await step('主题 · 切夜间 + 靛蓝，颜色与设置都持久化', async (
     bodyBg: getComputedStyle(document.body).backgroundColor,
   }))
   assert(darkState.mode === 'dark', `data-mode 应为 dark，实际 ${darkState.mode}`)
-  assert(darkState.theme === 'blue', `data-theme 应为 blue，实际 ${darkState.theme}`)
+  assert(darkState.theme === 'kaito', `data-theme 应为 kaito，实际 ${darkState.theme}`)
   assert(darkState.colorScheme === 'dark', 'color-scheme 应同步为 dark')
   assert(
     darkState.bodyBg === 'rgb(20, 20, 19)',
@@ -337,18 +337,18 @@ await step('主题 · 切夜间 + 靛蓝，颜色与设置都持久化', async (
     theme: document.documentElement.dataset.theme,
   }))
   assert(persisted.mode === 'dark', `刷新后 data-mode 应为 dark，实际 ${persisted.mode}`)
-  assert(persisted.theme === 'blue', `刷新后 data-theme 应为 blue，实际 ${persisted.theme}`)
+  assert(persisted.theme === 'kaito', `刷新后 data-theme 应为 kaito，实际 ${persisted.theme}`)
 
-  // 复位到默认浅色 + 赤红，保证后续截图与对比度断言稳定
+  // 复位到默认浅色 + 初音未来，保证后续截图与对比度断言稳定
   await page.getByRole('button', { name: '主题', exact: true }).first().click()
   await page.getByRole('button', { name: '日间', exact: true }).click()
-  await page.getByRole('button', { name: '赤红', exact: true }).click()
+  await page.getByRole('button', { name: '初音未来', exact: true }).click()
   await page.keyboard.press('Escape')
   const reset = await page.evaluate(() => ({
     mode: document.documentElement.dataset.mode,
     theme: document.documentElement.dataset.theme,
   }))
-  assert(reset.mode === 'light' && reset.theme === 'red', '主题应复位为 light/red')
+  assert(reset.mode === 'light' && reset.theme === 'miku', '主题应复位为 light/miku')
   await shot('02-theme')
 })
 

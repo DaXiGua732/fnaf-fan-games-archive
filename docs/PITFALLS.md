@@ -84,6 +84,9 @@
 
 21. **主题 storage key 有两个读者**：`index.html` 的防闪白内联脚本与 `useTheme.ts`。
     改 key 必须同时改两处；`selftest` 有静态守卫比对。
+    强调色 id 有三处读者（`useTheme.ts` 的联合类型 / `index.html` 的白名单 /
+    `src/styles/index.css` 的 `[data-theme]` 选择器），增删歌姬必须三处一起改，
+    否则会出现「选了没反应」或「属性正确但颜色不变」。
 
 22. **`white` / `black` 已被重映射**为 `paper` / `ink`：不要在 `bg-accent*` 上用
     `text-white` / `text-black` 当前景，否则深色模式会反向；用 `text-on-accent`，
