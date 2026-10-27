@@ -362,6 +362,11 @@ export function runDataQualityAssertions(): Assertion[] {
   })
   check('截图列表缺失 · missing-gallery', codes(galleryCases).includes('missing-gallery'), true)
   check(
+    '截图列表缺失 · 为 error（空数组合法，省略字段不合法）',
+    galleryCases.issues.find((issue) => issue.code === 'missing-gallery')?.severity,
+    'error',
+  )
+  check(
     '截图列表类型错误 · invalid-gallery 逐条',
     galleryCases.issues.filter((issue) => issue.code === 'invalid-gallery').length,
     2,
@@ -447,6 +452,80 @@ export function runDataQualityAssertions(): Assertion[] {
     '可选字段合法 · 不误报',
     optionalValid.issues.filter((issue) => issue.gameId === 'optional-valid').length,
     0,
+  )
+
+  const validTimestamps = [
+    '',
+    '2026-01-01T00:00:00Z',
+    '2026-01-01T00:00:00.000Z',
+    '2026-01-01T08:30:00+08:00',
+    '2026-01-01T00:00:00-05:00',
+    '2026-01-01T00:00:00+14:00',
+    '2024-02-29T23:59:59.999999Z',
+  ]
+  const validTimestampsReport = analyzeCatalog({
+    games: validTimestamps.map((value, index) => ({
+      ...cleanGame(),
+      id: `timestamp-ok-${index}`,
+      createdAt: value,
+      updatedAt: value,
+      publishedAt: value,
+    })),
+    taxonomy: cleanTaxonomy(),
+  })
+  check(
+    '严格时间戳 · 合法 ISO 8601 不误报',
+    validTimestampsReport.issues.filter((issue) => issue.gameId?.startsWith('timestamp-ok-')).length,
+    0,
+  )
+
+  const invalidTimestamps = [
+    '2026-01-01',
+    '2026-01-01 00:00:00Z',
+    '2026-02-30T00:00:00Z',
+    '2025-02-29T00:00:00Z',
+    '2026-13-01T00:00:00Z',
+    '2026-01-01T24:00:00Z',
+    '2026-01-01T00:00:60Z',
+    '2026-01-01T00:00Z',
+    '2026-01-01T00:00:00z',
+    '2026-01-01T00:00:00+14:30',
+    '2026-01-01T00:00:00.1234567890Z',
+    '01/02/2026',
+    'not-a-date',
+    5,
+    null,
+  ]
+  const invalidTimestampsReport = analyzeCatalog({
+    games: invalidTimestamps.map((value, index) => ({
+      ...cleanGame(),
+      id: `timestamp-bad-${index}`,
+      createdAt: value,
+    })),
+    taxonomy: cleanTaxonomy(),
+  })
+  check(
+    '严格时间戳 · 非法值逐条 invalid-created-at',
+    invalidTimestampsReport.issues.filter((issue) => issue.code === 'invalid-created-at').length,
+    invalidTimestamps.length,
+  )
+
+  const otherTimestampFields = analyzeCatalog({
+    games: [
+      {
+        ...cleanGame(),
+        id: 'timestamp-other-fields',
+        updatedAt: 'not-a-date',
+        publishedAt: '2026-02-30T00:00:00Z',
+      },
+    ],
+    taxonomy: cleanTaxonomy(),
+  })
+  check(
+    '严格时间戳 · updatedAt / publishedAt 同规则',
+    codes(otherTimestampFields).includes('invalid-updated-at') &&
+      codes(otherTimestampFields).includes('invalid-published-at'),
+    true,
   )
 
   const mixedContract = analyzeCatalog({

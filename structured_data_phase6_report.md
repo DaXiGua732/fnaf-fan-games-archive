@@ -36,8 +36,8 @@ npm run check:data -- --strict             # 有 error 时退出码 1（默认�
 | 必填 | `missing-title` / `missing-author` / `invalid-title` / `invalid-author` / `empty-title` / `empty-author` | error |
 | 必填（Game 契约） | `missing-ip-series` / `missing-engine` / `missing-description` / `invalid-ip-series` / `invalid-engine` / `invalid-description` | error |
 | 必填但为空 | `empty-ip-series` / `empty-engine` / `empty-description` | warning |
-| 资料完整度 | `missing-cover` / `missing-banner` / `missing-downloads` / `missing-gallery` | warning |
-| 资料类型 | `invalid-cover` / `invalid-banner` / `invalid-downloads` / `invalid-download` / `invalid-gallery` | error |
+| 资料完整度 | `missing-cover` / `missing-banner` / `missing-downloads` | warning |
+| 资料类型 | `missing-gallery` / `invalid-cover` / `invalid-banner` / `invalid-downloads` / `invalid-download` / `invalid-gallery` | error |
 | 指标 | `missing-metrics` / `invalid-metrics` / `invalid-fake-views` / `invalid-score` | error |
 | 指标范围 | `implausible-fake-views` / `implausible-score` | warning |
 | 分类 | `unclassified` / `unknown-vocabulary` | warning / error |
@@ -172,9 +172,12 @@ Phase 0–6 按设计完成，没有批量修改生产数据，没有引入新�
 
 2. **`Game` 契约字段补全**
    `analyzeCatalog()` 新增 `ipSeries` / `engine` / `description` 的缺失、类型与空值检查；
-   `gallery` 字符串数组；`metrics` 对象及 `fakeViews` / `score` 的有限数值与范围；
+   `gallery` 是必需字符串数组：**缺失为 error**（没有截图应写 `[]`），非数组 / 非字符串项也是 error；
+   `metrics` 对象及 `fakeViews` / `score` 的有限数值与范围；
    `shortDescription` / `videoUrl` / `sourceUrl` / `status` / `featured` / `archived` /
    `sortOrder` / `createdAt` / `updatedAt` / `publishedAt` 的类型、枚举与格式检查。
+   时间戳只接受带时区的完整 ISO 8601（`YYYY-MM-DDTHH:mm:ss[.sss]Z` 或 `±HH:MM`），
+   并校验真实日历日期；不再用 `Date.parse()` 的宽松解析兜底。
    可选字段缺失不误报；未知扩展字段继续保留；检查器仍只读且逐条隔离。
 
 3. **验证门禁**
@@ -185,6 +188,6 @@ Phase 0–6 按设计完成，没有批量修改生产数据，没有引入新�
    - `test:ui` 仍需常驻 dev server + 系统 Chrome（约 3 分钟），且 workflow 每小时
      兜底重建；交互回归不纳入部署门禁，人工命令为 `npm run dev` + `npm run test:ui`。
 
-回归结果（本轮）：`selftest` **1115/1115**（资料质量组 93/93，结构化资料组 321/321）、
+回归结果（本轮）：`selftest` **1119/1119**（资料质量组 97/97，结构化资料组 321/321）、
 `test:data-quality` **1/1**、`test:catalog` 3/3、`test:gamejolt` 22/22、`smoke` 16/16、
 UI 点击 99/99；当前快照 `check:data --strict` 为 error 0 · warning 7 · info 14。

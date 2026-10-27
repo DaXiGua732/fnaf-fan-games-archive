@@ -95,8 +95,50 @@ function isHttpUrlOrEmpty(value: unknown): boolean {
   return typeof value === 'string' && (!value.trim() || /^https?:\/\/\S+$/i.test(value.trim()))
 }
 
-function isTimestampValue(value: unknown): boolean {
-  return typeof value === 'string' && (value === '' || !Number.isNaN(Date.parse(value)))
+/**
+ * 严格的时间戳格式：带日期、时间、秒与时区（Z 或 ±HH:MM）。
+ * 不接受 `Date.parse()` 能“猜”出来的本地日期、空格分隔、无时区或非法日历日。
+ */
+const ISO_TIMESTAMP_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(?:Z|([+-])(\d{2}):(\d{2}))$/
+
+const TIMESTAMP_EXPECTATION =
+  'ISO 8601 时间戳（YYYY-MM-DDTHH:mm:ss[.sss]Z 或 ±HH:MM）或空字符串'
+
+function isIsoTimestampValue(value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  if (value === '') return true
+
+  const match = ISO_TIMESTAMP_PATTERN.exec(value)
+  if (!match) return false
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const hour = Number(match[4])
+  const minute = Number(match[5])
+  const second = Number(match[6])
+  if (month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) return false
+
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][
+    month - 1
+  ]
+  if (day < 1 || day > (daysInMonth ?? 0)) return false
+
+  // 时区偏移的 ISO 上限是 ±14:00；+14:30 之类不是合法偏移
+  if (match[8] !== undefined) {
+    const offsetHour = Number(match[9])
+    const offsetMinute = Number(match[10])
+    if (
+      offsetHour > 14 ||
+      offsetMinute > 59 ||
+      (offsetHour === 14 && offsetMinute !== 0)
+    ) {
+      return false
+    }
+  }
+  return true
 }
 
 /** 可选字段：缺失合法；存在时必须满足类型 / 枚举 / 格式约束 */
@@ -108,9 +150,9 @@ const OPTIONAL_FIELD_RULES = [
   { field: 'featured', label: '首页推荐标记', code: 'invalid-featured', expected: '布尔值', valid: (value: unknown) => typeof value === 'boolean' },
   { field: 'archived', label: '归档标记', code: 'invalid-archived', expected: '布尔值', valid: (value: unknown) => typeof value === 'boolean' },
   { field: 'sortOrder', label: '排序权重', code: 'invalid-sort-order', expected: '有限数字', valid: (value: unknown) => typeof value === 'number' && Number.isFinite(value) },
-  { field: 'createdAt', label: '创建时间', code: 'invalid-created-at', expected: 'ISO 时间字符串或空字符串', valid: isTimestampValue },
-  { field: 'updatedAt', label: '更新时间', code: 'invalid-updated-at', expected: 'ISO 时间字符串或空字符串', valid: isTimestampValue },
-  { field: 'publishedAt', label: '发布时间', code: 'invalid-published-at', expected: 'ISO 时间字符串或空字符串', valid: isTimestampValue },
+  { field: 'createdAt', label: '创建时间', code: 'invalid-created-at', expected: TIMESTAMP_EXPECTATION, valid: isIsoTimestampValue },
+  { field: 'updatedAt', label: '更新时间', code: 'invalid-updated-at', expected: TIMESTAMP_EXPECTATION, valid: isIsoTimestampValue },
+  { field: 'publishedAt', label: '发布时间', code: 'invalid-published-at', expected: TIMESTAMP_EXPECTATION, valid: isIsoTimestampValue },
 ]
 
 /** 大小写 / 空白归一化后找重复项；返回出现次数 > 1 的原值 */
@@ -406,8 +448,11 @@ export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
       })
     }
 
+
+    // `gallery` 是 Game 契约的必需数组：没有截图应写 `[]`，而不是省略字段。
+    // 详情页的空数组兜底只保证读取不崩，不能把缺失字段当成合法数据。
     if (rawGame.gallery === undefined) {
-      add('warning', 'missing-gallery', `作品《${label}》没有截图列表字段`, game.id)
+      add('error', 'missing-gallery', `作品《${label}》缺少截图列表字段`, game.id)
     }
 
     const metrics = rawGame.metrics

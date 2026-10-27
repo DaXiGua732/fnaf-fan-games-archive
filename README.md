@@ -555,10 +555,11 @@ Phase 6 增加只读资料质量检查 `npm run check:data`，并完成跨模块
   `games[n]` 的具体问题。失败零提交、零写入；不会把异常记录归一化、复制或丢失。
   本机模式的「恢复出厂数据」是显式修复入口，会把数据换回出厂快照。
 - `analyzeCatalog()` 按 `src/types/game.ts` 补齐契约检查：`ipSeries` / `engine` /
-  `description` 缺失与类型错误、`gallery` 数组、`metrics` 及 `fakeViews` / `score`、
-  以及 `shortDescription` / `videoUrl` / `sourceUrl` / `status` / `featured` /
-  `archived` / `sortOrder` / 三个时间戳字段的类型、枚举与格式约束。
-  可选字段缺失不误报；未知扩展字段继续允许。
+  `description` 缺失与类型错误；`gallery` 是必需字符串数组（缺失为 error，空数组合法）；
+  `metrics` 及 `fakeViews` / `score`；以及 `shortDescription` / `videoUrl` / `sourceUrl` /
+  `status` / `featured` / `archived` / `sortOrder` / 三个时间戳字段的类型、枚举与格式约束。
+  时间戳只接受带时区的完整 ISO 8601（`YYYY-MM-DDTHH:mm:ss[.sss]Z` 或 `±HH:MM`），
+  并校验真实日历日期；可选字段缺失不误报，未知扩展字段继续允许。
 - `check:data --strict` 与 `test:data-quality` 已纳入 `npm run verify` 和部署 workflow；
   只对 error 失败，warning 保留人工判断。`data:pull` 的成功 / 失败日志会说明
   随后的检查针对最新拉取内容还是仓库里的旧快照。
@@ -799,7 +800,7 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 > 一组合成 fixture（`FIXTURE_GAMES`），再跑状态统计 / 批量 / 标签 / 作者等断言。
 > CI 在 `data:pull` 之后运行，站长随时可能删改真实条目 —— 断言不能把条目标题或 id 编码进去。
 
-> 截至 2026-10-27：`selftest` **1115/1115**、`test:catalog` **3/3**、`test:data-quality` **1/1**、
+> 截至 2026-10-27：`selftest` **1119/1119**、`test:catalog` **3/3**、`test:data-quality` **1/1**、
 > `smoke` **16/16**、UI 点击测试 **99/99**，`check:data --strict` 在当前快照 error 0；
 > 完整 `npm run verify` 通过（含 build）。
 > 条数会随断言增长，后续以运行输出为准 —— 这也是下面提醒不要写死条数的原因。

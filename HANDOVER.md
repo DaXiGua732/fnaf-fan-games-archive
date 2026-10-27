@@ -29,7 +29,7 @@
 | 交互层 | ✅ 编辑器吸顶操作条 + 分区锚点 + 发布概览 + Ctrl/Cmd+S；列表行内快捷上下线 / 永久删除；详情页截图灯箱；主题下拉 + 催资源弹窗 |
 | 数据架构 | ✅ 游戏目录仍以 **GitHub 数据仓 `db.json`** 为唯一事实来源；`taxonomy` 与 `games` 同文件、同一提交；Supabase **只**承载公开请求榜，不参与构建，也不存游戏数据 |
 | 代码仓提交 | 最新已推送提交见 `git log -1`；主题 / 催资源 / 结构化 Phase 1–6 改动是否已提交以 `git status` 为准 |
-| 测试基线 | ✅ 完整 `npm run verify` 通过（含严格资料检查与 build；UI 点击单独跑）；**typecheck 通过、test:catalog 3/3、test:data-quality 1/1、selftest 1115/1115、smoke 16/16、UI 点击 99/99**；`test:gamejolt` 仍为 22 项 |
+| 测试基线 | ✅ 完整 `npm run verify` 通过（含严格资料检查与 build；UI 点击单独跑）；**typecheck 通过、test:catalog 3/3、test:data-quality 1/1、selftest 1119/1119、smoke 16/16、UI 点击 99/99**；`test:gamejolt` 仍为 22 项 |
 | 已知缺口 | 数据仓未加其他协作者；评论区已按产品决策移除；催资源 SQL **尚未在真实 Supabase 项目执行**；远程榜最多 50 条；本机模式数据不会自动迁移到 Supabase；client id 不是反滥用；质量检查只报告，分类与关系仍需管理员按资料逐条录入 |
 
 > ⚠️ **断言已改成从数据推导期望值**：`selftest` 会在 `data:pull` 之后跑，
@@ -128,7 +128,7 @@ npm run build:extension # 构建扩展到 extension/dist（Chrome/Edge 加载已
 npm run test:extension # 扩展 E2E：同源抓取 → 图片 → ZIP 下载（需要系统 Chrome）
 npm run gamejolt:helper # 本机助手（127.0.0.1:4317，开发备用；运维主路径是扩展 ZIP）
 npm run smoke          # 只跑 SSR 冒烟（16 条路由）
-npm run selftest       # 只跑断言集（1115 项，含八组断言 + 静态守卫）
+npm run selftest       # 只跑断言集（1119 项，含八组断言 + 静态守卫）
 npm run check:data     # 只读资料质量检查（默认 src/data/db.json；支持 --file / --json / --strict）
 npm run test:data-quality # check:data --strict 的退出码契约（合成夹具，不碰生产数据）
 ```
@@ -284,11 +284,11 @@ npm run test:data-quality # check:data --strict 的退出码契约（合成夹�
 ```
 npm run verify
 # = typecheck + test:gamejolt(22) + test:catalog(3) + test:data-quality(1)
-#   + build:extension + selftest(1115) + check:data --strict + smoke(16) + build
+#   + build:extension + selftest(1119) + check:data --strict + smoke(16) + build
 ```
 
 > ✅ 本轮完整 `npm run verify` 已通过（end-to-end，含 build）：`typecheck` 通过、
-> `test:catalog` 3/3、`test:data-quality` 1/1、`selftest` 1115/1115、`smoke` 16/16；
+> `test:catalog` 3/3、`test:data-quality` 1/1、`selftest` 1119/1119、`smoke` 16/16；
 > `check:data --strict` 在当前快照 error 0；UI 点击测试另行运行，99/99。
 
 - `test:gamejolt`：URL 解析 / 富文本 / 图片选型与尺寸升级 / 网络错误分支 / 扩展 ZIP 打包
