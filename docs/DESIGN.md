@@ -23,7 +23,7 @@
 
 ## 2. 设计系统速查
 
-- **色彩（浅色默认值）**：纸 `#fafaf8` / 墨 `#1a1a18` / 强调 `#2b6b70`（默认初音未来，
+- **色彩（浅色默认值）**：纸 `#fafaf8` / 墨 `#1a1a18` / 强调 `#257e78`（默认初音未来，
   其余歌姬色见 §4）/ 辅助线 `#d4d4d0` / 浅层表面 `#f2f2ef`。
   深色模式整体替换变量（纸 `#141413` / 墨 `#e8e8e4`）。
 - **网格**：12 列衍生，常用 `grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8`
@@ -101,9 +101,11 @@ grep -o '\.rounded-md\|\.shadow{\|\.font-serif\|\.font-mono' "$CSS" | sort -u  #
 | `meiko` | MEIKO | `#c8102e` |
 | `kaito` | KAITO | `#3366cc` |
 
-代表色只用于选择器色块；界面里的 `accent` / `accent-surface` / `accent-bright`
-是在代表色基础上低饱和 / 加深（浅色）或提亮（深色）后的值，必须同时满足
-paper 与 on-accent 的对比度。取色只改 `src/styles/index.css`。
+代表色**直接用作 `accent-surface`**（Hero、悬停底色等大面积色块），选择器色块也用它；
+`on-accent` 按代表色亮度在黑 / 白之间二选一。`accent` 用于正文 / 边框 / 小面积悬停，
+必须是同色相的加深版本（与 paper 保持 >= 4.5:1）—— 代表色本身对纸色太浅，
+直接当文字色会看不清。深色模式下 `accent-surface` 仍是同一个代表色，
+只有 `accent` 提亮。取色只改 `src/styles/index.css`。
 
 **作用范围**：公开站与后台共用同一份设置（模块级单例），**只保存在当前设备**。
 切换器在 `Layout.vue` 与 `AdminLayout.vue` 里都挂了一份。

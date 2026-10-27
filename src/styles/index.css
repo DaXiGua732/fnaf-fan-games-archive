@@ -21,12 +21,12 @@
     --inverse-rgb: 17 17 16;
     --inverse-fg-rgb: 245 245 242;
     --overlay-rgb: 10 10 9;
-    --on-accent-rgb: 250 250 248;
+    --on-accent-rgb: 26 26 24;
 
     /* 默认强调色：初音未来（与 data-theme='miku' 相同，保证未设置属性时也正确） */
-    --accent-rgb: 43 107 112;
-    --accent-surface-rgb: 31 84 87;
-    --accent-bright-rgb: 143 208 204;
+    --accent-rgb: 37 126 120;
+    --accent-surface-rgb: 57 197 187;
+    --accent-bright-rgb: 57 197 187;
   }
 
   /* 绝对禁忌：零圆角 / 零阴影 —— 全局强制 */
@@ -118,81 +118,95 @@
   }
 
   /* ================== 六种浅色强调色 · V家歌姬代表色 ==================
-     accent 必须与 paper 保持 >= 4.5:1（用于正文 / 边框 / 小面积悬停）；
-     accent-surface 必须与 on-accent 保持 >= 4.5:1（用于大面积色块）。
-     取色以各歌姬的代表色为基准做低饱和 / 加深处理，保留辨识度同时满足对比度。 */
+     直接使用各歌姬的代表色作为 accent-surface（大面积色块，Hero / 悬停态），
+     on-accent 按该色的亮度在黑 / 白之间二选一。
+     accent 用于正文 / 边框 / 小面积悬停，必须与 paper 保持 >= 4.5:1；
+     因此它是代表色的加深版本（同色相），而不是另一个颜色。 */
   :root[data-theme='miku'] {
-    --accent-rgb: 43 107 112;
-    --accent-surface-rgb: 31 84 87;
-    --accent-bright-rgb: 143 208 204;
+    --accent-rgb: 37 126 120;
+    --accent-surface-rgb: 57 197 187;
+    --accent-bright-rgb: 57 197 187;
+    --on-accent-rgb: 26 26 24;
   }
 
   :root[data-theme='rin'] {
-    --accent-rgb: 147 86 15;
-    --accent-surface-rgb: 107 68 16;
-    --accent-bright-rgb: 224 179 106;
+    --accent-rgb: 150 106 0;
+    --accent-surface-rgb: 242 169 0;
+    --accent-bright-rgb: 242 169 0;
+    --on-accent-rgb: 26 26 24;
   }
 
   :root[data-theme='len'] {
-    --accent-rgb: 125 101 16;
-    --accent-surface-rgb: 95 76 10;
-    --accent-bright-rgb: 217 194 92;
+    --accent-rgb: 135 112 0;
+    --accent-surface-rgb: 255 226 17;
+    --accent-bright-rgb: 255 226 17;
+    --on-accent-rgb: 26 26 24;
   }
 
   :root[data-theme='luka'] {
-    --accent-rgb: 156 74 107;
-    --accent-surface-rgb: 122 58 84;
-    --accent-bright-rgb: 230 168 196;
+    --accent-rgb: 184 79 125;
+    --accent-surface-rgb: 255 158 196;
+    --accent-bright-rgb: 255 158 196;
+    --on-accent-rgb: 26 26 24;
   }
 
   :root[data-theme='meiko'] {
-    --accent-rgb: 166 61 78;
-    --accent-surface-rgb: 125 45 58;
-    --accent-bright-rgb: 217 138 138;
+    --accent-rgb: 200 16 46;
+    --accent-surface-rgb: 200 16 46;
+    --accent-bright-rgb: 224 113 126;
+    --on-accent-rgb: 250 250 248;
   }
 
   :root[data-theme='kaito'] {
-    --accent-rgb: 63 99 144;
-    --accent-surface-rgb: 39 75 115;
-    --accent-bright-rgb: 155 184 207;
+    --accent-rgb: 51 102 204;
+    --accent-surface-rgb: 51 102 204;
+    --accent-bright-rgb: 127 165 224;
+    --on-accent-rgb: 250 250 248;
   }
 
   /* ================== 深色模式下的六种强调色 ==================
-     accent 变成浅色（在深纸上可读），surface 变深（承载 on-accent 近白字）。 */
+     accent 变成浅色（在深纸上可读）；surface 仍是代表色本身，
+     因而两套模式共用同一块「歌姬色」。 */
   :root[data-mode='dark'][data-theme='miku'] {
-    --accent-rgb: 127 201 196;
-    --accent-surface-rgb: 23 72 75;
-    --accent-bright-rgb: 165 218 213;
+    --accent-rgb: 57 197 187;
+    --accent-surface-rgb: 57 197 187;
+    --accent-bright-rgb: 57 197 187;
+    --on-accent-rgb: 26 26 24;
   }
 
   :root[data-mode='dark'][data-theme='rin'] {
-    --accent-rgb: 217 160 90;
-    --accent-surface-rgb: 90 54 8;
-    --accent-bright-rgb: 232 192 138;
+    --accent-rgb: 242 169 0;
+    --accent-surface-rgb: 242 169 0;
+    --accent-bright-rgb: 242 169 0;
+    --on-accent-rgb: 26 26 24;
   }
 
   :root[data-mode='dark'][data-theme='len'] {
-    --accent-rgb: 212 190 106;
-    --accent-surface-rgb: 79 63 6;
-    --accent-bright-rgb: 228 214 154;
+    --accent-rgb: 255 226 17;
+    --accent-surface-rgb: 255 226 17;
+    --accent-bright-rgb: 255 226 17;
+    --on-accent-rgb: 26 26 24;
   }
 
   :root[data-mode='dark'][data-theme='luka'] {
-    --accent-rgb: 217 154 182;
-    --accent-surface-rgb: 106 47 71;
-    --accent-bright-rgb: 236 194 212;
+    --accent-rgb: 255 158 196;
+    --accent-surface-rgb: 255 158 196;
+    --accent-bright-rgb: 255 158 196;
+    --on-accent-rgb: 26 26 24;
   }
 
   :root[data-mode='dark'][data-theme='meiko'] {
-    --accent-rgb: 217 138 138;
-    --accent-surface-rgb: 111 38 50;
-    --accent-bright-rgb: 234 176 176;
+    --accent-rgb: 226 106 122;
+    --accent-surface-rgb: 200 16 46;
+    --accent-bright-rgb: 224 113 126;
+    --on-accent-rgb: 250 250 248;
   }
 
   :root[data-mode='dark'][data-theme='kaito'] {
-    --accent-rgb: 155 184 207;
-    --accent-surface-rgb: 31 61 92;
-    --accent-bright-rgb: 192 214 232;
+    --accent-rgb: 133 169 224;
+    --accent-surface-rgb: 51 102 204;
+    --accent-bright-rgb: 127 165 224;
+    --on-accent-rgb: 250 250 248;
   }
 
   @media (prefers-reduced-motion: reduce) {
