@@ -29,7 +29,7 @@
 | 交互层 | ✅ 编辑器吸顶操作条 + 分区锚点 + 发布概览 + Ctrl/Cmd+S；列表行内快捷上下线 / 永久删除；详情页截图灯箱；主题下拉 + 催资源弹窗 |
 | 数据架构 | ✅ 游戏目录仍以 **GitHub 数据仓 `db.json`** 为唯一事实来源；`taxonomy` 与 `games` 同文件、同一提交；Supabase **只**承载公开请求榜，不参与构建，也不存游戏数据 |
 | 代码仓提交 | 最新已推送提交见 `git log -1`；主题 / 催资源 / 结构化 Phase 1–6 改动是否已提交以 `git status` 为准 |
-| 测试基线 | ✅ 完整 `npm run verify` 通过（含严格资料检查、真实浏览器 UI 与 build）；**typecheck 通过、test:catalog 3/3、test:data-quality 1/1、selftest 1120/1120、smoke 16/16、UI 点击 99/99**；`test:gamejolt` 仍为 22 项 |
+| 测试基线 | ✅ 完整 `npm run verify` 通过（含严格资料检查、真实浏览器 UI 与 build）；**typecheck 通过、test:catalog 3/3、test:data-quality 1/1、selftest 1120/1120、smoke 16/16、UI 点击 99/99、UI 启动器回归 1/1**；`test:gamejolt` 仍为 22 项 |
 | 已知缺口 | 数据仓未加其他协作者；评论区已按产品决策移除；催资源 SQL **尚未在真实 Supabase 项目执行**；远程榜最多 50 条；本机模式数据不会自动迁移到 Supabase；client id 不是反滥用；质量检查只报告，分类与关系仍需管理员按资料逐条录入 |
 
 > ⚠️ **断言已改成从数据推导期望值**：`selftest` 会在 `data:pull` 之后跑，
@@ -120,9 +120,10 @@
 ```bash
 npm run dev            # 本地开发（读 src/data/db.json —— 可能是旧快照，见下）
 npm run data:pull      # 从数据仓同步 db.json 到本地（部署前自动执行；本地开发需手动）
-npm run verify         # 全部门禁：typecheck + test:gamejolt + test:catalog + test:data-quality + build:extension + selftest + check:data --strict + test:ui:ci + smoke + build
+npm run verify         # 全部门禁：typecheck + test:gamejolt + test:catalog + test:data-quality + build:extension + selftest + check:data --strict + test:ui:ci-launcher + test:ui:ci + smoke + build
 npm run test:ui        # 复用已启动的 dev server；默认 Playwright Chromium（UI_BROWSER=chrome 可切换）
 npm run test:ui:ci     # 自动启动 / 清理 Vite 后运行同一套 UI 测试（verify / CI 使用）
+npm run test:ui:ci-launcher # 端口占用回归（旧服务的 HTTP 200 不得当作 ready）
 npm run test:gamejolt  # GameJolt 解析 / 网络层 / 扩展打包测试（22 项，不出网）
 npm run test:catalog   # 数据仓文档解析 / 序列化测试（3 项，保留未知顶层字段）
 npm run build:extension # 构建扩展到 extension/dist（Chrome/Edge 加载已解压）
@@ -133,6 +134,11 @@ npm run selftest       # 只跑断言集（1120 项，含八组断言 + 静态�
 npm run check:data     # 只读资料质量检查（默认 src/data/db.json；支持 --file / --json / --strict）
 npm run test:data-quality # check:data --strict 的退出码契约（合成夹具，不碰生产数据）
 ```
+
+> 环境变量写法：PowerShell 用 `$env:UI_BROWSER = 'chrome'`、`$env:BASE = '...'`、
+> `$env:PROD = '1'`；Bash 用 `UI_BROWSER=chrome`、`BASE=... PROD=1`。
+> `test:ui` 复用已启动的 dev server，`test:ui:ci` 自动启动 / 清理 Vite；
+> `UI_BROWSER` 只是可选的系统 Chrome 切换，不是运行测试的必需条件。
 
 **催资源（可选，Supabase）**：
 
@@ -285,7 +291,7 @@ npm run test:data-quality # check:data --strict 的退出码契约（合成夹�
 ```
 npm run verify
 # = typecheck + test:gamejolt(22) + test:catalog(3) + test:data-quality(1)
-#   + build:extension + selftest(1120) + check:data --strict + test:ui:ci + smoke(16) + build
+#   + build:extension + selftest(1120) + check:data --strict + test:ui:ci-launcher + test:ui:ci + smoke(16) + build
 ```
 
 > ✅ 本轮完整 `npm run verify` 已通过（end-to-end，含 build）：`typecheck` 通过、
@@ -317,8 +323,13 @@ npm run verify
 - `check:data --strict`：已纳入 `npm run verify` 与部署 workflow；只对 error 失败，
   warning 允许存在。检查的是 `data:pull` 之后的快照；拉取失败时日志会明确说明
   “本次检查的是旧快照，不是数据仓最新内容”
-- `test:ui:ci`：自动启动固定 `127.0.0.1:5173` 的 Vite（strictPort）、轮询就绪、运行 UI 测试，
-  并在成功 / 失败 / 中断时清理进程；默认 Playwright Chromium，CI 负责安装浏览器与系统依赖。
+  `--strict` 通过只证明当前快照没有 error，不证明最新同步成功；拉取失败仍按
+  既有策略用旧快照部署，这是有意保留的可用性取舍。
+- `test:ui:ci-launcher`：先占用一个端口并返回 HTTP 200，启动器必须非零退出、不访问旧服务、
+  不启动 UI 测试；这是端口竞争的自动化回归
+- `test:ui:ci`：自动启动固定 `127.0.0.1:5173` 的 Vite（strictPort），只认本次子进程
+  stdout 的 ready 信号，再运行 UI 测试并在成功 / 失败 / 中断时清理进程；
+  默认 Playwright Chromium，CI 负责安装浏览器与系统依赖；
   失败时上传 `.tmp/ui-shots/` 与 `.tmp/ui-ci-vite.log`
 - **催资源 SQL / 真实 Supabase 行为不在自动化门禁内**，必须按 README §7.4 手动验证
 - **公开站回归**：Phase 19 曾用逐字节基线；快照属 `.tmp/` 临时产物，不纳入版本管理，

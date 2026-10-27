@@ -16,12 +16,13 @@
     "selftest": "esbuild scripts/selftest.mts --bundle --platform=node --format=esm --external:vue --outfile=.tmp/selftest.mjs --log-level=warning && node .tmp/selftest.mjs",
     "smoke": "vite build --config vite.smoke.config.ts --logLevel warn && node .tmp/smoke-build/smoke.js",
     "test:ui": "node scripts/ui-test.mjs",
-    "verify": "npm run typecheck && npm run test:gamejolt && npm run test:catalog && npm run test:data-quality && npm run build:extension && npm run selftest && npm run check:data -- --strict && npm run test:ui:ci && npm run smoke && npm run build",
+    "verify": "npm run typecheck && npm run test:gamejolt && npm run test:catalog && npm run test:data-quality && npm run build:extension && npm run selftest && npm run check:data -- --strict && npm run test:ui:ci-launcher && npm run test:ui:ci && npm run smoke && npm run build",
     "preview": "vite preview",
     "test:extension": "npm run build:extension && node scripts/extension-test.mjs",
     "check:data": "esbuild scripts/data-quality.mts --bundle --platform=node --format=esm --outfile=.tmp/data-quality.mjs --log-level=warning && node .tmp/data-quality.mjs",
     "test:data-quality": "node --test scripts/data-quality.test.mjs",
-    "test:ui:ci": "node scripts/run-ui-test-ci.mjs"
+    "test:ui:ci": "node scripts/run-ui-test-ci.mjs",
+    "test:ui:ci-launcher": "node --test scripts/ui-ci-runner.test.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.3",

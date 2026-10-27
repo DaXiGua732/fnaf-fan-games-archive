@@ -84,6 +84,10 @@ jobs:
       - name: Deep module self-test
         run: npm run selftest
 
+      # 先验证启动器不会把占用端口的旧服务误认为本次 Vite；再跑完整浏览器测试。
+      - name: UI runner port-conflict test
+        run: npm run test:ui:ci-launcher
+
       # 同一套 99 步真实浏览器点击测试；runner 自动启动 Vite、等待就绪并在结束时清理。
       # 失败必须阻断部署；截图与 Vite 日志在下一步上传。
       - name: UI click tests (real browser)

@@ -214,6 +214,43 @@ let fakeDb = JSON.parse(JSON.stringify(localDb))
 let fakeSha = 'sha-1'
 let fakeCommits = 0
 
+/**
+ * 排序测试专用合成记录。
+ *
+ * 只临时追加到内存假数据仓（fakeDb），不会写入生产快照或真实 GitHub；
+ * 步骤结束（含失败）时恢复原数组，避免影响后续用例的数量 / 搜索断言。
+ */
+function sortProbeGame(id, title) {
+  return {
+    id,
+    title,
+    author: 'UI Sort Fixture',
+    releaseYear: 2020,
+    ipSeries: '',
+    engine: '',
+    coverImage: '',
+    bannerImage: '',
+    gallery: [],
+    description: 'Synthetic sorting fixture.',
+    downloads: [],
+    metrics: { fakeViews: 0, score: 0 },
+    tags: [],
+    altTitles: [],
+    gameplayTypes: [],
+    mechanics: [],
+    platforms: [],
+    relations: [],
+    developmentStatus: 'unknown',
+    status: 'draft',
+    featured: false,
+    archived: false,
+    sortOrder: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    publishedAt: '',
+  }
+}
+
 const toBase64 = (text) => Buffer.from(text, 'utf8').toString('base64')
 
 await context.route('https://api.github.com/**', async (route) => {
@@ -685,22 +722,36 @@ await step(`Phase 2 · 状态筛选「草稿」→ ${DRAFT_COUNT} 行`, async ()
   await page.waitForTimeout(300)
 })
 
-await step('Phase 2 · 排序切「游戏名称」→ 首行是标题最小的那条', async () => {
-  await page.locator('#admin-filter-sort').selectOption('title')
-  await page.waitForTimeout(400)
+await step('Phase 2 · 排序切「游戏名称」→ 两条合成记录真正升序', async () => {
+  // 只用临时合成 fixture 验证排序，不依赖生产数据里有哪些标题 / 多少条。
+  // 插入顺序故意是 B → A；若排序实现失效（保留插入顺序），下面的断言必须失败。
+  const originalGames = fakeDb.games
+  try {
+    fakeDb.games = [
+      ...originalGames,
+      sortProbeGame('ui-sort-probe-b', 'ZZZ Sort Probe B'),
+      sortProbeGame('ui-sort-probe-a', 'ZZZ Sort Probe A'),
+    ]
 
-  // ⚠️ 断言**排序规则**而不是某个写死的标题。
-  //    原先写死「Dayshift at Freddy」，站长把那条作品的标题一改，这里就假失败了。
-  //    正确做法：首行应等于当前列表里标题最小的那一个（用同一份数据自行推导）。
-  // 名称列的第 3 个 td；标题现在是通往编辑页的链接，取链接文本才是纯标题
-  const cells = await page.locator('table tbody tr td:nth-child(3) a').allInnerTexts()
-  const titles = cells.map((text) => text.replace(/\s+/g, ' ').trim())
-  const ascending = [...titles].sort((a, b) => a.localeCompare(b, 'en'))
-  assert(titles.length > 0, '列表里没有作品，无法验证排序')
-  assert(
-    titles[0] === ascending[0],
-    `首行应是标题升序的第一个：期望 ${JSON.stringify(ascending[0])}，实际 ${JSON.stringify(titles[0])}`,
-  )
+    // 重新加载后台，让远程仓储读取到含合成记录的假数据仓
+    await go('/admin/games', '收录作品')
+    await page.fill('#admin-search', 'ZZZ Sort Probe')
+    await page.waitForTimeout(600)
+    assert((await rowCount()) === 2, `合成排序记录应有 2 行，实际 ${await rowCount()}`)
+
+    await page.locator('#admin-filter-sort').selectOption('title')
+    await page.waitForTimeout(400)
+    const cells = await page.locator('table tbody tr td:nth-child(3) a').allInnerTexts()
+    const titles = cells.map((text) => text.replace(/\s+/g, ' ').trim())
+    assert(
+      titles.join('|') === 'ZZZ Sort Probe A|ZZZ Sort Probe B',
+      `标题升序应为 A → B，实际 ${JSON.stringify(titles)}`,
+    )
+  } finally {
+    // 永远恢复假数据仓，避免污染后续的数量 / 搜索 / 分页断言
+    fakeDb.games = originalGames
+    await go('/admin/games', '收录作品')
+  }
 })
 
 await step('Phase 2 · 每页条数可调小 → 分页控件随数据出现', async () => {

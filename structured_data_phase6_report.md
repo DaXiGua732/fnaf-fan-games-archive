@@ -181,11 +181,15 @@ Phase 0–6 按设计完成，没有批量修改生产数据，没有引入新�
    可选字段缺失不误报；未知扩展字段继续保留；检查器仍只读且逐条隔离。
 
 3. **验证门禁**
-   - `npm run verify` 新增 `test:data-quality`、`check:data --strict` 与 `test:ui:ci`。
-   - 部署 workflow 新增严格资料检查、CLI 退出码测试与真实浏览器 UI 测试；
-     UI 测试默认 Playwright Chromium，runner 自动启动 / 清理 Vite，失败上传截图与日志。
+   - `npm run verify` 新增 `test:data-quality`、`check:data --strict`、`test:ui:ci-launcher`
+     与 `test:ui:ci`。
+   - 部署 workflow 新增严格资料检查、CLI 退出码测试、启动器端口回归与真实浏览器 UI 测试；
+     UI 测试默认 Playwright Chromium，runner 只认本次 Vite 子进程的 stdout ready 信号，
+     失败上传截图与日志。
    - `check:data --strict` 只对 error 失败，warning 继续人工判断；检查对象是
      `data:pull` 之后的快照，拉取失败时日志明确标注“本次检查的是旧快照”。
+   - `test:ui:ci-launcher` 用占用端口的 HTTP 200 模拟旧服务，断言启动器拒绝误连；
+     排序步骤使用临时合成记录（插入 B→A，断言升序 A→B），不依赖生产标题 / 条数。
    - `test:ui` 仍保留“复用已启动 dev server”的本地模式；`test:ui:ci` 是 verify / CI 使用的
      自动服务器版本，两者运行同一套 99 步浏览器点击测试。
 
