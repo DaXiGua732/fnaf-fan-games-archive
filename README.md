@@ -48,8 +48,8 @@ Phase 0–20 全部落地，并已在线上实际使用。**后续改动仍按�
 
 已完成：**Phase 0–20 全部**。其中 Phase 14（数据库设计）不适用 —— `db.json` 就是库；
 Phase 20（测试）由贯穿全程的门禁体系覆盖：
-`typecheck + test:gamejolt + test:catalog + build:extension + selftest + smoke + build`
-（UI 点击测试与扩展 E2E 需要本机浏览器，单独运行）。
+`typecheck + test:gamejolt + test:catalog + test:data-quality + build:extension + selftest + check:data --strict + test:ui:ci + smoke + build`
+（扩展 E2E 仍需系统 Chrome，单独运行）。
 
 > 结构化资料库升级是另一条分阶段工作流：Phase 0–6 全部完成，
 > 包含数据层、后台维护、前台索引、组合筛选、作品关系与只读质量检查。
@@ -558,8 +558,8 @@ Phase 6 增加只读资料质量检查 `npm run check:data`，并完成跨模块
   `description` 缺失与类型错误；`gallery` 是必需字符串数组（缺失为 error，空数组合法）；
   `metrics` 及 `fakeViews` / `score`；以及 `shortDescription` / `videoUrl` / `sourceUrl` /
   `status` / `featured` / `archived` / `sortOrder` / 三个时间戳字段的类型、枚举与格式约束。
-  时间戳只接受带时区的完整 ISO 8601（`YYYY-MM-DDTHH:mm:ss[.sss]Z` 或 `±HH:MM`），
-  并校验真实日历日期；可选字段缺失不误报，未知扩展字段继续允许。
+  时间戳只接受带时区的完整 ISO 8601：`YYYY-MM-DDTHH:mm:ss`，可带 1–9 位小数秒，
+  时区为 `Z` 或 `±HH:MM`；并校验真实日历日期。可选字段缺失不误报，未知扩展字段继续允许。
 - `check:data --strict` 与 `test:data-quality` 已纳入 `npm run verify` 和部署 workflow；
   只对 error 失败，warning 保留人工判断。`data:pull` 的成功 / 失败日志会说明
   随后的检查针对最新拉取内容还是仓库里的旧快照。
@@ -572,7 +572,7 @@ Phase 6 增加只读资料质量检查 `npm run check:data`，并完成跨模块
 ### 测试覆盖对照（Phase 20）
 
 计划书 §21（后台专项）/ §22（前台回归）逐项对照。`selftest` = 纯函数与深模块断言，
-`UI` = `npm run test:ui`（99 步真实浏览器点击），`冒烟` = SSR 渲染 16 条路由，
+`UI` = `npm run test:ui` / `npm run test:ui:ci`（99 步真实浏览器点击），`冒烟` = SSR 渲染 16 条路由，
 `字节对比` = 公开站产物逐字节基线。
 
 **§21 后台专项**
@@ -742,9 +742,10 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 | `npm run gamejolt:helper` | 启动 GameJolt 导入助手（只监听 127.0.0.1:4317，见 §7.3） |
 | `npm run build:extension` | 构建 Chrome / Edge 扩展到 `extension/dist/` |
 | `npm run test:extension` | 扩展端到端测试（需系统 Chrome；会先构建扩展） |
-| `npm run test:ui` | Playwright 真实浏览器点击测试（需先另开终端 `npm run dev`） |
+| `npm run test:ui` | Playwright 真实浏览器点击测试（默认 Chromium；需另开 `npm run dev`） |
+| `npm run test:ui:ci` | 自动启动 / 清理 Vite 后运行同一套 UI 测试（`verify` / CI 使用） |
 | `npm run assets` | 按 `db.json` 重新生成占位图到 `public/images/` |
-| `npm run verify` | `typecheck` + `test:gamejolt` + `test:catalog` + `test:data-quality` + `build:extension` + `selftest` + `check:data --strict` + `smoke` + `build` |
+| `npm run verify` | `typecheck` + `test:gamejolt` + `test:catalog` + `test:data-quality` + `build:extension` + `selftest` + `check:data --strict` + `test:ui:ci` + `smoke` + `build` |
 | `npm run check:data` | **只读**资料质量检查：默认读 `src/data/db.json`，支持 `--file=` / `--json` / `--strict` |
 
 ---
@@ -761,17 +762,23 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 | `test:catalog` | 数据仓文档的解析 / 序列化；未知顶层字段与 `taxonomy` 必须原样保留 | 真实 GitHub 并发（由 selftest 的 409 桩覆盖） |
 | `test:data-quality` | `check:data --strict` 的退出码语义：error 必须真的让门禁失败 | 真实生产数据内容（用合成夹具） |
 | `build:extension` | 扩展能否打包、manifest / 图标 / 依赖是否齐全 | 真实浏览器里的扩展行为 |
-| `selftest` | 深模块的搜索/过滤/排序/分页逻辑是否正确；主题解析、催资源去重/匹配/仓储契约；结构化字段 / 词表 / 关系 / 仓储契约；异常输入与原始 ID 安全 | UI |
+| `selftest` | 深模块的搜索/过滤/排序/分页逻辑是否正确；主题解析、催资源去重/匹配/仓储契约；结构化字段 / 词表 / 关系 / 仓储契约；异常输入与原始 ID 安全 | 真实浏览器交互 |
 | `check:data --strict` | 当前快照是否存在结构性数据 error（warning 不阻断） | 数据仓是否拉取成功（由 `data:pull` 日志区分） |
+| `test:ui:ci` | 真实 Chromium 点击：主题 / 筛选 / 后台编辑 / 批量 / 上传 / 催资源 / GameJolt 导入 / 关系 | 真实 GitHub / Supabase 写入（网络层桩） |
 | `smoke` | 每个路由能否真实渲染出 DOM（**防白屏**） | 样式是否正确 |
 | `build` | 生产构建能否通过、代码分割是否正常 | — |
 
-> `npm run test:ui` 依赖常驻 `npm run dev` 与系统 Chrome，单次约 3 分钟；它验证交互而不是
-> 构建 / 数据完整性，且部署 workflow 每小时兜底重建，因此**不纳入 verify / CI**。
-> 人工执行：另开终端 `npm run dev`，再跑 `npm run test:ui`（见 §2.2）。
+> `npm run test:ui:ci` 由 `scripts/run-ui-test-ci.mjs` 自动启动 `127.0.0.1:5173`
+> 的 Vite（strictPort）、轮询就绪、运行同一套 UI 测试，并在成功 / 失败 / 中断时清理进程；
+> `npm run verify` 与部署 workflow 都执行它。默认使用 Playwright Chromium，首次执行
+> `npx playwright install chromium`（CI 使用 `npx playwright install --with-deps chromium`）。
+> 失败时 workflow 会上传 `.tmp/ui-shots/` 与 `.tmp/ui-ci-vite.log`。
+>
+> 本地想复用已启动的 dev server：另开终端 `npm run dev`，再跑 `npm run test:ui`；
+> 想用系统 Chrome 时加 `UI_BROWSER=chrome`。
 >
 > `npm run test:extension` 用系统 Chrome 跑扩展的端到端流程（抓取 → 下载图片 → 打包 ZIP），
-> 同样**不进 CI / verify**；改了扩展代码就本地跑一次。
+> 仍**不进 CI / verify**；改了扩展代码就本地跑一次。
 
 ### 2.1 `selftest` 的设计要点
 
@@ -800,9 +807,9 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 > 一组合成 fixture（`FIXTURE_GAMES`），再跑状态统计 / 批量 / 标签 / 作者等断言。
 > CI 在 `data:pull` 之后运行，站长随时可能删改真实条目 —— 断言不能把条目标题或 id 编码进去。
 
-> 截至 2026-10-27：`selftest` **1119/1119**、`test:catalog` **3/3**、`test:data-quality` **1/1**、
+> 截至 2026-10-27：`selftest` **1120/1120**、`test:catalog` **3/3**、`test:data-quality` **1/1**、
 > `smoke` **16/16**、UI 点击测试 **99/99**，`check:data --strict` 在当前快照 error 0；
-> 完整 `npm run verify` 通过（含 build）。
+> 完整 `npm run verify`（含真实浏览器 UI 与 build）通过。
 > 条数会随断言增长，后续以运行输出为准 —— 这也是下面提醒不要写死条数的原因。
 
 > ⚠️ **不要在文档里写死断言条数**（比如"29 项"）。条数每个阶段都在涨，
@@ -865,17 +872,26 @@ GameJolt 抓取 / 转换 / 扩展打包的测试放在 `scripts/gamejolt/test.mj
 勾选、批量执行、二次确认、保存、未保存拦截、标签增删 —— 这些只能靠真实浏览器点。
 
 脚本在 `scripts/ui-test.mjs`（**已纳入版本管理**），`playwright` 在 `devDependencies` 里。
-它用 Playwright 驱动**系统已安装的 Chrome**（`channel: 'chrome'`），因此**不需要下载 Chromium**。
-脚本从自身位置推导项目根目录，所以从任何 cwd 启动都可以。
+默认使用 Playwright Chromium（不依赖系统 Chrome）；首次运行先安装：
 
 ```bash
-# 1. 另开一个终端起 dev server
-npm run dev
+npx playwright install chromium
+```
 
-# 2. 跑（默认 http://localhost:5173）
-npm run test:ui
+两种运行方式：
 
-# 3. 跑（对生产构建预览，需要 npm run build && npm run preview -- --port 4173）
+```bash
+# A. 一次性运行：runner 自动启动 / 清理 Vite（verify 与 CI 使用这条路径）
+npm run test:ui:ci
+
+# B. 复用已启动的 dev server
+npm run dev                     # 终端 1
+npm run test:ui                 # 终端 2（默认 http://localhost:5173）
+
+# 本地想用系统 Chrome
+UI_BROWSER=chrome npm run test:ui
+
+# 对生产构建预览（需要 npm run build && npm run preview -- --port 4173）
 BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 ```
 
@@ -890,9 +906,9 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 > 提交 / +1 / 自动「已收录」用例。远程 Supabase 路径**不连真实项目**，由 selftest 的
 > 注入 fetch 覆盖；SQL 本身需要按 §7.4 的步骤手动验证。
 >
-> ⚠️ 催资源 UI 用例开头会断言首页显示「本机模式」。跑 `test:ui` 的 dev server
-> **不要**配置 `VITE_SUPABASE_*`，否则测试会在写入前直接失败，避免把探针数据
-> 提交到真实的共享榜单。
+> ⚠️ 催资源 UI 用例开头会断言首页显示「本机模式」。`test:ui:ci` 会自动清空
+> `VITE_SUPABASE_*`；手工启动 dev server 时**不要**配置它们，否则测试会在写入前
+> 直接失败，避免把探针数据提交到真实的共享榜单。
 
 > ⚠️ **三个必须知道的坑**（写这个脚本时全踩过）：
 > 1. **脚本必须自己定位项目根目录**（`import.meta.url`），不要依赖 cwd ——
@@ -922,7 +938,8 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 │   ├── catalog.test.mjs            # 数据仓文档测试（node --test）
 │   ├── selftest.mts                # 命令行入口：深模块自检 + 静态守卫
 │   ├── smoke.ts                    # 命令行入口：SSR 冒烟
-│   └── ui-test.mjs                 # 命令行入口：浏览器点击测试（需 dev server + Chrome）
+│   ├── ui-test.mjs                 # 浏览器点击测试主体（Playwright Chromium，需 BASE）
+│   └── run-ui-test-ci.mjs          # 自动启动 / 清理 Vite 并传播 UI 测试退出码
 ├── supabase/
 │   └── resource_requests.sql       # 催资源初始化：表 / RLS / 公开视图 / security definer RPC
 ├── src/

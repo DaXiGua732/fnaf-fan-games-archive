@@ -29,7 +29,7 @@
 | 交互层 | ✅ 编辑器吸顶操作条 + 分区锚点 + 发布概览 + Ctrl/Cmd+S；列表行内快捷上下线 / 永久删除；详情页截图灯箱；主题下拉 + 催资源弹窗 |
 | 数据架构 | ✅ 游戏目录仍以 **GitHub 数据仓 `db.json`** 为唯一事实来源；`taxonomy` 与 `games` 同文件、同一提交；Supabase **只**承载公开请求榜，不参与构建，也不存游戏数据 |
 | 代码仓提交 | 最新已推送提交见 `git log -1`；主题 / 催资源 / 结构化 Phase 1–6 改动是否已提交以 `git status` 为准 |
-| 测试基线 | ✅ 完整 `npm run verify` 通过（含严格资料检查与 build；UI 点击单独跑）；**typecheck 通过、test:catalog 3/3、test:data-quality 1/1、selftest 1119/1119、smoke 16/16、UI 点击 99/99**；`test:gamejolt` 仍为 22 项 |
+| 测试基线 | ✅ 完整 `npm run verify` 通过（含严格资料检查、真实浏览器 UI 与 build）；**typecheck 通过、test:catalog 3/3、test:data-quality 1/1、selftest 1120/1120、smoke 16/16、UI 点击 99/99**；`test:gamejolt` 仍为 22 项 |
 | 已知缺口 | 数据仓未加其他协作者；评论区已按产品决策移除；催资源 SQL **尚未在真实 Supabase 项目执行**；远程榜最多 50 条；本机模式数据不会自动迁移到 Supabase；client id 不是反滥用；质量检查只报告，分类与关系仍需管理员按资料逐条录入 |
 
 > ⚠️ **断言已改成从数据推导期望值**：`selftest` 会在 `data:pull` 之后跑，
@@ -120,15 +120,16 @@
 ```bash
 npm run dev            # 本地开发（读 src/data/db.json —— 可能是旧快照，见下）
 npm run data:pull      # 从数据仓同步 db.json 到本地（部署前自动执行；本地开发需手动）
-npm run verify         # 全部门禁：typecheck + test:gamejolt + test:catalog + build:extension + selftest + smoke + build
-npm run test:ui        # 浏览器点击测试（先另开终端 npm run dev；需要系统 Chrome）
+npm run verify         # 全部门禁：typecheck + test:gamejolt + test:catalog + test:data-quality + build:extension + selftest + check:data --strict + test:ui:ci + smoke + build
+npm run test:ui        # 复用已启动的 dev server；默认 Playwright Chromium（UI_BROWSER=chrome 可切换）
+npm run test:ui:ci     # 自动启动 / 清理 Vite 后运行同一套 UI 测试（verify / CI 使用）
 npm run test:gamejolt  # GameJolt 解析 / 网络层 / 扩展打包测试（22 项，不出网）
 npm run test:catalog   # 数据仓文档解析 / 序列化测试（3 项，保留未知顶层字段）
 npm run build:extension # 构建扩展到 extension/dist（Chrome/Edge 加载已解压）
 npm run test:extension # 扩展 E2E：同源抓取 → 图片 → ZIP 下载（需要系统 Chrome）
 npm run gamejolt:helper # 本机助手（127.0.0.1:4317，开发备用；运维主路径是扩展 ZIP）
 npm run smoke          # 只跑 SSR 冒烟（16 条路由）
-npm run selftest       # 只跑断言集（1119 项，含八组断言 + 静态守卫）
+npm run selftest       # 只跑断言集（1120 项，含八组断言 + 静态守卫）
 npm run check:data     # 只读资料质量检查（默认 src/data/db.json；支持 --file / --json / --strict）
 npm run test:data-quality # check:data --strict 的退出码契约（合成夹具，不碰生产数据）
 ```
@@ -284,12 +285,12 @@ npm run test:data-quality # check:data --strict 的退出码契约（合成夹�
 ```
 npm run verify
 # = typecheck + test:gamejolt(22) + test:catalog(3) + test:data-quality(1)
-#   + build:extension + selftest(1119) + check:data --strict + smoke(16) + build
+#   + build:extension + selftest(1120) + check:data --strict + test:ui:ci + smoke(16) + build
 ```
 
 > ✅ 本轮完整 `npm run verify` 已通过（end-to-end，含 build）：`typecheck` 通过、
-> `test:catalog` 3/3、`test:data-quality` 1/1、`selftest` 1119/1119、`smoke` 16/16；
-> `check:data --strict` 在当前快照 error 0；UI 点击测试另行运行，99/99。
+> `test:catalog` 3/3、`test:data-quality` 1/1、`selftest` 1120/1120、`smoke` 16/16；
+> `check:data --strict` 在当前快照 error 0；UI 点击测试 99/99（同一套测试已纳入 verify / CI）。
 
 - `test:gamejolt`：URL 解析 / 富文本 / 图片选型与尺寸升级 / 网络错误分支 / 扩展 ZIP 打包
   （`node --test`，夹具注入 fetch，不出网）
@@ -306,9 +307,9 @@ npm run verify
     未分类 / 失效词条 / 关系异常 / 重复项 / 缺图缺下载）
   + 原始 ID 安全（缺失 / 空白 / 非法 / 重复 id 时远程与本地一致地拒绝写入，零提交 / 零落盘）
 - `smoke`：SSR 渲染 16 条路由（公开 5 + 后台 11），断言外壳分离与关键内容
-- `UI 点击测试`（`scripts/ui-test.mjs`，**已纳入版本管理**，`npm run test:ui`）：
-  **99 步真实浏览器点击**，覆盖计划书 §21 后台专项、§22 前台回归、GameJolt 助手导入与 ZIP 导入，
-  以及本轮的主题持久化、本机模式催资源提交 / +1 / 自动已收录
+- `UI 点击测试`（`scripts/ui-test.mjs` + `scripts/run-ui-test-ci.mjs`，**已纳入 verify / CI**）：
+  **99 步真实浏览器点击**，默认 Playwright Chromium；覆盖计划书 §21 后台专项、§22 前台回归、
+  GameJolt 助手导入与 ZIP 导入，以及主题持久化、本机模式催资源提交 / +1 / 自动已收录
 - `npm run test:extension`：扩展 E2E（同源抓取 → 下载图片 → 打包 ZIP），需要系统 Chrome，
   **不进 verify / CI**，改扩展代码时本地跑
 - `test:data-quality`：真实执行 `npm run check:data -- --file=... --strict`，
@@ -316,9 +317,9 @@ npm run verify
 - `check:data --strict`：已纳入 `npm run verify` 与部署 workflow；只对 error 失败，
   warning 允许存在。检查的是 `data:pull` 之后的快照；拉取失败时日志会明确说明
   “本次检查的是旧快照，不是数据仓最新内容”
-- `test:ui`（99 步真实浏览器点击）**未纳入 CI / verify**：需要常驻 `npm run dev` 与
-  系统 Chrome，单次约 3 分钟；本 workflow 每小时兜底重建，交互回归不纳入部署门禁。
-  人工执行：另开终端 `npm run dev`，再跑 `npm run test:ui`
+- `test:ui:ci`：自动启动固定 `127.0.0.1:5173` 的 Vite（strictPort）、轮询就绪、运行 UI 测试，
+  并在成功 / 失败 / 中断时清理进程；默认 Playwright Chromium，CI 负责安装浏览器与系统依赖。
+  失败时上传 `.tmp/ui-shots/` 与 `.tmp/ui-ci-vite.log`
 - **催资源 SQL / 真实 Supabase 行为不在自动化门禁内**，必须按 README §7.4 手动验证
 - **公开站回归**：Phase 19 曾用逐字节基线；快照属 `.tmp/` 临时产物，不纳入版本管理，
   需要时重新构建一份即可
@@ -326,8 +327,8 @@ npm run verify
 ## 10. 新会话怎么开始
 
 1. 读本文件 → 读 `README.md`（项目手册，最完整）
-2. `npm run verify` 确认全绿，`npm run dev` 起本地；涉及交互行为时再跑 `npm run test:ui`，
-   涉及扩展时跑 `npm run test:extension`
+2. `npm run verify` 确认全绿（含真实浏览器 UI）；日常开发可只跑 `npm run dev`，
+   涉及交互时跑 `npm run test:ui` 或 `npm run test:ui:ci`；扩展改动跑 `npm run test:extension`
 3. 有疑问先查 `README.md` 对应章节，再查 `.workbuddy/memory/MEMORY.md` 的踩坑记录
 4. 改主题：先读 README §5.4 与 `src/styles/index.css`，颜色只加语义 token，不要往 `.vue` 写 hex；
    改催资源：先读 README §7.4、`supabase/resource_requests.sql` 与 `src/config/requests.ts`，

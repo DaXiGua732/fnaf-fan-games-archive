@@ -156,7 +156,10 @@ export interface Game {
   archived?: boolean
   /** 手动排序权重，越大越靠前 */
   sortOrder?: number
-  /** ISO 8601 时间戳；空字符串表示数据源尚未记录该字段 */
+  /**
+   * ISO 8601 时间戳：`YYYY-MM-DDTHH:mm:ss`，可带 1–9 位小数秒，时区为 `Z` 或 `±HH:MM`。
+   * 空字符串表示数据源尚未记录该字段。
+   */
   createdAt?: string
   updatedAt?: string
   publishedAt?: string

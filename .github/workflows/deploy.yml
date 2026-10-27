@@ -44,6 +44,11 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
+      # UI 测试默认使用 Playwright Chromium；--with-deps 补齐 Ubuntu 运行库。
+      # 浏览器按 package.json 的 playwright 版本安装，不依赖 runner 预装 Chrome。
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
       # 以下各步是本地一直在跑的质量门禁，部署前必须全绿，
       # 保证线上永远不会出现「编译通过但页面白屏」的版本。
 
@@ -79,9 +84,21 @@ jobs:
       - name: Deep module self-test
         run: npm run selftest
 
-      # test:ui（99 步真实浏览器点击）依赖 `npm run dev` 常驻 + 系统 Chrome，
-      # 单次约 3 分钟；本 workflow 每小时兜底重建，交互回归不纳入部署门禁。
-      # 人工执行：另开终端 `npm run dev`，再跑 `npm run test:ui`（见 README / HANDOVER）。
+      # 同一套 99 步真实浏览器点击测试；runner 自动启动 Vite、等待就绪并在结束时清理。
+      # 失败必须阻断部署；截图与 Vite 日志在下一步上传。
+      - name: UI click tests (real browser)
+        run: npm run test:ui:ci
+
+      - name: Upload UI test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-artifacts
+          path: |
+            .tmp/ui-shots
+            .tmp/ui-ci-vite.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: SSR smoke test
         run: npm run smoke

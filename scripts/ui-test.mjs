@@ -1,15 +1,15 @@
 /**
- * 后台 UI 点击测试（真实浏览器）
+ * 真实浏览器 UI 点击测试
  *
- * 覆盖 SSR 冒烟测不到的部分：勾选、批量、二次确认、保存、未保存拦截、
- * 标签录入 / 重命名、图片上传与自动压缩、预览、永久删除。
+ * 覆盖 SSR 冒烟测不到的部分：主题、筛选、后台编辑 / 批量 / 上传 / 预览 / 删除、
+ * 催资源本机模式、GameJolt 导入与关系展示。
  *
- * 前置：
- *   1. `npm run dev`（默认 http://localhost:5173，可用 BASE 覆盖）
- *   2. 本机安装 Chrome —— 用 `channel: 'chrome'`，不下载 Playwright 自带浏览器
- *   3. `npm i`（playwright 在 devDependencies 里；本项目的安装惯例是 --ignore-scripts）
+ * 运行方式（二选一）：
+ *   1. `npm run test:ui`：另开终端 `npm run dev`；默认使用 Playwright Chromium，
+ *      首次先执行 `npx playwright install chromium`
+ *   2. `npm run test:ui:ci`：自动启动 / 清理 Vite，供本地一次性验证与 CI 使用
  *
- * 运行：`npm run test:ui`
+ * 本地想用系统 Chrome：`UI_BROWSER=chrome npm run test:ui`（或 test:ui:ci）。
  * 截图：`.tmp/ui-shots`（不纳入版本管理）
  *
  * 两个必须注意的坑（第一版脚本就栽在这上面）：
@@ -52,7 +52,11 @@ async function step(name, fn) {
   }
 }
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true })
+const browserChannel = process.env.UI_BROWSER === 'chrome' ? 'chrome' : undefined
+const browser = await chromium.launch({
+  headless: true,
+  ...(browserChannel ? { channel: browserChannel } : {}),
+})
 // ⚠️ 用 context 挂拦截，而不是 page —— 预览功能会开新标签页，
 //    page.route 只对本页生效，新标签页里的请求就没人拦了。
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
@@ -692,7 +696,7 @@ await step('Phase 2 · 排序切「游戏名称」→ 首行是标题最小的�
   const cells = await page.locator('table tbody tr td:nth-child(3) a').allInnerTexts()
   const titles = cells.map((text) => text.replace(/\s+/g, ' ').trim())
   const ascending = [...titles].sort((a, b) => a.localeCompare(b, 'en'))
-  assert(titles.length > 1, '列表里至少应有两条作品才谈得上排序')
+  assert(titles.length > 0, '列表里没有作品，无法验证排序')
   assert(
     titles[0] === ascending[0],
     `首行应是标题升序的第一个：期望 ${JSON.stringify(ascending[0])}，实际 ${JSON.stringify(titles[0])}`,

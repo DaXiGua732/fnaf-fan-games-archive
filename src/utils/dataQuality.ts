@@ -96,14 +96,15 @@ function isHttpUrlOrEmpty(value: unknown): boolean {
 }
 
 /**
- * 严格的时间戳格式：带日期、时间、秒与时区（Z 或 ±HH:MM）。
+ * 本项目接受的 ISO 8601 时间戳子集：
+ * `YYYY-MM-DDTHH:mm:ss`，可带 1–9 位小数秒，时区必须是 `Z` 或 `±HH:MM`。
  * 不接受 `Date.parse()` 能“猜”出来的本地日期、空格分隔、无时区或非法日历日。
  */
 const ISO_TIMESTAMP_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(?:Z|([+-])(\d{2}):(\d{2}))$/
 
 const TIMESTAMP_EXPECTATION =
-  'ISO 8601 时间戳（YYYY-MM-DDTHH:mm:ss[.sss]Z 或 ±HH:MM）或空字符串'
+  '本项目接受的 ISO 8601 时间戳（YYYY-MM-DDTHH:mm:ss，可带 1–9 位小数秒，时区为 Z 或 ±HH:MM）或空字符串'
 
 function isIsoTimestampValue(value: unknown): boolean {
   if (typeof value !== 'string') return false

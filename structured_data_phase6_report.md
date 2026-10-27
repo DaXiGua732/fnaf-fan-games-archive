@@ -176,18 +176,19 @@ Phase 0–6 按设计完成，没有批量修改生产数据，没有引入新�
    `metrics` 对象及 `fakeViews` / `score` 的有限数值与范围；
    `shortDescription` / `videoUrl` / `sourceUrl` / `status` / `featured` / `archived` /
    `sortOrder` / `createdAt` / `updatedAt` / `publishedAt` 的类型、枚举与格式检查。
-   时间戳只接受带时区的完整 ISO 8601（`YYYY-MM-DDTHH:mm:ss[.sss]Z` 或 `±HH:MM`），
-   并校验真实日历日期；不再用 `Date.parse()` 的宽松解析兜底。
+   时间戳只接受带时区的完整 ISO 8601：`YYYY-MM-DDTHH:mm:ss`，可带 1–9 位小数秒，
+   时区为 `Z` 或 `±HH:MM`；并校验真实日历日期，不再用 `Date.parse()` 的宽松解析兜底。
    可选字段缺失不误报；未知扩展字段继续保留；检查器仍只读且逐条隔离。
 
 3. **验证门禁**
-   - `npm run verify` 新增 `test:data-quality` 与 `check:data --strict`。
-   - 部署 workflow 新增「Data quality CLI tests」与「Data quality check (strict)」。
+   - `npm run verify` 新增 `test:data-quality`、`check:data --strict` 与 `test:ui:ci`。
+   - 部署 workflow 新增严格资料检查、CLI 退出码测试与真实浏览器 UI 测试；
+     UI 测试默认 Playwright Chromium，runner 自动启动 / 清理 Vite，失败上传截图与日志。
    - `check:data --strict` 只对 error 失败，warning 继续人工判断；检查对象是
      `data:pull` 之后的快照，拉取失败时日志明确标注“本次检查的是旧快照”。
-   - `test:ui` 仍需常驻 dev server + 系统 Chrome（约 3 分钟），且 workflow 每小时
-     兜底重建；交互回归不纳入部署门禁，人工命令为 `npm run dev` + `npm run test:ui`。
+   - `test:ui` 仍保留“复用已启动 dev server”的本地模式；`test:ui:ci` 是 verify / CI 使用的
+     自动服务器版本，两者运行同一套 99 步浏览器点击测试。
 
-回归结果（本轮）：`selftest` **1119/1119**（资料质量组 97/97，结构化资料组 321/321）、
+回归结果（本轮）：`selftest` **1120/1120**（资料质量组 98/98，结构化资料组 321/321）、
 `test:data-quality` **1/1**、`test:catalog` 3/3、`test:gamejolt` 22/22、`smoke` 16/16、
 UI 点击 99/99；当前快照 `check:data --strict` 为 error 0 · warning 7 · info 14。

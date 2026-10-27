@@ -457,7 +457,10 @@ export function runDataQualityAssertions(): Assertion[] {
   const validTimestamps = [
     '',
     '2026-01-01T00:00:00Z',
+    '2026-01-01T00:00:00.1Z',
     '2026-01-01T00:00:00.000Z',
+    '2026-01-01T00:00:00.123456Z',
+    '2026-01-01T00:00:00.123456789Z',
     '2026-01-01T08:30:00+08:00',
     '2026-01-01T00:00:00-05:00',
     '2026-01-01T00:00:00+14:00',
@@ -488,6 +491,7 @@ export function runDataQualityAssertions(): Assertion[] {
     '2026-01-01T24:00:00Z',
     '2026-01-01T00:00:60Z',
     '2026-01-01T00:00Z',
+    '2026-01-01T00:00:00',
     '2026-01-01T00:00:00z',
     '2026-01-01T00:00:00+14:30',
     '2026-01-01T00:00:00.1234567890Z',
@@ -508,6 +512,13 @@ export function runDataQualityAssertions(): Assertion[] {
     '严格时间戳 · 非法值逐条 invalid-created-at',
     invalidTimestampsReport.issues.filter((issue) => issue.code === 'invalid-created-at').length,
     invalidTimestamps.length,
+  )
+  check(
+    '严格时间戳 · 错误文案说明小数秒 1–9 位',
+    invalidTimestampsReport.issues
+      .find((issue) => issue.code === 'invalid-created-at')
+      ?.message.includes('1–9 位小数秒'),
+    true,
   )
 
   const otherTimestampFields = analyzeCatalog({
