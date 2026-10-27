@@ -278,15 +278,15 @@ onUnmounted(revokePreviewCover)
 
 const INPUT_CLASS =
   'w-full rounded-none border border-black bg-white px-4 py-3 font-sans text-sm ' +
-  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-[#ff0000] focus:outline-none'
+  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-accent focus:outline-none'
 
 const ACTION_BASE =
   'inline-flex items-center gap-3 border px-6 py-3 font-sans text-[11px] font-bold ' +
   'uppercase tracking-[0.16em] transition-colors duration-150 ease-out'
 
-const ACTION_PRIMARY = `${ACTION_BASE} border-black bg-black text-white hover:border-[#ff0000] hover:bg-[#ff0000] disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:bg-white disabled:text-black/30 disabled:hover:border-[#cccccc] disabled:hover:bg-white disabled:hover:text-black/30`
+const ACTION_PRIMARY = `${ACTION_BASE} border-black bg-black text-white hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent disabled:cursor-not-allowed disabled:border-line disabled:bg-white disabled:text-black/30 disabled:hover:border-line disabled:hover:bg-white disabled:hover:text-black/30`
 
-const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30`
+const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-line disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30`
 </script>
 
 <template>
@@ -299,7 +299,7 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
 
     <!-- 方式一：浏览器扩展导出的 ZIP（运维主路径） -->
     <div
-      class="mt-5 border border-black bg-[#f9f9f9] p-5"
+      class="mt-5 border border-black bg-surface p-5"
       @dragover.prevent
       @drop.prevent="onDrop"
     >
@@ -334,7 +334,7 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
     </div>
 
     <!-- 方式二：本机助手（开发 / 调试备用） -->
-    <p class="mt-4 max-w-[78ch] border border-[#cccccc] bg-[#f9f9f9] px-4 py-3 font-sans text-xs leading-relaxed text-black/60">
+    <p class="mt-4 max-w-[78ch] border border-line bg-surface px-4 py-3 font-sans text-xs leading-relaxed text-black/60">
       方式二 · 本机助手（开发调试用）：在项目目录运行
       <code class="font-mono text-[11px] font-bold text-black">npm run gamejolt:helper</code>
       ，窗口别关，然后粘贴链接抓取。助手只负责读取 GameJolt 的公开信息，碰不到数据仓的令牌。
@@ -363,14 +363,14 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
       </button>
     </div>
 
-    <div v-if="error" class="mt-4 border border-[#ff0000] px-4 py-3" role="alert" aria-live="assertive">
-      <p class="font-sans text-xs leading-relaxed text-[#ff0000]">{{ error }}</p>
+    <div v-if="error" class="mt-4 border border-accent px-4 py-3" role="alert" aria-live="assertive">
+      <p class="font-sans text-xs leading-relaxed text-accent">{{ error }}</p>
     </div>
 
     <!-- ============ 抓取结果预览 ============ -->
-    <div v-if="data" class="mt-6 border border-[#cccccc]">
+    <div v-if="data" class="mt-6 border border-line">
       <div class="grid gap-5 p-5 md:grid-cols-[180px_minmax(0,1fr)]">
-        <div class="border border-[#cccccc] bg-[#f9f9f9]">
+        <div class="border border-line bg-surface">
           <img
             v-if="previewCoverUrl"
             :src="previewCoverUrl"
@@ -398,7 +398,7 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
 
           <p
             v-if="data.description"
-            class="mt-3 max-h-32 overflow-auto whitespace-pre-wrap border-t border-[#e5e5e5] pt-3 font-sans text-xs leading-relaxed text-black/70"
+            class="mt-3 max-h-32 overflow-auto whitespace-pre-wrap border-t border-line pt-3 font-sans text-xs leading-relaxed text-black/70"
           >
             {{ data.description }}
           </p>
@@ -408,15 +408,15 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
             :href="data.sourceUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="mt-3 inline-block font-sans text-xs font-bold underline underline-offset-4 hover:text-[#ff0000]"
+            class="mt-3 inline-block font-sans text-xs font-bold underline underline-offset-4 hover:text-accent"
           >
             打开 GameJolt 原页
           </a>
         </div>
       </div>
 
-      <div v-if="warnings.length" class="border-t border-[#cccccc] px-5 py-4">
-        <p class="swiss-meta font-bold text-[#ff0000]">需要注意</p>
+      <div v-if="warnings.length" class="border-t border-line px-5 py-4">
+        <p class="swiss-meta font-bold text-accent">需要注意</p>
         <ul class="mt-2 space-y-1">
           <li
             v-for="warning in warnings"
@@ -428,7 +428,7 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
         </ul>
       </div>
 
-      <div class="border-t border-[#cccccc] px-5 py-4">
+      <div class="border-t border-line px-5 py-4">
         <div class="flex flex-wrap items-center gap-3">
           <button type="button" :class="ACTION_PRIMARY" :disabled="!canApply" @click="onApply">
             {{ applying ? '正在导入…' : '填入表单并上传图片' }}
@@ -444,7 +444,7 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
 
         <p
           v-if="storage !== 'remote'"
-          class="mt-3 font-sans text-xs leading-relaxed text-[#ff0000]"
+          class="mt-3 font-sans text-xs leading-relaxed text-accent"
         >
           还没登录：可以先预览，但图片不会上传。请登录后再导入。
         </p>
@@ -458,7 +458,7 @@ const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black ho
     <!-- ============ 导入结果 ============ -->
     <div
       v-if="result"
-      class="mt-4 border border-[#cccccc] border-l-4 border-l-[#ff0000] px-5 py-4"
+      class="mt-4 border border-line border-l-4 border-l-accent px-5 py-4"
       role="status"
       aria-live="polite"
     >

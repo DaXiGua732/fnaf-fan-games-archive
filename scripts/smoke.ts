@@ -160,10 +160,10 @@ function installFetchStub(): void {
  */
 const SHELL_MARKERS: Record<SmokeCase['shell'], string[]> = {
   // 「后台管理」是公开站 Header 的导航项（同时出现在移动端菜单与页脚），每条公开路由都该有
-  public: ['跳到主内容', '非商业性质的粉丝向资源导航站', '后台管理'],
+  public: ['跳到主内容', '非商业性质的粉丝向资源导航站', '后台管理', '主题'],
   // 「Sections」是后台侧栏的小标题；它**在登录与未登录两种状态下都存在**，
   // 所以适合做外壳标记（「登录 / 已登录」这类会随状态变化的文本不行）。
-  admin: ['跳到后台主内容', '返回站点', 'Sections'],
+  admin: ['跳到后台主内容', '返回站点', 'Sections', '主题'],
 }
 
 /**
@@ -188,8 +188,18 @@ const CASES: SmokeCase[] = [
       'FNAF Fan Games',
       '游戏库',
       '关键词搜索',
+      '资源请求',
+      '开发引擎',
+      '催一个资源',
       ...VISIBLE_GAMES.slice(0, 2).map((game) => game.title),
     ],
+  },
+  {
+    // URL 里的索引条件必须在 SSR 首帧就反映到摘要里（刷新 / 复制链接的契约）
+    path: `/?year=${DETAIL_GAME.releaseYear}`,
+    name: '首页·索引 URL',
+    shell: 'public',
+    expect: ['当前索引条件', '年份', String(DETAIL_GAME.releaseYear)],
   },
   {
     path: `/game/${DETAIL_GAME.id}`,
@@ -369,6 +379,37 @@ const CASES: SmokeCase[] = [
       '推荐与排序',
       '未归档',
       '未推荐',
+      // Phase 2 结构化字段（新建 / 编辑共用同一份编辑器）
+      '开发状态',
+      '来源页',
+      '其他名称',
+      '支持平台',
+      '玩法与机制',
+      '玩法类型',
+      '游戏机制',
+      '还没有标注玩法类型',
+      // Phase 5：有向关系区块（新建 / 编辑共用）
+      '关联作品',
+    ],
+  },
+  {
+    path: '/admin/vocabulary',
+    name: '后台·玩法与机制',
+    shell: 'admin',
+    // 后台页面必须带令牌，否则会被登录门禁拦到登录页
+    token: true,
+    expect: [
+      '玩法与机制',
+      '玩法类型',
+      '游戏机制',
+      '支持平台',
+      '未标玩法',
+      // 内置初始词表（数据仓尚无 taxonomy 时使用）
+      '传统守夜式',
+      '监控摄像头',
+      'Windows',
+      '使用数量',
+      '操作',
     ],
   },
   {

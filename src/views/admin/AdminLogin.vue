@@ -33,13 +33,13 @@ async function submit(): Promise<void> {
 
 const INPUT_CLASS =
   'w-full rounded-none border border-black bg-white px-4 py-3 font-sans text-sm ' +
-  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-[#ff0000] focus:outline-none'
+  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-accent focus:outline-none'
 
 const ACTION_PRIMARY =
   'inline-flex items-center justify-center border border-black bg-black px-6 py-3 font-sans ' +
   'text-[11px] font-bold uppercase tracking-[0.16em] text-white transition-colors ' +
-  'duration-150 ease-out hover:border-[#ff0000] hover:bg-[#ff0000] ' +
-  'disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:bg-white disabled:text-black/30'
+  'duration-150 ease-out hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent ' +
+  'disabled:cursor-not-allowed disabled:border-line disabled:bg-white disabled:text-black/30'
 </script>
 
 <template>
@@ -55,7 +55,7 @@ const ACTION_PRIMARY =
     </p>
 
     <!-- ============ 怎么拿到令牌 ============ -->
-    <section class="mt-10 max-w-[78ch] border border-[#cccccc] px-6 py-5">
+    <section class="mt-10 max-w-[78ch] border border-line px-6 py-5">
       <p class="swiss-meta text-black/60">第一步 · 拿到自己的令牌（每人一枚，别共用）</p>
       <ol class="mt-4 flex flex-col gap-3 font-sans text-xs leading-relaxed text-black/70">
         <li>
@@ -64,7 +64,7 @@ const ACTION_PRIMARY =
             :href="TOKEN_CREATE_URL"
             target="_blank"
             rel="noopener noreferrer"
-            class="font-bold text-black underline decoration-[#ff0000] decoration-2 underline-offset-2 transition-colors duration-150 ease-out hover:text-[#ff0000]"
+            class="font-bold text-black underline decoration-accent decoration-2 underline-offset-2 transition-colors duration-150 ease-out hover:text-accent"
           >
             细粒度令牌创建页 ↗
           </a>
@@ -72,7 +72,7 @@ const ACTION_PRIMARY =
         <li>
           2. <span class="font-bold text-black">Repository access</span> 选
           <span class="font-bold text-black">Only select repositories</span>，
-          只勾 <code class="border border-[#cccccc] px-1">fnaf-fan-games-data</code>
+          只勾 <code class="border border-line px-1">fnaf-fan-games-data</code>
         </li>
         <li>
           3. <span class="font-bold text-black">Permissions</span> →
@@ -80,7 +80,7 @@ const ACTION_PRIMARY =
           <span class="font-bold text-black">Contents</span> 设为
           <span class="font-bold text-black">Read and write</span>（其余全部 No access）
         </li>
-        <li>4. 生成后，复制以 <code class="border border-[#cccccc] px-1">github_pat_</code> 开头的那串字符</li>
+        <li>4. 生成后，复制以 <code class="border border-line px-1">github_pat_</code> 开头的那串字符</li>
       </ol>
     </section>
 
@@ -106,14 +106,14 @@ const ACTION_PRIMARY =
           </button>
           <RouterLink
             to="/"
-            class="font-sans text-[11px] font-bold uppercase tracking-[0.16em] text-black/60 transition-colors duration-150 ease-out hover:text-[#ff0000]"
+            class="font-sans text-[11px] font-bold uppercase tracking-[0.16em] text-black/60 transition-colors duration-150 ease-out hover:text-accent"
           >
             返回站点
           </RouterLink>
         </div>
       </form>
 
-      <p v-if="notice" class="mt-4 font-sans text-xs leading-relaxed text-[#ff0000]" role="alert">
+      <p v-if="notice" class="mt-4 font-sans text-xs leading-relaxed text-accent" role="alert">
         {{ notice }}
       </p>
       <p v-else class="mt-4 font-sans text-xs leading-relaxed text-black/45">

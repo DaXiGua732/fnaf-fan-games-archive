@@ -2,6 +2,7 @@
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import AdminNav from '../components/admin/AdminNav.vue'
 import StyleAuditBadge from '../components/StyleAuditBadge.vue'
+import ThemeSwitcher from '../components/ThemeSwitcher.vue'
 import { useAdminAuth } from '../composables/useAdminAuth'
 
 /**
@@ -17,8 +18,8 @@ import { useAdminAuth } from '../composables/useAdminAuth'
  *   └──────────────┴──────────────────────────────────────────┘
  *
  * Swiss 约束复查点：
- *  - 全部用 1px 边框分隔（主分隔 border-black / 次分隔 #cccccc），零阴影、零圆角、零渐变
- *  - 悬停只改文字颜色为 #ff0000，过渡上限 duration-150
+ *  - 全部用 1px 边框分隔（主分隔用墨色 / 次分隔用辅助线色），零阴影、零圆角、零渐变
+ *  - 悬停只改文字颜色为强调色，过渡上限 duration-150
  *  - 布局用 grid / flex 而非 position:fixed，避免移动端遮挡与滚动耦合
  *  - 只有表格数字列允许右对齐（本文件内无表格）
  */
@@ -50,10 +51,10 @@ async function onLogout(): Promise<void> {
       <div class="mx-auto flex h-14 max-w-[1280px] items-center justify-between gap-4 px-4 md:gap-6 md:px-12">
         <RouterLink
           to="/admin/games"
-          class="flex items-baseline font-sans text-xs font-bold uppercase tracking-[0.24em] transition-colors duration-150 ease-out hover:text-[#ff0000] md:text-sm"
+          class="flex items-baseline font-sans text-xs font-bold uppercase tracking-[0.24em] transition-colors duration-150 ease-out hover:text-accent md:text-sm"
         >
           <span>FNAF</span>
-          <span class="px-1 text-[#ff0000]">/</span>
+          <span class="px-1 text-accent">/</span>
           <span>Admin</span>
         </RouterLink>
 
@@ -65,7 +66,7 @@ async function onLogout(): Promise<void> {
             </p>
             <button
               type="button"
-              class="font-sans text-xs font-bold uppercase tracking-[0.16em] text-black/60 transition-colors duration-150 ease-out hover:text-[#ff0000]"
+              class="font-sans text-xs font-bold uppercase tracking-[0.16em] text-black/60 transition-colors duration-150 ease-out hover:text-accent"
               @click="onLogout"
             >
               登出
@@ -74,14 +75,17 @@ async function onLogout(): Promise<void> {
           <RouterLink
             v-else
             :to="{ name: 'admin-login' }"
-            class="font-sans text-xs font-bold uppercase tracking-[0.16em] text-[#ff0000] transition-colors duration-150 ease-out hover:text-black"
+            class="font-sans text-xs font-bold uppercase tracking-[0.16em] text-accent transition-colors duration-150 ease-out hover:text-black"
           >
             登录
           </RouterLink>
 
+          <!-- 主题切换：与认证状态放在同一操作区，窄屏仍可触达 -->
+          <ThemeSwitcher />
+
           <RouterLink
             to="/"
-            class="group hidden items-baseline gap-3 border-b-2 border-b-transparent py-1 font-sans text-xs font-bold uppercase tracking-[0.16em] transition-colors duration-150 ease-out hover:border-b-[#ff0000] hover:text-[#ff0000] sm:inline-flex"
+            class="group hidden items-baseline gap-3 border-b-2 border-b-transparent py-1 font-sans text-xs font-bold uppercase tracking-[0.16em] transition-colors duration-150 ease-out hover:border-b-accent hover:text-accent sm:inline-flex"
           >
             <span>返回站点</span>
             <span class="u-arrow" aria-hidden="true">&#8594;</span>
@@ -98,7 +102,7 @@ async function onLogout(): Promise<void> {
         <RouterView />
 
         <!-- 开发期视觉规范哨兵：全量扫描后台 DOM 的圆角 / 阴影 -->
-        <div v-if="isDev" class="mt-16 border-t border-[#cccccc] pt-8">
+        <div v-if="isDev" class="mt-16 border-t border-line pt-8">
           <StyleAuditBadge />
         </div>
       </main>

@@ -40,12 +40,12 @@ const BASE =
   'disabled:cursor-not-allowed disabled:opacity-40'
 
 const VARIANTS: Record<Variant, string> = {
-  // 黑色直角按钮：悬停整块变红
-  solid: 'border-black bg-black text-white hover:border-[#ff0000] hover:bg-[#ff0000] hover:text-white',
-  // 白底黑框：悬停反转
-  outline: 'border-black bg-white text-black hover:bg-black hover:text-white',
-  // 幽灵按钮：仅文字变红
-  ghost: 'border-transparent bg-transparent text-black hover:text-[#ff0000]',
+  // 实心按钮：墨色底，悬停换成强调色面
+  solid: 'border-ink bg-ink text-paper hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent',
+  // 纸色底墨框：悬停反转
+  outline: 'border-ink bg-paper text-ink hover:bg-ink hover:text-paper',
+  // 幽灵按钮：仅文字变强调色
+  ghost: 'border-transparent bg-transparent text-ink hover:text-accent',
 }
 
 const SIZES: Record<Size, string> = {

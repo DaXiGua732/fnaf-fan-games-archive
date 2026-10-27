@@ -7,7 +7,12 @@
  * 放在类型定义旁边才能让编译器在联合类型增删成员时立刻报错（Record 缺键即编译失败），
  * 从机制上杜绝「加了状态却忘了加文案」。
  */
-import type { Game, GameStatus } from './game'
+import type {
+  DevelopmentStatus,
+  Game,
+  GameRelation,
+  GameStatus,
+} from './game'
 
 /**
  * 后台使用的游戏视图模型 —— 可选字段已全部落地为必填。
@@ -17,8 +22,14 @@ import type { Game, GameStatus } from './game'
  */
 export type AdminGame = Game & {
   shortDescription: string
+  altTitles: string[]
+  gameplayTypes: string[]
+  mechanics: string[]
   tags: string[]
   platforms: string[]
+  developmentStatus: DevelopmentStatus
+  relations: GameRelation[]
+  sourceUrl: string
   status: GameStatus
   featured: boolean
   archived: boolean
@@ -120,7 +131,7 @@ export const SORT_OPTIONS: { key: AdminSortKey; label: string }[] = [
  * 那是合法的表单状态，但不是合法的模型值。校验通过后才由 `draftToPatch()`
  * 转换回模型类型（例如 releaseYear: string → number）。
  *
- * 标签是唯一的非文本字段（Phase 6 起）。
+ * 标签、其他名称与分类词条是数组字段；其余都是文本中间态。
  */
 export interface GameDraft {
   title: string
@@ -136,6 +147,20 @@ export interface GameDraft {
   sortOrder: string
   /** 标签。与 ipSeries（世界观归属）并列，不是替代关系 */
   tags: string[]
+  /** 其他名称（搜索可见）。数量与单个长度上限见 ALT_TITLE_LIMITS */
+  altTitles: string[]
+  /** 官方页面 / 原始发布页。可留空；填了必须是 http(s) */
+  sourceUrl: string
+  /** 作品自身的开发状态 —— 与网站发布状态 `status` 完全正交 */
+  developmentStatus: DevelopmentStatus
+  /** 玩法类型词条 id（≤3）。**第一项是主要玩法**，顺序有含义 */
+  gameplayTypes: string[]
+  /** 机制词条 id（≤12） */
+  mechanics: string[]
+  /** 平台词条 id（≤8） */
+  platforms: string[]
+  /** 显式作品关系（有向边，≤20）；不是标签，也不由系列自动推导 */
+  relations: GameRelation[]
   /** 封面图地址（站内路径或外链） */
   coverImage: string
   /** Banner 宣传图地址 */
@@ -163,6 +188,7 @@ export type DraftTextField =
   | 'shortDescription'
   | 'description'
   | 'sortOrder'
+  | 'sourceUrl'
   | 'coverImage'
   | 'bannerImage'
 
@@ -176,9 +202,11 @@ export const DRAFT_TEXT_FIELDS: DraftTextField[] = [
   'shortDescription',
   'description',
   'sortOrder',
+  'sourceUrl',
   'coverImage',
   'bannerImage',
 ]
+
 
 /** 下载渠道的草稿行。三个字段都是字符串 —— 表单中间态允许空 */
 export interface DownloadDraft {
@@ -198,6 +226,12 @@ export const DOWNLOAD_LIMITS = {
 export type DraftField =
   | DraftTextField
   | 'tags'
+  | 'altTitles'
+  | 'developmentStatus'
+  | 'gameplayTypes'
+  | 'mechanics'
+  | 'platforms'
+  | 'relations'
   | 'gallery'
   | 'downloads'
   | 'status'
@@ -207,6 +241,12 @@ export type DraftField =
 export const DRAFT_FIELDS: DraftField[] = [
   ...DRAFT_TEXT_FIELDS,
   'tags',
+  'altTitles',
+  'developmentStatus',
+  'gameplayTypes',
+  'mechanics',
+  'platforms',
+  'relations',
   'gallery',
   'downloads',
   'status',
@@ -214,8 +254,32 @@ export const DRAFT_FIELDS: DraftField[] = [
   'featured',
 ]
 
-/** 草稿校验结果（只针对文本字段）。键为字段名，值为错误文案；空字符串表示通过 */
-export type DraftErrors = Record<DraftTextField, string>
+/**
+ * 数组型字段的错误槽。
+ *
+ * 它们不是文本输入框（没有 `DraftTextField` 那种「字符串中间态」），
+ * 但校验结果要和文本字段放在同一张表里 —— 否则 `isValid` 得在多个地方
+ * 各拼一次条件，迟早漏掉一个。
+ */
+export type DraftGroupField = 'altTitles' | 'gameplayTypes' | 'mechanics' | 'platforms'
+
+export const DRAFT_GROUP_FIELDS: DraftGroupField[] = [
+  'altTitles',
+  'gameplayTypes',
+  'mechanics',
+  'platforms',
+]
+
+export type DraftErrorField = DraftTextField | DraftGroupField
+
+/** 草稿校验结果。键为字段名，值为错误文案；空字符串表示通过 */
+export type DraftErrors = Record<DraftErrorField, string>
+
+/** 所有参与「是否通过校验」的字段（文本 + 数组组） */
+export const DRAFT_ERROR_FIELDS: DraftErrorField[] = [
+  ...DRAFT_TEXT_FIELDS,
+  ...DRAFT_GROUP_FIELDS,
+]
 
 /**
  * 写入片段：只描述「这次要改哪些字段」。
@@ -293,6 +357,32 @@ export function normalizeTag(input: unknown): string {
 /** 标签是否合法（非空且不超长） */
 export function isValidTag(tag: string): boolean {
   return tag.length > 0 && tag.length <= TAG_LIMITS.maxLength
+}
+
+/* ==========================================================================
+   其他名称（altTitles）
+   ========================================================================== */
+
+export const ALT_TITLE_LIMITS = {
+  /** 单条作品最多其他名称数 */
+  maxPerGame: 5,
+  /** 单个其他名称最大长度 */
+  maxLength: 80,
+} as const
+
+/**
+ * 归一化其他名称：NFKC、去首尾空白、折叠内部空白。
+ *
+ * 与标签不同，**不去 `#` 前缀** —— 其他名称是正式名称（可能含符号），
+ * 不是社区标签。返回空字符串表示这一项无效。
+ */
+export function normalizeAltTitle(input: unknown): string {
+  const text = typeof input === 'string' ? input : String(input ?? '')
+  return text.normalize('NFKC').trim().replace(/\s+/g, ' ')
+}
+
+export function isValidAltTitle(title: string): boolean {
+  return title.length > 0 && title.length <= ALT_TITLE_LIMITS.maxLength
 }
 
 /* ==========================================================================

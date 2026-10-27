@@ -31,6 +31,8 @@ const NAV_ITEMS: AdminNavItem[] = [
   { to: '/admin/games', label: '游戏管理', ready: true },
   // 标签与作者合并在同一页：它们都是作品的派生分类维度，没必要占两个导航项。
   { to: '/admin/taxonomy', label: '标签与作者', ready: true },
+  // 受控词表：玩法类型 / 机制 / 平台。标签与作者仍是派生字符串，两者不要混。
+  { to: '/admin/vocabulary', label: '玩法与机制', ready: true },
   { to: '/admin/settings', label: '系统设置', ready: false },
 ]
 
@@ -45,15 +47,15 @@ function itemClass(ready: boolean, active: boolean): string {
   return [
     ITEM_BASE,
     active
-      ? 'border-l-[#ff0000] text-[#ff0000]'
-      : 'border-l-transparent text-black hover:text-[#ff0000]',
+      ? 'border-l-accent text-accent'
+      : 'border-l-transparent text-black hover:text-accent',
   ].join(' ')
 }
 </script>
 
 <template>
   <nav
-    class="shrink-0 border-b border-[#cccccc] md:w-[220px] md:border-b-0 md:border-r md:border-[#cccccc] md:pr-6"
+    class="shrink-0 border-b border-line md:w-[220px] md:border-b-0 md:border-r md:border-line md:pr-6"
     aria-label="后台分区导航"
   >
     <p class="swiss-meta hidden pb-3 pt-1 text-black/45 md:block">Sections</p>

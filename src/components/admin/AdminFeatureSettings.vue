@@ -23,7 +23,7 @@ const CHECKBOX_CLASS =
 
 const INPUT_CLASS =
   'w-full rounded-none border border-black bg-white px-4 py-3 font-sans text-sm ' +
-  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-[#ff0000] focus:outline-none'
+  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-accent focus:outline-none'
 </script>
 
 <template>

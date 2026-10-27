@@ -5,7 +5,7 @@
  * 统一「标题 + 区块头右侧状态」这一层重复结构：
  *   - 已接入的区块：右侧显示「已修改 / 未修改」
  *   - 待接入的区块：右侧显示「Phase N 接入」，且边框降为辅助灰
- *     （已接入的区块用黑边框，未接入的用 #cccccc —— 一眼能看出哪些是能用的）
+ *     （已接入的区块用墨色边框，未接入的用辅助线色 —— 一眼能看出哪些是能用的）
  *
  * 抽出来的直接原因：编辑页已经有 5 个区块，Phase 8 / 9 还要再加；
  * 与其把这段标记抄 7 遍，不如让「区块长什么样」只有一处定义。
@@ -33,11 +33,11 @@ withDefaults(
 <template>
   <section
     :id="anchor || undefined"
-    :class="[pending ? 'border border-[#cccccc]' : 'border border-black', anchor ? 'scroll-mt-40' : '']"
+    :class="[pending ? 'border border-line' : 'border border-black', anchor ? 'scroll-mt-40' : '']"
   >
     <header
       class="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4"
-      :class="pending ? 'border-[#cccccc]' : 'border-black'"
+      :class="pending ? 'border-line' : 'border-black'"
     >
       <h2 class="swiss-meta font-bold">{{ title }}</h2>
 
@@ -45,7 +45,7 @@ withDefaults(
       <span
         v-else-if="!hideStatus"
         class="swiss-meta"
-        :class="changed ? 'font-bold text-[#ff0000]' : 'text-black/40'"
+        :class="changed ? 'font-bold text-accent' : 'text-black/40'"
       >
         {{ changed ? '已修改' : '未修改' }}
       </span>

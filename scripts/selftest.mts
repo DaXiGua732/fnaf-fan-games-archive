@@ -11,7 +11,12 @@ import { fileURLToPath } from 'node:url'
 import { useAdminGames } from '../src/composables/useAdminGames'
 import { useGameLibrary } from '../src/composables/useGameLibrary'
 import { runAdminAssertions } from '../src/dev/adminAssertions'
+import { runDataQualityAssertions } from '../src/dev/dataQualityAssertions'
 import { runLibraryAssertions, type Assertion } from '../src/dev/libraryAssertions'
+import { runFilterUrlAssertions } from '../src/dev/filterUrlAssertions'
+import { runRequestAssertions } from '../src/dev/requestAssertions'
+import { runStructuredDataAssertions } from '../src/dev/structuredDataAssertions'
+import { runThemeAssertions } from '../src/dev/themeAssertions'
 import { runViewCounterAssertions } from '../src/dev/viewCounterAssertions'
 
 /* ---------------------------------------------------------------------------
@@ -75,9 +80,45 @@ const DB_ALLOWLIST = ['src/repositories/localGameRepository.ts']
 /** 只有这些文件可以创建仓储实例（否则会出现两份互不相干的数据） */
 const FACTORY_ALLOWLIST = [
   'src/repositories/localGameRepository.ts',
-  'src/repositories/remoteGameRepository.ts',
+  'src/repositories/githubGameRepository.ts',
   'src/repositories/index.ts',
 ]
+
+/** 催资源仓储同样只能装配一次；两个实现文件里只是函数声明，不是实例化 */
+const REQUEST_FACTORY_ALLOWLIST = [
+  'src/repositories/index.ts',
+  'src/repositories/localResourceRequestRepository.ts',
+  'src/repositories/supabaseResourceRequestRepository.ts',
+]
+
+/**
+ * 主题色的唯一来源是 `src/styles/index.css` 里的 CSS 变量。
+ * `.vue` 里写死 hex 会绕过整套主题（切夜间 / 换强调色时它不会变），
+ * 所以要扫；`&#8594;` 这类 HTML 实体不算（负向后行断言排除 `&`）。
+ */
+const HEX_COLOR_IN_VUE = /(?<!&)#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/
+
+/** 固定 Tailwind 调色板同样会绕过主题变量（semantic token 才是唯一出口） */
+const FIXED_PALETTE_CLASS =
+  /\b(?:bg|text|border|divide|ring|outline|placeholder|from|via|to|fill|stroke)-(?:red|blue|green|pink|purple|yellow|gray|grey|slate|zinc|neutral|stone|orange|amber|lime|emerald|teal|cyan|sky|indigo|violet|fuchsia|rose)-\d{2,3}\b/
+
+const INDEX_HTML = readFileSync(join(PROJECT_ROOT, 'index.html'), 'utf8')
+
+/**
+ * Supabase SQL 无法在本地执行（没有 psql / Docker），但它的安全边界必须可回归。
+ * 这些守卫只检查「关键声明还在」：RLS、收回直接写权限、security definer + search_path、
+ * 视图不暴露身份列、同名 open 请求唯一。真正执行仍由站长在 Supabase 控制台完成。
+ */
+const REQUEST_SQL = readFileSync(
+  join(PROJECT_ROOT, 'supabase/resource_requests.sql'),
+  'utf8',
+)
+  // 去掉 SQL 注释，避免「注释里写了 security definer」把守卫骗过去
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/--.*$/gm, '')
+const REQUEST_VIEW_BLOCK =
+  REQUEST_SQL.match(/create or replace view public\.resource_request_board([\s\S]*?);/)?.[1] ??
+  ''
 
 const staticResults: Assertion[] = [
   guard(
@@ -92,7 +133,7 @@ const staticResults: Assertion[] = [
     SOURCES.filter(
       (f) =>
         ADMIN_SCOPE.test(f.path) &&
-        /from\s+['"][^'"]*repositories\/(local|remote)GameRepository/.test(f.code),
+        /from\s+['"][^'"]*repositories\/(local|github)GameRepository/.test(f.code),
     ).map((f) => f.path),
     '只允许 import ../repositories 的当前实例',
   ),
@@ -100,22 +141,110 @@ const staticResults: Assertion[] = [
     '静态守卫 · 只有 repositories/index.ts 实例化仓储',
     SOURCES.filter(
       (f) =>
-        /create(Local|Remote)GameRepository\s*\(/.test(f.code) &&
+        /create(Local|GitHub)GameRepository\s*\(/.test(f.code) &&
         !FACTORY_ALLOWLIST.includes(f.path) &&
         !TEST_SCOPE.test(f.path),
     ).map((f) => f.path),
     `${FACTORY_ALLOWLIST.join(', ')}（测试夹具除外）`,
   ),
+  guard(
+    '静态守卫 · 只有 repositories/index.ts 实例化催资源仓储',
+    SOURCES.filter(
+      (f) =>
+        /create(Local|Supabase)ResourceRequestRepository\s*\(/.test(f.code) &&
+        !REQUEST_FACTORY_ALLOWLIST.includes(f.path) &&
+        !TEST_SCOPE.test(f.path),
+    ).map((f) => f.path),
+    `${REQUEST_FACTORY_ALLOWLIST.join(', ')}（测试夹具除外）`,
+  ),
+  guard(
+    '静态守卫 · .vue 不写死颜色（必须走主题变量）',
+    SOURCES.filter((f) => f.path.endsWith('.vue') && HEX_COLOR_IN_VUE.test(f.code)).map(
+      (f) => f.path,
+    ),
+    '颜色只在 src/styles/index.css 与 useTheme 的语义 token 中定义',
+  ),
+  guard(
+    '静态守卫 · .vue 不用固定 Tailwind 调色板',
+    SOURCES.filter(
+      (f) => f.path.endsWith('.vue') && FIXED_PALETTE_CLASS.test(f.code),
+    ).map((f) => f.path),
+    '使用 ink / paper / line / surface / accent / inverse 等语义色',
+  ),
+  guard(
+    '静态守卫 · 前端不出现 service_role',
+    SOURCES.filter((f) => /service_role/i.test(f.code)).map((f) => f.path),
+    '只使用 anon public key；service_role 绝不能进入前端',
+  ),
+  guard(
+    '静态守卫 · 主题启动脚本与 useTheme 使用同一组 key',
+    ['fnaf-archive:theme-mode:v1', 'fnaf-archive:theme-accent:v1'].filter(
+      (key) => !INDEX_HTML.includes(key),
+    ),
+    'index.html 的防闪白脚本必须读取与 useTheme 相同的 storage key',
+  ),
+  guard(
+    'Supabase SQL · 两张请求表都启用 RLS',
+    ['resource_requests', 'resource_request_votes'].filter(
+      (table) =>
+        !REQUEST_SQL.includes(`alter table public.${table} enable row level security;`),
+    ),
+    '两张表都必须 enable row level security',
+  ),
+  guard(
+    'Supabase SQL · anon 没有直接写权限',
+    ['resource_requests', 'resource_request_votes'].filter(
+      (table) =>
+        !REQUEST_SQL.includes(`revoke all on table public.${table} from anon, authenticated;`),
+    ),
+    'anon / authenticated 只能通过 security definer RPC 写入',
+  ),
+  guard(
+    'Supabase SQL · 两个写函数都是 security definer 且固定 search_path',
+    [
+      (REQUEST_SQL.match(/security definer/g) ?? []).length < 2 ? 'security definer 不足 2 处' : '',
+      (REQUEST_SQL.match(/set search_path = public/g) ?? []).length < 2
+        ? 'set search_path = public 不足 2 处'
+        : '',
+    ].filter(Boolean),
+    '提交 / 投票函数必须使用 security definer + set search_path = public',
+  ),
+  guard(
+    'Supabase SQL · 公开视图不暴露身份与归一化列',
+    [
+      !/security_invoker = true/.test(REQUEST_VIEW_BLOCK) ? '视图缺少 security_invoker' : '',
+      /created_by_client/.test(REQUEST_VIEW_BLOCK) ? '视图暴露了 created_by_client' : '',
+      /normalized/.test(REQUEST_VIEW_BLOCK) ? '视图暴露了 normalized' : '',
+    ].filter(Boolean),
+    'resource_request_board 只暴露 id / title / votes / created_at / updated_at',
+  ),
+  guard(
+    'Supabase SQL · 同名 open 请求有唯一索引',
+    !/resource_requests_open_normalized_key[\s\S]*?where status = 'open';/.test(REQUEST_SQL)
+      ? ['缺少 normalized + status=open 的唯一索引']
+      : [],
+    '并发提交同名请求时由唯一索引兜底',
+  ),
 ]
 
 const libraryResults = await runLibraryAssertions(useGameLibrary())
 const adminResults = await runAdminAssertions(useAdminGames())
+const structuredResults = await runStructuredDataAssertions()
 const viewResults = await runViewCounterAssertions()
+const themeResults = runThemeAssertions()
+const requestResults = await runRequestAssertions()
+const filterUrlResults = runFilterUrlAssertions()
+const dataQualityResults = runDataQualityAssertions()
 
 const GROUPS: { title: string; results: Assertion[] }[] = [
   { title: 'useGameLibrary（前台深模块）', results: libraryResults },
   { title: 'useAdminGames（后台深模块）', results: adminResults },
+  { title: '资料质量检查（只读）', results: dataQualityResults },
+  { title: '筛选 URL（解析 / 序列化 / 签名）', results: filterUrlResults },
+  { title: '结构化资料（字段 / 词表 / 关系 / 仓储）', results: structuredResults },
   { title: '浏览量服务（Abacus + 降级）', results: viewResults },
+  { title: '主题系统（模式 / 强调色）', results: themeResults },
+  { title: '催资源（归一化 / 仓储 / Supabase）', results: requestResults },
   { title: '静态守卫（源码规范）', results: staticResults },
 ]
 

@@ -20,10 +20,15 @@
  * ============================================================================
  */
 import { shallowRef } from 'vue'
+import { REQUESTS_REMOTE_ENABLED, SUPABASE_ANON_KEY, SUPABASE_URL } from '../config/requests'
 import type { AdminGame } from '../types/admin'
+import type { ResourceRequestRepository } from '../types/resourceRequest'
 import type { GameRepository } from './gameRepository'
 import { createGitHubGameRepository } from './githubGameRepository'
 import { createLocalGameRepository } from './localGameRepository'
+import { createLocalResourceRequestRepository } from './localResourceRequestRepository'
+import { createSupabaseResourceRequestRepository } from './supabaseResourceRequestRepository'
+import { normalizeTaxonomy } from '../utils/taxonomy'
 
 /** 前台的数据源（也是未登录后台的数据源） */
 export const publicGameRepository: GameRepository = createLocalGameRepository()
@@ -45,6 +50,19 @@ export function useRemoteAdminRepository(token: string, getAccount: () => string
 export function useLocalAdminRepository(): void {
   adminGameRepository.value = publicGameRepository
 }
+
+/**
+ * 催资源仓储 —— **全站只实例化这一次**。
+ *
+ * 配置了 Supabase（URL + anon public key）就走全站共享；
+ * 否则走本机模式。两种实现满足同一个接口，上层组件不关心数据在哪。
+ */
+export const resourceRequestRepository: ResourceRequestRepository = REQUESTS_REMOTE_ENABLED
+  ? createSupabaseResourceRequestRepository({
+      url: SUPABASE_URL,
+      anonKey: SUPABASE_ANON_KEY,
+    })
+  : createLocalResourceRequestRepository()
 
 /* ---------------------------------------------------------------------------
    前台数据同步
@@ -84,10 +102,21 @@ export function hydratePublicCatalog(): Promise<void> {
       })
       if (!response.ok) return
 
-      const payload = (await response.json()) as { games?: unknown }
+      const payload = (await response.json()) as {
+        games?: unknown
+        taxonomy?: unknown
+      }
       if (!Array.isArray(payload.games)) return
 
-      publicGameRepository.hydrate(payload.games as AdminGame[])
+      // 数据仓还没有 taxonomy 字段时保留当前词表（通常是内置初始词表）；
+      // 存在但结构不可用时同样保留，不能因为一次坏数据把本地词表清空。
+      const normalized =
+        payload.taxonomy === undefined ? null : normalizeTaxonomy(payload.taxonomy)
+
+      publicGameRepository.hydrate(
+        payload.games as AdminGame[],
+        normalized?.present && normalized.usable ? normalized.taxonomy : undefined,
+      )
       lastHydratedAt = Date.now()
     } catch {
       // 数据仓不可达时保持构建期快照：前台必须仍能离线打开

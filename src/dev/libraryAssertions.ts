@@ -10,6 +10,7 @@
 import { nextTick } from 'vue'
 import { isPubliclyVisible, type GameLibraryAPI } from '../composables/useGameLibrary'
 import { publicGameRepository } from '../repositories'
+import { resolveVocabularyEntry } from '../utils/taxonomy'
 
 export interface Assertion {
   name: string
@@ -241,6 +242,164 @@ export async function runLibraryAssertions(lib: GameLibraryAPI): Promise<Asserti
   check('可用作者数量', lib.availableAuthors.value.length, uniqueAuthors)
   check('可用年份数量（去重）', lib.availableYears.value.length, uniqueYears.length)
   check('年份降序排列', lib.availableYears.value.join(','), uniqueYears.join(','))
+
+  /* ------------------------------------------- 16.5 多维查询 / URL / 失效条件（Phase 3） */
+  lib.clearFilters()
+  lib.setSortBy('views')
+  lib.setPageSize(12)
+  lib.hydrateFromQuery({})
+  await settle(lib)
+
+  // 标签：同维度 OR
+  const tagCounts = new Map<string, number>()
+  for (const game of base) {
+    for (const tag of game.tags ?? []) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1)
+  }
+  const busiestTag =
+    [...tagCounts.entries()].sort(
+      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh'),
+    )[0]?.[0] ?? ''
+  if (busiestTag) {
+    lib.setFilter('tag', busiestTag)
+    await settle(lib)
+    check(
+      `标签 = ${busiestTag} 命中数`,
+      lib.total.value,
+      base.filter((game) => (game.tags ?? []).includes(busiestTag)).length,
+    )
+  }
+
+  // 引擎
+  lib.clearFilters()
+  lib.setFilter('engine', busiestEngine)
+  await settle(lib)
+  check(
+    `引擎 = ${busiestEngine} 命中数`,
+    lib.total.value,
+    base.filter((game) => game.engine === busiestEngine).length,
+  )
+
+  // 年份：同维度多值 OR
+  const twoYears = uniqueYears.slice(0, 2)
+  lib.clearFilters()
+  for (const year of twoYears) lib.setFilter('year', String(year))
+  await settle(lib)
+  check(
+    '年份多选 · OR 命中数',
+    lib.total.value,
+    base.filter((game) => twoYears.includes(game.releaseYear)).length,
+  )
+  check(
+    '年份多选 · 状态保留全部值',
+    lib.activeFilters.value.year.join(','),
+    twoYears.map(String).join(','),
+  )
+
+  // URL → 状态
+  lib.clearFilters()
+  lib.hydrateFromQuery({
+    author: [busiestAuthor],
+    year: [String(sampleYear)],
+    sort: 'title',
+    page: '1',
+    future: 'ignored',
+  })
+  await settle(lib)
+  check('URL 注入 · 作者', lib.activeFilters.value.author.join(','), busiestAuthor)
+  check('URL 注入 · 年份', lib.activeFilters.value.year.join(','), String(sampleYear))
+  check('URL 注入 · 排序', lib.activeFilters.value.sort, 'title')
+  check('URL 注入 · 未知参数不外泄', 'future' in lib.toQueryParams(), false)
+  check('URL 注入 · 交叉命中数', lib.total.value, crossCount)
+
+  // 失效词条：保留条件、给出标记、不静默变成「显示全部」
+  lib.clearFilters()
+  lib.hydrateFromQuery({ gameplay: 'deleted-entry' })
+  await settle(lib)
+  check('失效词条 · 结果为空', lib.total.value, 0)
+  check('失效词条 · 被标记', lib.invalidFilterChips.value.length, 1)
+  check('失效词条 · valid=false', lib.invalidFilterChips.value[0]?.valid, false)
+  check('失效条件 · 不静默显示全部', lib.total.value === BASE, false)
+  lib.clearInvalidFilters()
+  await settle(lib)
+  check('清除失效条件 · 恢复全量', lib.total.value, BASE)
+
+  // 索引链接：清空其他条件，只保留点击项，排序回默认
+  lib.clearFilters()
+  lib.setFilter('author', busiestAuthor)
+  lib.setIndexFilter('series', busiestSeries)
+  await settle(lib)
+  check('索引链接 · 清空其他条件', lib.activeFilters.value.author.length, 0)
+  check('索引链接 · 目标条件生效', lib.activeFilters.value.series.join(','), busiestSeries)
+  check('索引链接 · 排序回到默认', lib.activeFilters.value.sort, 'views')
+
+  // 默认值不写进 URL
+  lib.clearFilters()
+  lib.setSortBy('views')
+  await settle(lib)
+  check('默认状态 · URL 为空', Object.keys(lib.toQueryParams()).length, 0)
+
+  // 筛选变化 → 页码回到 1
+  lib.clearFilters()
+  lib.setPageSize(1)
+  lib.setPage(2)
+  await settle(lib)
+  lib.setFilter('author', busiestAuthor)
+  check('筛选变化 · 页码回到 1', lib.activeFilters.value.page, 1)
+  lib.setPageSize(12)
+  lib.clearFilters()
+  await settle(lib)
+
+  /* ------------------------------------------- 16.6 过滤元数据只来自可见作品（Phase 4） */
+  const usedVocabularyIds = (
+    collection: 'gameplayTypes' | 'mechanics' | 'platforms',
+  ): Set<string> => {
+    const ids = new Set<string>()
+    for (const game of base) {
+      for (const value of game[collection] ?? []) {
+        const entry = resolveVocabularyEntry(lib.taxonomy.value, collection, value)
+        ids.add(entry?.id ?? value)
+      }
+    }
+    return ids
+  }
+  const expectedVocabularyOptions = (
+    collection: 'gameplayTypes' | 'mechanics' | 'platforms',
+  ): string => {
+    const used = usedVocabularyIds(collection)
+    return lib.taxonomy.value[collection]
+      .filter((entry) => used.has(entry.id))
+      .map((entry) => entry.id)
+      .join(',')
+  }
+  check(
+    '可用玩法类型只含被可见作品使用的词条',
+    lib.availableGameplayTypes.value.map((entry) => entry.id).join(','),
+    expectedVocabularyOptions('gameplayTypes'),
+  )
+  check(
+    '可用机制只含被可见作品使用的词条',
+    lib.availableMechanics.value.map((entry) => entry.id).join(','),
+    expectedVocabularyOptions('mechanics'),
+  )
+  check(
+    '可用平台只含被可见作品使用的词条',
+    lib.availablePlatforms.value.map((entry) => entry.id).join(','),
+    expectedVocabularyOptions('platforms'),
+  )
+
+  const expectedTags = [...new Set(base.flatMap((game) => game.tags ?? []))].sort((a, b) =>
+    a.localeCompare(b, 'zh'),
+  )
+  check('可用标签 = 可见作品标签去重排序', lib.availableTags.value.join(','), expectedTags.join(','))
+
+  const expectedEngines = [...new Set(base.map((game) => game.engine))].sort((a, b) =>
+    a.localeCompare(b, 'en'),
+  )
+  check(
+    '可用引擎 = 可见作品引擎去重排序',
+    lib.availableEngines.value.join(','),
+    expectedEngines.join(','),
+  )
 
   /* ---------------------------------------------------------------- 17. 前台可见性联动 */
   // Phase 10：前台与后台读的是**同一份**数据，所以改一处就能观察到前台的实时反应。

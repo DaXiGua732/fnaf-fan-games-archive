@@ -124,6 +124,14 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '标签与作者' },
       },
       {
+        // 受控词表：玩法类型 / 机制 / 平台。与「标签与作者」分开 ——
+        // 后者是派生字符串，这里是带稳定 id、可合并、可删除保护的独立词条。
+        path: 'vocabulary',
+        name: 'admin-vocabulary',
+        component: () => import('../views/admin/AdminVocabulary.vue'),
+        meta: { title: '玩法与机制' },
+      },
+      {
         // 旧地址保留重定向，避免书签 / 外部链接 404。
         path: 'tags',
         redirect: { name: 'admin-taxonomy' },

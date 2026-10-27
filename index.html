@@ -1,8 +1,52 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-mode="light" data-theme="red">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 浏览器地址栏 / UA 主题色。放在脚本之前，脚本才能在首帧同步深色值 -->
+    <meta id="theme-color-meta" name="theme-color" content="#fafaf8" />
+    <!--
+      在样式与 Vue 之前先应用主题，避免深色模式下首屏闪白。
+      这里读取的 storage key 必须与 src/composables/useTheme.ts 保持一致。
+    -->
+    <script>
+      (function () {
+        var storedMode = null
+        var storedAccent = null
+        try {
+          storedMode = localStorage.getItem('fnaf-archive:theme-mode:v1')
+          storedAccent = localStorage.getItem('fnaf-archive:theme-accent:v1')
+        } catch (_error) {
+          // localStorage 被禁用时按「跟随系统」处理
+        }
+
+        var modes = ['system', 'light', 'dark']
+        var accents = ['red', 'blue', 'teal', 'pink', 'purple']
+        var preference = modes.indexOf(storedMode) === -1 ? 'system' : storedMode
+        var accent = accents.indexOf(storedAccent) === -1 ? 'red' : storedAccent
+        var systemDark = false
+        try {
+          systemDark =
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches
+        } catch (_error) {
+          systemDark = false
+        }
+
+        var resolved = preference === 'dark' || (preference === 'system' && systemDark)
+          ? 'dark'
+          : 'light'
+        var root = document.documentElement
+        root.dataset.mode = resolved
+        root.dataset.theme = accent
+        root.style.colorScheme = resolved
+
+        var themeColor = document.querySelector('meta[name="theme-color"]')
+        if (themeColor) {
+          themeColor.setAttribute('content', resolved === 'dark' ? '#141413' : '#fafaf8')
+        }
+      })()
+    </script>
     <title>FNAF FAN GAMES ARCHIVE</title>
     <meta name="description" content="Five Nights at Freddy's 粉丝游戏资源导航与分享站" />
   </head>

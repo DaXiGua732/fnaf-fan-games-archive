@@ -63,21 +63,21 @@ function showError(index: number): boolean {
 
 const INPUT_CLASS =
   'w-full rounded-none border border-black bg-white px-4 py-3 font-sans text-sm ' +
-  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-[#ff0000] focus:outline-none'
+  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-accent focus:outline-none'
 
 const TILE_BUTTON =
-  'rounded-none border border-[#cccccc] bg-white px-3 py-1 font-sans text-[10px] font-bold ' +
+  'rounded-none border border-line bg-white px-3 py-1 font-sans text-[10px] font-bold ' +
   'uppercase tracking-[0.1em] transition-colors duration-150 ease-out hover:border-black ' +
-  'disabled:cursor-not-allowed disabled:text-black/25 disabled:hover:border-[#cccccc]'
+  'disabled:cursor-not-allowed disabled:text-black/25 disabled:hover:border-line'
 </script>
 
 <template>
   <div>
     <!-- ============ 渠道列表 ============ -->
     <div v-if="draft.downloads.length" class="flex flex-col gap-5">
-      <div v-for="(link, index) in draft.downloads" :key="index" class="border border-[#cccccc]">
+      <div v-for="(link, index) in draft.downloads" :key="index" class="border border-line">
         <header
-          class="flex flex-wrap items-center justify-between gap-3 border-b border-[#cccccc] px-4 py-3"
+          class="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3"
         >
           <span class="swiss-meta text-black/45">
             NO.{{ String(index + 1).padStart(2, '0') }}
@@ -104,7 +104,7 @@ const TILE_BUTTON =
             </button>
             <button
               type="button"
-              class="font-sans text-[10px] font-bold uppercase tracking-[0.1em] text-[#ff0000] transition-colors duration-150 ease-out hover:text-black"
+              class="font-sans text-[10px] font-bold uppercase tracking-[0.1em] text-accent transition-colors duration-150 ease-out hover:text-black"
               :aria-label="`删除第 ${index + 1} 个渠道`"
               @click="remove(index)"
             >
@@ -154,7 +154,7 @@ const TILE_BUTTON =
 
         <p
           v-if="showError(index)"
-          class="border-t border-[#cccccc] px-4 py-3 font-sans text-xs text-[#ff0000]"
+          class="border-t border-line px-4 py-3 font-sans text-xs text-accent"
           role="alert"
         >
           {{ downloadErrors[index] }}
@@ -167,14 +167,14 @@ const TILE_BUTTON =
     <!-- ============ 添加 ============ -->
     <button
       type="button"
-      class="mt-5 rounded-none border border-black bg-white px-5 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30"
+      class="mt-5 rounded-none border border-black bg-white px-5 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-line disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30"
       :disabled="!canAddDownload"
       @click="add"
     >
       添加下载渠道
     </button>
 
-    <p v-if="notice" class="mt-3 font-sans text-xs text-[#ff0000]" role="alert">{{ notice }}</p>
+    <p v-if="notice" class="mt-3 font-sans text-xs text-accent" role="alert">{{ notice }}</p>
     <!--
       注意：这里的静态提示**不要**和 validateDownload 的错误文案用同一句话。
       否则一行出错时用户会在同一屏里看到两遍完全相同的句子，分不清哪句是「提示」哪句是「报错」。

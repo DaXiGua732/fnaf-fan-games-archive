@@ -6,13 +6,13 @@ const route = useRoute()
 
 <template>
   <div>
-    <section class="bg-[#ff0000] text-white">
+    <section class="bg-accent-surface text-on-accent">
       <div class="mx-auto max-w-[1280px] px-6 py-24 md:px-12 md:py-32">
         <p class="swiss-meta mb-8">Error 404</p>
         <h1 class="font-sans text-5xl font-bold uppercase leading-[0.95] tracking-[-0.03em] md:text-8xl">
           这是<br />禁区
         </h1>
-        <p class="mt-10 max-w-[52ch] font-sans text-base leading-relaxed text-white/90">
+        <p class="mt-10 max-w-[52ch] font-sans text-base leading-relaxed text-on-accent/90">
           你试图访问的路径不存在。也许是链接失效，也许是地址打错了。
         </p>
       </div>
@@ -25,7 +25,7 @@ const route = useRoute()
 
         <RouterLink
           to="/"
-          class="group inline-flex items-center gap-4 border border-black bg-black px-8 py-4 font-sans text-xs font-bold uppercase tracking-[0.16em] text-white transition-colors duration-150 hover:border-[#ff0000] hover:bg-[#ff0000]"
+          class="group inline-flex items-center gap-4 border border-black bg-black px-8 py-4 font-sans text-xs font-bold uppercase tracking-[0.16em] text-white transition-colors duration-150 hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent"
         >
           <span>回到首页</span>
           <span class="u-arrow" aria-hidden="true">&#8594;</span>

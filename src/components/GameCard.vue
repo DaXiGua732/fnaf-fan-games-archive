@@ -9,8 +9,8 @@ import { assetUrl } from '../utils/asset'
  * GameCard —— 游戏网格单元
  *
  * Swiss 约束：
- *  - 复用 Card 基础组件：默认白底 + 黑边框，直角无阴影
- *  - 悬停：左边框 4px 变 #ff0000、底色转 #f9f9f9，唯一动效是箭头右移
+ *  - 复用 Card 基础组件：默认纸色底 + 墨色边框，直角无阴影
+ *  - 悬停：左边框 4px 变强调色、底色转 surface，唯一动效是箭头右移
  *  - 排版：顶部封面图 → 大字标题 → 小字「年份 · 作者」（全大写）
  */
 const props = defineProps<{ game: Game }>()
@@ -26,7 +26,7 @@ const cover = computed(() => assetUrl(props.game.coverImage))
   >
     <Card interactive>
       <template #media>
-        <div class="aspect-[16/9] w-full bg-[#f9f9f9]">
+        <div class="aspect-[16/9] w-full bg-surface">
           <img
             :src="cover"
             :alt="`${game.title} 封面`"

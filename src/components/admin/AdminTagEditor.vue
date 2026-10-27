@@ -71,16 +71,16 @@ function pick(tag: string): void {
       <span
         v-for="tag in draftTags"
         :key="tag"
-        class="inline-flex items-center gap-3 border border-black bg-black px-3 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-white"
+        class="inline-flex items-center gap-3 border border-ink bg-ink px-3 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-paper"
       >
         <span>{{ tag }}</span>
         <button
           type="button"
-          class="cursor-pointer text-white/70 transition-colors duration-150 ease-out hover:text-[#ff0000]"
+          class="cursor-pointer text-paper/70 transition-colors duration-150 ease-out hover:text-paper"
           :aria-label="`移除标签 ${tag}`"
           @click="removeTag(tag)"
         >
-          &#215;
+          ×
         </button>
       </span>
     </div>
@@ -94,12 +94,12 @@ function pick(tag: string): void {
         autocomplete="off"
         placeholder="输入标签名后回车，或从下方选择已有标签"
         :maxlength="TAG_LIMITS.maxLength"
-        class="min-w-[220px] flex-1 rounded-none border border-black bg-white px-4 py-3 font-sans text-sm transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-[#ff0000] focus:outline-none"
+        class="min-w-[220px] flex-1 rounded-none border border-black bg-white px-4 py-3 font-sans text-sm transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-accent focus:outline-none"
         @keyup.enter="submit"
       />
       <button
         type="button"
-        class="rounded-none border border-black bg-white px-6 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.16em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30"
+        class="rounded-none border border-black bg-white px-6 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.16em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-line disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30"
         :disabled="!normalizeTag(input)"
         @click="submit"
       >
@@ -107,7 +107,7 @@ function pick(tag: string): void {
       </button>
     </div>
 
-    <p v-if="notice" class="mt-3 font-sans text-xs text-[#ff0000]" role="alert">{{ notice }}</p>
+    <p v-if="notice" class="mt-3 font-sans text-xs text-accent" role="alert">{{ notice }}</p>
     <p v-else class="mt-3 font-sans text-xs text-black/45">
       {{ draftTags.length }} / {{ TAG_LIMITS.maxPerGame }} 个标签 · 输入一个目录里没有的名字，就会新建一个标签
     </p>
@@ -120,7 +120,7 @@ function pick(tag: string): void {
           v-for="tag in suggestions"
           :key="tag"
           type="button"
-          class="rounded-none border border-[#cccccc] bg-white px-3 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:border-black"
+          class="rounded-none border border-line bg-white px-3 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:border-black"
           @click="pick(tag)"
         >
           + {{ tag }}

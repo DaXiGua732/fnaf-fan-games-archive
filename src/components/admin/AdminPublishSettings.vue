@@ -37,8 +37,8 @@ function chipClass(active: boolean): string {
     'rounded-none border px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em]',
     'transition-colors duration-150 ease-out',
     active
-      ? 'border-[#ff0000] bg-black text-white'
-      : 'border-[#cccccc] bg-white text-black hover:border-black',
+      ? 'border-accent bg-black text-white'
+      : 'border-line bg-white text-black hover:border-black',
   ].join(' ')
 }
 
@@ -68,10 +68,10 @@ const CHECKBOX_CLASS =
     <!-- ============ 发布缺口 ============ -->
     <div
       v-if="draft.status === 'published' && publishIssues.length"
-      class="border border-[#ff0000] px-5 py-4"
+      class="border border-accent px-5 py-4"
       role="alert"
     >
-      <p class="swiss-meta font-bold text-[#ff0000]">还差这些才能上线</p>
+      <p class="swiss-meta font-bold text-accent">还差这些才能上线</p>
       <ul class="mt-3 flex flex-col gap-2">
         <li
           v-for="issue in publishIssues"

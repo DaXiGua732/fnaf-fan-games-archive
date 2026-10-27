@@ -8,7 +8,8 @@ import { assetUrl } from '../utils/asset'
  * `modelValue` 为当前图片下标，`null` 表示关闭。
  * 键盘：← / → 切换，Esc 关闭；打开期间锁住页面滚动。
  *
- * Swiss：整屏黑底白字（不用遮罩渐变），图片只加 1px 白边，零圆角零阴影。
+ * Swiss：整屏反色底（overlay）+ inverse-fg 文字，图片只加 1px 反色边，
+ * 零圆角零阴影。强调色只出现在悬停态。
  */
 const props = defineProps<{
   images: string[]
@@ -74,19 +75,19 @@ onUnmounted(() => {
   <Teleport to="body">
     <div
       v-if="open"
-      class="fixed inset-0 z-[80] flex flex-col bg-black text-white"
+      class="fixed inset-0 z-[80] flex flex-col bg-overlay text-inverse-fg"
       role="dialog"
       aria-modal="true"
       :aria-label="`${title} 截图查看器`"
     >
       <!-- 顶栏：计数 + 关闭 -->
-      <header class="flex items-center justify-between gap-6 border-b border-white/30 px-6 py-4">
-        <p class="swiss-meta text-white/70">
+      <header class="flex items-center justify-between gap-6 border-b border-inverse-fg/30 px-6 py-4">
+        <p class="swiss-meta text-inverse-fg/70">
           截图 {{ index + 1 }} / {{ images.length }}
         </p>
         <button
           type="button"
-          class="border border-white/40 px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:border-[#ff0000] hover:bg-[#ff0000]"
+          class="border border-inverse-fg/40 px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent"
           @click="close"
         >
           关闭
@@ -98,28 +99,28 @@ onUnmounted(() => {
         <img
           :src="assetUrl(current)"
           :alt="`${title} 截图 ${index + 1}`"
-          class="max-h-full max-w-full border border-white object-contain"
+          class="max-h-full max-w-full border border-inverse-fg object-contain"
         />
       </div>
 
       <!-- 底栏：上一张 / 下一张 -->
-      <footer class="flex items-center justify-between gap-4 border-t border-white/30 px-6 py-4">
+      <footer class="flex items-center justify-between gap-4 border-t border-inverse-fg/30 px-6 py-4">
         <button
           type="button"
-          class="group inline-flex items-center gap-4 border border-white/40 px-5 py-2.5 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:border-[#ff0000] hover:bg-[#ff0000]"
+          class="group inline-flex items-center gap-4 border border-inverse-fg/40 px-5 py-2.5 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent"
           @click="go(-1)"
         >
           <span class="u-arrow-back" aria-hidden="true">&#8594;</span>
           <span>上一张</span>
         </button>
 
-        <p class="hidden max-w-[40ch] truncate font-sans text-xs text-white/50 sm:block">
+        <p class="hidden max-w-[40ch] truncate font-sans text-xs text-inverse-fg/50 sm:block">
           {{ title }}
         </p>
 
         <button
           type="button"
-          class="group inline-flex items-center gap-4 border border-white/40 px-5 py-2.5 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:border-[#ff0000] hover:bg-[#ff0000]"
+          class="group inline-flex items-center gap-4 border border-inverse-fg/40 px-5 py-2.5 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent"
           @click="go(1)"
         >
           <span>下一张</span>

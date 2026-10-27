@@ -8,6 +8,7 @@
  * ============================================================================
  */
 import type { AdminGame } from '../types/admin'
+import { normalizeGame } from './gameDefaults'
 
 /** 真实的编辑时刻，不是伪造的日期 */
 export function nowIso(): string {
@@ -38,8 +39,14 @@ export function blankGame(): AdminGame {
     downloads: [],
     metrics: { fakeViews: 0, score: 0 },
     shortDescription: '',
+    altTitles: [],
+    gameplayTypes: [],
+    mechanics: [],
     tags: [],
     platforms: [],
+    developmentStatus: 'unknown',
+    relations: [],
+    sourceUrl: '',
     status: 'draft',
     featured: false,
     archived: false,
@@ -77,9 +84,14 @@ export function createGameFrom(
 ): AdminGame {
   const title = typeof patch.title === 'string' ? patch.title : ''
   const stamp = nowIso()
-  return {
+  // 显式的 `status: undefined` 不能覆盖 blankGame 的 draft：
+  // normalizeGame 会把缺失 status 补成 published（那是给旧数据的规则），
+  // 于是「没传状态」的新作品会意外对外可见。
+  const status = patch.status ?? 'draft'
+  return normalizeGame({
     ...blankGame(),
     ...patch,
+    status,
     id: uniqueId(games, title),
     createdAt: stamp,
     updatedAt: stamp,
@@ -91,7 +103,7 @@ export function createGameFrom(
           ? stamp
           : '',
     ...(updatedBy ? { updatedBy } : {}),
-  }
+  })
 }
 
 /**
@@ -109,9 +121,22 @@ export function applyPatch(
   const firstPublish = patch.status === 'published' && game.status !== 'published'
 
   // id 不可被 patch 覆盖（类型上已经排除，这里再兜一次底）
-  return {
+  return normalizeGame({
     ...game,
     ...patch,
+    // `GamePatch` 是 Partial，显式 undefined 在类型上合法。
+    // 新字段的「清空」语义是空数组 / 空字符串 / unknown，不是 undefined；
+    // 若把 undefined 直接 spread 进去，normalizeGame 会把它变成默认值，
+    // 表现为「保存成功但关系 / 分类 / 开发状态凭空消失」。
+    altTitles: patch.altTitles ?? game.altTitles,
+    gameplayTypes: patch.gameplayTypes ?? game.gameplayTypes,
+    mechanics: patch.mechanics ?? game.mechanics,
+    platforms: patch.platforms ?? game.platforms,
+    relations: patch.relations ?? game.relations,
+    developmentStatus: patch.developmentStatus ?? game.developmentStatus,
+    sourceUrl: patch.sourceUrl ?? game.sourceUrl,
+    // 同上：status: undefined 不能把已有作品打回 normalizeGame 的 published 默认值
+    status: patch.status ?? game.status,
     id: game.id,
     updatedAt: stamp,
     // 首次变成「已上线」时记录发布时间；之后重命名 / 改简介都不会覆盖它。
@@ -123,5 +148,5 @@ export function applyPatch(
           ? patch.publishedAt
           : game.publishedAt,
     ...(updatedBy ? { updatedBy } : { updatedBy: game.updatedBy }),
-  }
+  })
 }

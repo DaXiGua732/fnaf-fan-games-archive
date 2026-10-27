@@ -13,6 +13,9 @@ import AdminImageSlot from '../../components/admin/AdminImageSlot.vue'
 import AdminPublishOverview from '../../components/admin/AdminPublishOverview.vue'
 import AdminPublishSettings from '../../components/admin/AdminPublishSettings.vue'
 import AdminTagEditor from '../../components/admin/AdminTagEditor.vue'
+import AdminRelationEditor from '../../components/admin/AdminRelationEditor.vue'
+import AdminAltTitleEditor from '../../components/admin/AdminAltTitleEditor.vue'
+import AdminVocabularyPicker from '../../components/admin/AdminVocabularyPicker.vue'
 import {
   draftToPatch,
   emptyErrors,
@@ -21,8 +24,15 @@ import {
 import { useAdminGames } from '../../composables/useAdminGames'
 import { PREVIEW_PATH, publishPreview } from '../../composables/useGamePreview'
 import { blankGame, slugify } from '../../utils/gameFactory'
-import { DRAFT_TEXT_FIELDS, STORAGE_NOTICE, type AdminGame, type DraftErrors } from '../../types/admin'
-import type { StorageKind } from '../../types/admin'
+import {
+  DRAFT_GROUP_FIELDS,
+  DRAFT_TEXT_FIELDS,
+  STORAGE_NOTICE,
+  type AdminGame,
+  type DraftErrors,
+  type StorageKind,
+} from '../../types/admin'
+import { DEVELOPMENT_STATUSES, DEVELOPMENT_STATUS_LABELS } from '../../types/game'
 
 /**
  * AdminGameEditor —— 游戏编辑页
@@ -97,7 +107,7 @@ const shownErrors = computed<DraftErrors>(() => {
   if (touched.value) return errors.value
   const changed = new Set<string>(changedFields.value)
   const result = emptyErrors()
-  for (const field of DRAFT_TEXT_FIELDS) {
+  for (const field of [...DRAFT_TEXT_FIELDS, ...DRAFT_GROUP_FIELDS]) {
     if (changed.has(field)) result[field] = errors.value[field]
   }
   return result
@@ -305,8 +315,21 @@ const BASIC_FIELDS: string[] = [
   'videoUrl',
   'shortDescription',
   'description',
+  'altTitles',
+  'sourceUrl',
+  'developmentStatus',
+  'platforms',
 ]
 const basicChanged = computed(() => changedFields.value.some((field) => BASIC_FIELDS.includes(field)))
+
+/** 玩法与机制单独一个区块：它们是「怎么玩」，与标准资料字段不是一类 */
+const VOCAB_FIELDS: string[] = ['gameplayTypes', 'mechanics']
+const vocabChanged = computed(() =>
+  changedFields.value.some((field) => VOCAB_FIELDS.includes(field)),
+)
+
+/** 关联作品单独一个区块：有向边，不与标签 / 系列混为一谈 */
+const relationChanged = computed(() => changedFields.value.includes('relations'))
 
 const MEDIA_FIELDS: string[] = ['coverImage', 'bannerImage']
 const mediaChanged = computed(() => changedFields.value.some((field) => MEDIA_FIELDS.includes(field)))
@@ -330,10 +353,11 @@ const featureChanged = computed(() =>
 const SECTIONS = computed(() => [
   { id: 'section-import', label: 'GameJolt 导入', changed: false },
   { id: 'section-basic', label: '基本信息', changed: basicChanged.value },
+  { id: 'section-vocab', label: '玩法与机制', changed: vocabChanged.value },
   { id: 'section-media', label: '封面与宣传图', changed: mediaChanged.value },
-  { id: 'section-gallery', label: '图库', changed: changedFields.value.includes('gallery') },
   { id: 'section-downloads', label: '下载资源', changed: changedFields.value.includes('downloads') },
   { id: 'section-tags', label: '标签', changed: changedFields.value.includes('tags') },
+  { id: 'section-relations', label: '关联作品', changed: relationChanged.value },
   { id: 'section-publish', label: '发布设置', changed: publishChanged.value },
   { id: 'section-feature', label: '推荐与排序', changed: featureChanged.value },
 ])
@@ -387,17 +411,17 @@ onUnmounted(() => {
    --------------------------------------------------------------------------- */
 const INPUT_CLASS =
   'w-full rounded-none border border-black bg-white px-4 py-3 font-sans text-sm ' +
-  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-[#ff0000] focus:outline-none'
+  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-accent focus:outline-none'
 
 const ACTION_BASE =
   'inline-flex items-center gap-3 border px-6 py-3 font-sans text-[11px] font-bold ' +
   'uppercase tracking-[0.16em] transition-colors duration-150 ease-out'
 
-const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30`
+const ACTION_SECONDARY = `${ACTION_BASE} border-black bg-white hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-line disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30`
 
-const ACTION_PRIMARY = `${ACTION_BASE} border-black bg-black text-white hover:border-[#ff0000] hover:bg-[#ff0000] disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:bg-white disabled:text-black/30 disabled:hover:border-[#cccccc] disabled:hover:bg-white disabled:hover:text-black/30`
+const ACTION_PRIMARY = `${ACTION_BASE} border-black bg-black text-white hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent disabled:cursor-not-allowed disabled:border-line disabled:bg-white disabled:text-black/30 disabled:hover:border-line disabled:hover:bg-white disabled:hover:text-black/30`
 
-const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] hover:bg-[#ff0000] hover:text-white`
+const ACTION_DANGER = `${ACTION_BASE} border-accent bg-white text-accent hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent`
 </script>
 
 <template>
@@ -419,7 +443,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
 
     <RouterLink
       :to="{ name: 'admin-games' }"
-      class="group mt-10 inline-flex items-center gap-4 border border-black bg-black px-8 py-4 font-sans text-xs font-bold uppercase tracking-[0.16em] text-white transition-colors duration-150 ease-out hover:border-[#ff0000] hover:bg-[#ff0000]"
+      class="group mt-10 inline-flex items-center gap-4 border border-black bg-black px-8 py-4 font-sans text-xs font-bold uppercase tracking-[0.16em] text-white transition-colors duration-150 ease-out hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent"
     >
       <span>返回游戏管理</span>
       <span class="u-arrow" aria-hidden="true">&#8594;</span>
@@ -446,7 +470,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
       <div class="flex flex-wrap items-center justify-between gap-4">
         <p
           class="swiss-meta"
-          :class="isDirty ? 'font-bold text-[#ff0000]' : 'text-black/45'"
+          :class="isDirty ? 'font-bold text-accent' : 'text-black/45'"
           aria-live="polite"
         >
           <template v-if="saving">正在保存……</template>
@@ -495,11 +519,11 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
           v-for="section in SECTIONS"
           :key="section.id"
           type="button"
-          class="shrink-0 border border-transparent px-3 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.12em] text-black/60 transition-colors duration-150 ease-out hover:text-[#ff0000]"
+          class="shrink-0 border border-transparent px-3 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.12em] text-black/60 transition-colors duration-150 ease-out hover:text-accent"
           @click="jumpTo(section.id)"
         >
           {{ section.label }}
-          <span v-if="section.changed" class="ml-1 text-[#ff0000]" aria-label="有未保存修改">·</span>
+          <span v-if="section.changed" class="ml-1 text-accent" aria-label="有未保存修改">·</span>
         </button>
 
         <span class="ml-auto hidden shrink-0 pl-4 swiss-meta text-black/30 md:block">
@@ -511,11 +535,11 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
     <!-- ============ 离开确认（页内，不用原生弹窗） ============ -->
     <div
       v-if="pendingLeavePath"
-      class="mt-8 border border-[#ff0000] px-6 py-5"
+      class="mt-8 border border-accent px-6 py-5"
       role="alert"
       aria-live="assertive"
     >
-      <p class="swiss-meta font-bold text-[#ff0000]">这个作品有未保存的修改</p>
+      <p class="swiss-meta font-bold text-accent">这个作品有未保存的修改</p>
       <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
         离开后这些修改就没了，也找不回来，因为它们还没保存到数据仓。
       </p>
@@ -538,7 +562,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
     <!-- ============ 保存结果 ============ -->
     <div
       v-if="savedOutcome"
-      class="mt-8 border border-[#cccccc] border-l-4 border-l-[#ff0000] px-6 py-5"
+      class="mt-8 border border-line border-l-4 border-l-accent px-6 py-5"
       role="status"
       aria-live="polite"
     >
@@ -553,18 +577,18 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
     </div>
 
     <!-- ============ 保存失败 ============ -->
-    <div v-if="saveError" class="mt-8 border border-[#ff0000] px-6 py-5" role="alert">
-      <p class="swiss-meta font-bold text-[#ff0000]">保存失败</p>
+    <div v-if="saveError" class="mt-8 border border-accent px-6 py-5" role="alert">
+      <p class="swiss-meta font-bold text-accent">保存失败</p>
       <p class="mt-2 font-sans text-xs text-black/70">{{ saveError }}</p>
     </div>
 
     <!-- ============ 校验未通过 ============ -->
     <div
       v-if="touched && !isValid"
-      class="mt-8 border border-[#cccccc] border-l-4 border-l-[#ff0000] px-6 py-5"
+      class="mt-8 border border-line border-l-4 border-l-accent px-6 py-5"
       role="alert"
     >
-      <p class="swiss-meta font-bold text-[#ff0000]">还有内容没填对</p>
+      <p class="swiss-meta font-bold text-accent">还有内容没填对</p>
       <p class="mt-2 font-sans text-xs leading-relaxed text-black/70">
         请把下面标红的地方改好再保存。错误提示会随着输入实时更新。
       </p>
@@ -573,10 +597,10 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
     <!-- ============ 发布缺口拦下了保存 ============ -->
     <div
       v-if="touched && isValid && !canSave"
-      class="mt-8 border border-[#cccccc] border-l-4 border-l-[#ff0000] px-6 py-5"
+      class="mt-8 border border-line border-l-4 border-l-accent px-6 py-5"
       role="alert"
     >
-      <p class="swiss-meta font-bold text-[#ff0000]">
+      <p class="swiss-meta font-bold text-accent">
         保存被拦下了 —— 「已上线」状态还差 {{ publishIssues.length }} 项
       </p>
       <p class="mt-2 font-sans text-xs leading-relaxed text-black/70">
@@ -679,6 +703,43 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
                 :aria-invalid="Boolean(shownErrors.engine)"
               />
             </AdminField>
+            <AdminField
+              label="开发状态"
+              control-id="f-development"
+              hint="作品自身做到哪一步 —— 与网站的「已上线 / 草稿」发布状态无关"
+            >
+              <select
+                id="f-development"
+                v-model="draft.developmentStatus"
+                :class="INPUT_CLASS"
+              >
+                <option
+                  v-for="status in DEVELOPMENT_STATUSES"
+                  :key="status"
+                  :value="status"
+                >
+                  {{ DEVELOPMENT_STATUS_LABELS[status] }}
+                </option>
+              </select>
+            </AdminField>
+
+            <AdminField
+              label="来源页"
+              control-id="f-source"
+              class="md:col-span-2"
+              :error="shownErrors.sourceUrl"
+              hint="官方页面或原始发布页，只接受 http(s) 完整链接；可以不填"
+            >
+              <input
+                id="f-source"
+                v-model="draft.sourceUrl"
+                type="url"
+                autocomplete="off"
+                placeholder="https://…"
+                :class="INPUT_CLASS"
+                :aria-invalid="Boolean(shownErrors.sourceUrl)"
+              />
+            </AdminField>
 
             <AdminField
               label="视频 URL"
@@ -731,6 +792,73 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
                 :aria-invalid="Boolean(shownErrors.description)"
               />
             </AdminField>
+            <AdminField
+              label="其他名称"
+              control-id="f-alt-titles"
+              class="md:col-span-2"
+              :error="shownErrors.altTitles"
+              hint="缩写、旧标题、其他语言标题。会参与前台搜索，但不作为索引入口"
+            >
+              <AdminAltTitleEditor />
+            </AdminField>
+
+            <AdminField
+              label="支持平台"
+              control-id="f-platforms"
+              class="md:col-span-2"
+              :error="shownErrors.platforms"
+              hint="从受控词表里选；没有需要的平台就到「玩法与机制」页新建"
+            >
+              <AdminVocabularyPicker collection="platforms" />
+            </AdminField>
+          </div>
+        </AdminEditorSection>
+        <!-- 玩法与机制（Phase 2）—— 与「标签」不是一回事：这里是受控词表 -->
+        <AdminEditorSection
+          title="玩法与机制"
+          anchor="section-vocab"
+          :changed="vocabChanged"
+        >
+          <div class="flex flex-col gap-10">
+            <div>
+              <div class="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+                <h3 class="swiss-meta font-bold">玩法类型</h3>
+                <p class="swiss-meta text-black/45">第一个是主要玩法 · 最多 3 个</p>
+              </div>
+              <p class="mb-4 max-w-[78ch] font-sans text-xs leading-relaxed text-black/50">
+                回答「核心游玩循环是什么」。有监控摄像头不等于传统守夜式 ——
+                机制不能反推玩法类型；不确定就留空，不要用标签凑数。
+              </p>
+              <AdminVocabularyPicker
+                collection="gameplayTypes"
+                primary
+                :error="shownErrors.gameplayTypes"
+              />
+            </div>
+
+            <div class="border-t border-line pt-8">
+              <div class="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+                <h3 class="swiss-meta font-bold">游戏机制</h3>
+                <p class="swiss-meta text-black/45">最多 12 个</p>
+              </div>
+              <p class="mb-4 max-w-[78ch] font-sans text-xs leading-relaxed text-black/50">
+                回答「玩家具体做什么」：监控摄像头、资源管理、潜行、解谜、自由移动等。
+              </p>
+              <AdminVocabularyPicker
+                collection="mechanics"
+                :error="shownErrors.mechanics"
+              />
+            </div>
+
+            <p class="border-t border-line pt-6 font-sans text-xs leading-relaxed text-black/50">
+              词表由「<RouterLink
+                to="/admin/vocabulary"
+                class="font-bold underline underline-offset-2 transition-colors duration-150 ease-out hover:text-accent"
+              >
+                玩法与机制
+              </RouterLink>」页维护。作品编辑器只能选择已有词条，不能在这里新建 ——
+              否则同一个概念会被写成好几个近义词。
+            </p>
           </div>
         </AdminEditorSection>
 
@@ -788,6 +916,15 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
         >
           <AdminTagEditor />
         </AdminEditorSection>
+
+        <!-- 关联作品（Phase 5）—— 有向边，反向文案由目标页派生 -->
+        <AdminEditorSection
+          title="关联作品"
+          anchor="section-relations"
+          :changed="relationChanged"
+        >
+          <AdminRelationEditor />
+        </AdminEditorSection>
       </div>
 
       <!-- ---------- 右栏 ---------- -->
@@ -816,10 +953,10 @@ const ACTION_DANGER = `${ACTION_BASE} border-[#ff0000] bg-white text-[#ff0000] h
     <!-- ============ 危险操作：永久删除 ============ -->
     <section
       v-if="!isNew && game"
-      class="mt-16 border border-[#ff0000] px-6 py-6"
+      class="mt-16 border border-accent px-6 py-6"
       aria-labelledby="danger-zone-title"
     >
-      <p class="swiss-meta text-[#ff0000]">危险操作</p>
+      <p class="swiss-meta text-accent">危险操作</p>
       <h2 id="danger-zone-title" class="mt-2 font-sans text-lg font-bold">永久删除这条作品</h2>
 
       <p class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">

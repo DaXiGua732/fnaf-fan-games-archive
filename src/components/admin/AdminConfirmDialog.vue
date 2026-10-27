@@ -70,7 +70,7 @@ onUnmounted(() => {
   <Teleport to="body">
     <div
       v-if="open"
-      class="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 px-4"
+      class="fixed inset-0 z-[80] flex items-center justify-center bg-overlay/60 px-4"
       @click.self="cancel"
     >
       <div
@@ -89,7 +89,7 @@ onUnmounted(() => {
           <div id="admin-confirm-desc" class="font-sans text-sm leading-relaxed text-black/70">
             <slot />
           </div>
-          <p v-if="error" class="mt-3 font-sans text-xs font-bold text-[#ff0000]" role="alert">
+          <p v-if="error" class="mt-3 font-sans text-xs font-bold text-accent" role="alert">
             {{ error }}
           </p>
         </div>
@@ -98,7 +98,7 @@ onUnmounted(() => {
           <button
             ref="cancelButton"
             type="button"
-            class="rounded-none border border-black bg-white px-5 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30"
+            class="rounded-none border border-black bg-white px-5 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-line disabled:text-black/30"
             :disabled="busy"
             @click="cancel"
           >
@@ -106,7 +106,7 @@ onUnmounted(() => {
           </button>
           <button
             type="button"
-            class="rounded-none border border-[#ff0000] bg-white px-5 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-[#ff0000] transition-colors duration-150 ease-out hover:bg-[#ff0000] hover:text-white disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30"
+            class="rounded-none border border-accent bg-white px-5 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-accent transition-colors duration-150 ease-out hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent disabled:cursor-not-allowed disabled:border-line disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30"
             :disabled="busy"
             @click="emit('confirm')"
           >

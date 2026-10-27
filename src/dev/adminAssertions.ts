@@ -18,6 +18,7 @@ import {
   validateDownload,
   validateDraft,
 } from '../composables/useAdminGameDraft'
+import { initialTaxonomy } from '../config/taxonomy'
 import type { AdminGamesAPI } from '../composables/useAdminGames'
 import { publicGameRepository } from '../repositories'
 import { aspectWarning, checkImageSize } from '../utils/imageInspect'
@@ -31,8 +32,18 @@ import {
 } from '../repositories/localGameRepository'
 import { normalizeGames } from '../utils/gameDefaults'
 import type { Game } from '../types/game'
-import { IMAGE_LIMITS, DOWNLOAD_LIMITS, TAG_LIMITS, isValidImageRef, isValidTag, isLocalPreviewUrl, normalizeTag } from '../types/admin'
+import {
+  ALT_TITLE_LIMITS,
+  DOWNLOAD_LIMITS,
+  IMAGE_LIMITS,
+  TAG_LIMITS,
+  isLocalPreviewUrl,
+  isValidImageRef,
+  isValidTag,
+  normalizeTag,
+} from '../types/admin'
 import type { AdminGame } from '../types/admin'
+import { GAME_VOCABULARY_LIMITS } from '../types/taxonomy'
 import type { Assertion } from './libraryAssertions'
 
 /**
@@ -828,6 +839,191 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   check('markSaved 前 · isDirty', draftApi.isDirty.value, true)
   draftApi.markSaved()
   check('markSaved 后 · isDirty', draftApi.isDirty.value, false)
+  /* --------------------- 13.5 结构化字段（Phase 2） --------------------- */
+  const taxonomy = initialTaxonomy()
+  const structuredRaw: AdminGame = {
+    ...target,
+    altTitles: ['Alias One'],
+    sourceUrl: 'https://example.com/source',
+    developmentStatus: 'in-development',
+    gameplayTypes: ['traditional-night-watch', 'exploration'],
+    mechanics: ['security-cameras'],
+    platforms: ['windows'],
+  }
+
+  const structuredDraft = gameToDraft(structuredRaw, taxonomy)
+  check('结构化草稿 · 其他名称', structuredDraft.altTitles.join('|'), 'Alias One')
+  check('结构化草稿 · 来源页', structuredDraft.sourceUrl, structuredRaw.sourceUrl)
+  check('结构化草稿 · 开发状态', structuredDraft.developmentStatus, 'in-development')
+  check(
+    '结构化草稿 · 玩法顺序（主要在前）',
+    structuredDraft.gameplayTypes.join('|'),
+    'traditional-night-watch|exploration',
+  )
+  check('结构化草稿 · 机制', structuredDraft.mechanics.join('|'), 'security-cameras')
+  check('结构化草稿 · 平台', structuredDraft.platforms.join('|'), 'windows')
+
+  // 历史数据把平台名直接写进字段：有词表时解析成 id，解析不了就保留原值
+  check(
+    '历史平台名解析为稳定 id',
+    gameToDraft({ ...target, platforms: ['Windows'] }, taxonomy).platforms.join('|'),
+    'windows',
+  )
+  check(
+    '无法解析的平台名保留原值',
+    gameToDraft({ ...target, platforms: ['Dreamcast'] }, taxonomy).platforms.join('|'),
+    'Dreamcast',
+  )
+
+  const structuredPatch = draftToPatch(structuredDraft)
+  check(
+    '结构化 patch · 玩法',
+    structuredPatch.gameplayTypes?.join('|'),
+    'traditional-night-watch|exploration',
+  )
+  check(
+    '结构化 patch · 机制',
+    structuredPatch.mechanics?.join('|'),
+    'security-cameras',
+  )
+  check('结构化 patch · 平台', structuredPatch.platforms?.join('|'), 'windows')
+  check('结构化 patch · 开发状态', structuredPatch.developmentStatus, 'in-development')
+  check('结构化 patch · 其他名称', structuredPatch.altTitles?.join('|'), 'Alias One')
+  check('结构化 patch · 来源页', structuredPatch.sourceUrl, structuredRaw.sourceUrl)
+
+  check(
+    '来源页非法 · 报错',
+    validateDraft({ ...emptyDraft(), sourceUrl: 'nope' }).sourceUrl,
+    '来源页必须是 http:// 或 https:// 开头的完整链接',
+  )
+  check(
+    '来源页合法 · 无错',
+    validateDraft({ ...emptyDraft(), sourceUrl: 'https://example.com' }).sourceUrl,
+    '',
+  )
+  check(
+    '其他名称超限 · 报错',
+    validateDraft({
+      ...emptyDraft(),
+      altTitles: Array.from(
+        { length: ALT_TITLE_LIMITS.maxPerGame + 1 },
+        (_, index) => `别名${index}`,
+      ),
+    }).altTitles,
+    `其他名称最多 ${ALT_TITLE_LIMITS.maxPerGame} 个`,
+  )
+  check(
+    '其他名称单项超长 · 报错',
+    validateDraft({
+      ...emptyDraft(),
+      altTitles: ['x'.repeat(ALT_TITLE_LIMITS.maxLength + 1)],
+    }).altTitles,
+    `其他名称不能超过 ${ALT_TITLE_LIMITS.maxLength} 个字符`,
+  )
+  check(
+    '玩法超限 · 报错',
+    validateDraft({
+      ...emptyDraft(),
+      gameplayTypes: ['a', 'b', 'c', 'd'],
+    }).gameplayTypes,
+    `玩法类型最多 ${GAME_VOCABULARY_LIMITS.gameplayTypes} 个`,
+  )
+  check(
+    '失效词条 · 报错',
+    validateDraft({ ...emptyDraft(), gameplayTypes: ['missing'] }, taxonomy).gameplayTypes.includes(
+      '已失效',
+    ),
+    true,
+  )
+  check(
+    '没有词表时不做存在性检查',
+    validateDraft({ ...emptyDraft(), gameplayTypes: ['missing'] }).gameplayTypes,
+    '',
+  )
+
+  const structuredApi = useAdminGameDraft()
+  structuredApi.loadFrom(structuredRaw)
+  check(
+    '草稿加载 · 玩法已填',
+    structuredApi.draftVocabulary('gameplayTypes').join('|'),
+    'traditional-night-watch|exploration',
+  )
+  check('草稿加载 · 校验通过', structuredApi.isValid.value, true)
+  check('草稿加载 · 无改动', structuredApi.isDirty.value, false)
+
+  structuredApi.setPrimaryGameplayType('exploration')
+  check(
+    '设为主要 · 顺序变化',
+    structuredApi.draftVocabulary('gameplayTypes').join('|'),
+    'exploration|traditional-night-watch',
+  )
+  check('设为主要 · 产生改动', structuredApi.isDirty.value, true)
+  structuredApi.resetToBaseline()
+  check(
+    '撤销 · 玩法顺序复原',
+    structuredApi.draftVocabulary('gameplayTypes').join('|'),
+    'traditional-night-watch|exploration',
+  )
+
+  check('添加机制 · 成功', structuredApi.addVocabularyValue('mechanics', 'puzzle'), true)
+  check('添加机制 · 重复拒绝', structuredApi.addVocabularyValue('mechanics', 'puzzle'), false)
+  check(
+    '添加不存在的词条 · 拒绝',
+    structuredApi.addVocabularyValue('mechanics', 'not-exist'),
+    false,
+  )
+  structuredApi.removeVocabularyValue('mechanics', 'puzzle')
+  check(
+    '移除词条',
+    structuredApi.draftVocabulary('mechanics').includes('puzzle'),
+    false,
+  )
+
+  check('添加其他名称 · 成功', structuredApi.addAltTitle('Alias Two'), 1)
+  check('添加其他名称 · 重复拒绝', structuredApi.addAltTitle('alias two'), 0)
+  structuredApi.removeAltTitle('Alias Two')
+  check('其他名称 · 移除', structuredApi.draftAltTitles.value.join('|'), 'Alias One')
+
+  // —— 关联作品（Phase 5）——
+  check('添加关系 · 成功', structuredApi.addRelation('sequel', 'popgoes'), '')
+  check('添加关系 · 数量', structuredApi.draftRelations.value.length, 1)
+  check('添加关系 · 行错误为空', structuredApi.relationRowErrors.value[0], '')
+  check(
+    '添加关系 · 重复目标被拒绝',
+    structuredApi.addRelation('prequel', 'popgoes').includes('重复'),
+    true,
+  )
+  check(
+    '添加关系 · 自关联被拒绝',
+    structuredApi.addRelation('related', 'tjoc-reborn').length > 0,
+    true,
+  )
+  check(
+    '添加关系 · 不存在的目标被拒绝',
+    structuredApi.addRelation('related', 'no-such-game').includes('不存在'),
+    true,
+  )
+  check(
+    '关系进入保存片段',
+    JSON.stringify(draftToPatch(structuredApi.draft).relations),
+    JSON.stringify([{ type: 'sequel', targetId: 'popgoes' }]),
+  )
+
+  structuredApi.removeRelation(0)
+  check('移除关系', structuredApi.draftRelations.value.length, 0)
+
+  // 目标端已经有反向记录 → 拒绝，避免两端各存一条
+  await lib.saveGame({
+    id: 'popgoes',
+    patch: { relations: [{ type: 'prequel', targetId: 'tjoc-reborn' }] },
+  })
+  check(
+    '反向关系已记录 · 拒绝',
+    structuredApi.addRelation('sequel', 'popgoes').includes('已经记录'),
+    true,
+  )
+  await lib.saveGame({ id: 'popgoes', patch: { relations: [] } })
+  check('反向关系 · 已清理', lib.getGameById('popgoes')?.relations.length, 0)
 
   // —— 保存：更新路径 ——
   // 说明：前面的批量断言已经改过 tjoc-reborn，所以这里**不能**断言「updatedAt 从空变成非空」。

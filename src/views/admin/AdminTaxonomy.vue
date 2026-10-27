@@ -163,23 +163,23 @@ const editingAuthorUsage = computed(() => findAuthor(editingAuthor.value)?.usage
    --------------------------------------------------------------------------- */
 const GHOST_CLASS =
   'rounded-none border border-transparent px-2 py-1 font-sans text-[11px] font-bold ' +
-  'uppercase tracking-[0.14em] text-black/60 transition-colors duration-150 ease-out hover:text-[#ff0000] disabled:cursor-not-allowed disabled:text-black/25'
+  'uppercase tracking-[0.14em] text-black/60 transition-colors duration-150 ease-out hover:text-accent disabled:cursor-not-allowed disabled:text-black/25'
 
 const SMALL_BUTTON =
   'rounded-none border border-black bg-white px-4 py-2 font-sans text-[11px] font-bold ' +
-  'uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30'
+  'uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-line disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30'
 
 const DANGER_BUTTON =
-  'rounded-none border border-[#ff0000] bg-white px-4 py-2 font-sans text-[11px] font-bold ' +
-  'uppercase tracking-[0.14em] text-[#ff0000] transition-colors duration-150 ease-out hover:bg-[#ff0000] hover:text-white disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30'
+  'rounded-none border border-accent bg-white px-4 py-2 font-sans text-[11px] font-bold ' +
+  'uppercase tracking-[0.14em] text-accent transition-colors duration-150 ease-out hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent disabled:cursor-not-allowed disabled:border-line disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30'
 
 const SEARCH_INPUT =
   'min-w-[240px] flex-1 rounded-none border border-black bg-white px-4 py-3 font-sans text-sm ' +
-  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-[#ff0000] focus:outline-none'
+  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-accent focus:outline-none'
 
 const RENAME_INPUT =
   'min-w-[180px] rounded-none border border-black bg-white px-3 py-2 font-sans text-sm ' +
-  'focus:border-[#ff0000] focus:outline-none'
+  'focus:border-accent focus:outline-none'
 </script>
 
 <template>
@@ -205,7 +205,7 @@ const RENAME_INPUT =
     </p>
 
     <!-- ============ 创建时间说明 ============ -->
-    <div class="mt-8 border border-[#cccccc] border-l-4 border-l-black px-6 py-5">
+    <div class="mt-8 border border-line border-l-4 border-l-black px-6 py-5">
       <p class="swiss-meta text-black/60">关于创建时间</p>
       <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
         标签<span class="font-bold text-black">没有单独存起来，也没有记录创建时间</span>。
@@ -217,7 +217,7 @@ const RENAME_INPUT =
     <!-- ============ 操作结果 ============ -->
     <div
       v-if="lastOutcome"
-      class="mt-8 border border-[#cccccc] border-l-4 border-l-[#ff0000] px-6 py-5"
+      class="mt-8 border border-line border-l-4 border-l-accent px-6 py-5"
       role="status"
       aria-live="polite"
     >
@@ -228,12 +228,12 @@ const RENAME_INPUT =
             {{ lastOutcome.label }} —— 影响了 {{ lastOutcome.changed }} 条作品<template
               v-if="lastOutcome.failed > 0"
             >
-              ，<span class="text-[#ff0000]">失败 {{ lastOutcome.failed }} 条</span></template
+              ，<span class="text-accent">失败 {{ lastOutcome.failed }} 条</span></template
             >
           </p>
           <p
             v-if="lastOutcome.failed > 0 && lastOutcome.error"
-            class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-[#ff0000]"
+            class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-accent"
           >
             失败原因：{{ lastOutcome.error }}
           </p>
@@ -260,11 +260,11 @@ const RENAME_INPUT =
       <!-- 删除确认（页内，不用原生弹窗） -->
       <div
         v-if="pendingDeleteTag"
-        class="mt-6 border border-[#ff0000] px-6 py-5"
+        class="mt-6 border border-accent px-6 py-5"
         role="alert"
         aria-live="assertive"
       >
-        <p class="swiss-meta font-bold text-[#ff0000]">确认删除标签「{{ pendingDeleteTag }}」？</p>
+        <p class="swiss-meta font-bold text-accent">确认删除标签「{{ pendingDeleteTag }}」？</p>
         <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
           现在有 {{ pendingDeleteUsage }} 款作品在用这个标签。删除后，它会从这些作品上一起消失；
           作品本身不会被删，但 <span class="font-bold text-black">这个操作会同时改动多条作品</span>。
@@ -293,7 +293,7 @@ const RENAME_INPUT =
           />
           <button
             type="button"
-            class="rounded-none border border-black px-6 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.16em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30"
+            class="rounded-none border border-black px-6 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.16em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-line disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30"
             :disabled="tagSearch.trim() === ''"
             @click="clearTagSearch"
           >
@@ -310,13 +310,13 @@ const RENAME_INPUT =
         <table class="w-full min-w-[760px] border-collapse text-left">
           <thead>
             <tr class="border-b border-black">
-              <th class="border-r border-[#cccccc] px-4 py-4 align-middle">
+              <th class="border-r border-line px-4 py-4 align-middle">
                 <span class="swiss-meta font-normal text-black/60">标签名称</span>
               </th>
-              <th class="w-[130px] border-r border-[#cccccc] px-4 py-4 text-right align-middle">
+              <th class="w-[130px] border-r border-line px-4 py-4 text-right align-middle">
                 <span class="swiss-meta font-normal text-black/60">使用数量</span>
               </th>
-              <th class="w-[180px] border-r border-[#cccccc] px-4 py-4 text-right align-middle">
+              <th class="w-[180px] border-r border-line px-4 py-4 text-right align-middle">
                 <span class="swiss-meta font-normal text-black/60">创建时间</span>
               </th>
               <th class="w-[150px] px-4 py-4 align-middle">
@@ -329,9 +329,9 @@ const RENAME_INPUT =
             <tr
               v-for="tag in visibleTags"
               :key="tag.name"
-              class="border-b border-[#cccccc] transition-colors duration-150 ease-out last:border-b-0 hover:bg-[#f9f9f9]"
+              class="border-b border-line transition-colors duration-150 ease-out last:border-b-0 hover:bg-surface"
             >
-              <td class="border-r border-[#cccccc] px-4 py-4 align-middle">
+              <td class="border-r border-line px-4 py-4 align-middle">
                 <template v-if="editingTag === tag.name">
                   <div class="flex flex-wrap items-center gap-3">
                     <input
@@ -349,7 +349,7 @@ const RENAME_INPUT =
                       取消
                     </button>
                   </div>
-                  <p v-if="tagRenameNotice" class="mt-2 font-sans text-xs text-[#ff0000]" role="alert">
+                  <p v-if="tagRenameNotice" class="mt-2 font-sans text-xs text-accent" role="alert">
                     {{ tagRenameNotice }}
                   </p>
                   <p
@@ -363,11 +363,11 @@ const RENAME_INPUT =
                 <span v-else class="font-sans text-sm font-bold">{{ tag.name }}</span>
               </td>
 
-              <td class="border-r border-[#cccccc] px-4 py-4 text-right align-middle">
+              <td class="border-r border-line px-4 py-4 text-right align-middle">
                 <span class="font-sans text-xs tabular-nums">{{ tag.usage }} 款</span>
               </td>
 
-              <td class="border-r border-[#cccccc] px-4 py-4 text-right align-middle">
+              <td class="border-r border-line px-4 py-4 text-right align-middle">
                 <span class="font-sans text-xs tabular-nums text-black/70">
                   {{ formatTimestamp(tag.createdAt) }}
                 </span>
@@ -377,14 +377,14 @@ const RENAME_INPUT =
                 <div class="flex flex-col items-start gap-2">
                   <button
                     type="button"
-                    class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:text-[#ff0000]"
+                    class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:text-accent"
                     @click="startTagRename(tag.name)"
                   >
                     重命名
                   </button>
                   <button
                     type="button"
-                    class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-[#ff0000] transition-colors duration-150 ease-out hover:text-black"
+                    class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-accent transition-colors duration-150 ease-out hover:text-black"
                     @click="startDeleteTag(tag.name)"
                   >
                     删除
@@ -441,7 +441,7 @@ const RENAME_INPUT =
           />
           <button
             type="button"
-            class="rounded-none border border-black px-6 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.16em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30"
+            class="rounded-none border border-black px-6 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.16em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-line disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30"
             :disabled="authorSearch.trim() === ''"
             @click="clearAuthorSearch"
           >
@@ -458,10 +458,10 @@ const RENAME_INPUT =
         <table class="w-full min-w-[620px] border-collapse text-left">
           <thead>
             <tr class="border-b border-black">
-              <th class="border-r border-[#cccccc] px-4 py-4 align-middle">
+              <th class="border-r border-line px-4 py-4 align-middle">
                 <span class="swiss-meta font-normal text-black/60">作者名称</span>
               </th>
-              <th class="w-[150px] border-r border-[#cccccc] px-4 py-4 text-right align-middle">
+              <th class="w-[150px] border-r border-line px-4 py-4 text-right align-middle">
                 <span class="swiss-meta font-normal text-black/60">使用数量</span>
               </th>
               <th class="w-[150px] px-4 py-4 align-middle">
@@ -474,9 +474,9 @@ const RENAME_INPUT =
             <tr
               v-for="author in visibleAuthors"
               :key="author.name"
-              class="border-b border-[#cccccc] transition-colors duration-150 ease-out last:border-b-0 hover:bg-[#f9f9f9]"
+              class="border-b border-line transition-colors duration-150 ease-out last:border-b-0 hover:bg-surface"
             >
-              <td class="border-r border-[#cccccc] px-4 py-4 align-middle">
+              <td class="border-r border-line px-4 py-4 align-middle">
                 <template v-if="editingAuthor === author.name">
                   <div class="flex flex-wrap items-center gap-3">
                     <input
@@ -504,7 +504,7 @@ const RENAME_INPUT =
                       取消
                     </button>
                   </div>
-                  <p v-if="authorRenameNotice" class="mt-2 font-sans text-xs text-[#ff0000]" role="alert">
+                  <p v-if="authorRenameNotice" class="mt-2 font-sans text-xs text-accent" role="alert">
                     {{ authorRenameNotice }}
                   </p>
                   <p
@@ -519,14 +519,14 @@ const RENAME_INPUT =
                 <span v-else class="font-sans text-sm font-bold">{{ author.name }}</span>
               </td>
 
-              <td class="border-r border-[#cccccc] px-4 py-4 text-right align-middle">
+              <td class="border-r border-line px-4 py-4 text-right align-middle">
                 <span class="font-sans text-xs tabular-nums">{{ author.usage }} 款</span>
               </td>
 
               <td class="px-4 py-4 align-middle">
                 <button
                   type="button"
-                  class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:text-[#ff0000]"
+                  class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:text-accent"
                   @click="startAuthorRename(author.name)"
                 >
                   重命名

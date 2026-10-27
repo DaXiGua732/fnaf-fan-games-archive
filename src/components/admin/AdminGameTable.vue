@@ -131,7 +131,7 @@ const CHECKBOX_CLASS =
       <table class="w-full min-w-[980px] border-collapse text-left">
       <thead>
         <tr class="border-b border-black">
-          <th class="w-12 border-r border-[#cccccc] px-4 py-4 align-middle">
+          <th class="w-12 border-r border-line px-4 py-4 align-middle">
             <input
               type="checkbox"
               :class="CHECKBOX_CLASS"
@@ -144,7 +144,7 @@ const CHECKBOX_CLASS =
           <th
             v-for="column in COLUMNS"
             :key="column.label"
-            class="border-r border-[#cccccc] px-4 py-4 align-middle whitespace-nowrap last:border-r-0"
+            class="border-r border-line px-4 py-4 align-middle whitespace-nowrap last:border-r-0"
             :class="column.width"
           >
             <span class="swiss-meta font-normal text-black/60">{{ column.label }}</span>
@@ -156,11 +156,11 @@ const CHECKBOX_CLASS =
         <tr
           v-for="game in games"
           :key="game.id"
-          class="border-b border-[#cccccc] transition-colors duration-150 ease-out last:border-b-0"
-          :class="isSelected(game.id) ? 'bg-[#f9f9f9]' : 'hover:bg-[#f9f9f9]'"
+          class="border-b border-line transition-colors duration-150 ease-out last:border-b-0"
+          :class="isSelected(game.id) ? 'bg-surface' : 'hover:bg-surface'"
         >
           <!-- 选择 -->
-          <td class="border-r border-[#cccccc] px-4 py-4 align-middle">
+          <td class="border-r border-line px-4 py-4 align-middle">
             <input
               type="checkbox"
               :class="CHECKBOX_CLASS"
@@ -171,21 +171,21 @@ const CHECKBOX_CLASS =
           </td>
 
           <!-- 封面 -->
-          <td class="border-r border-[#cccccc] px-4 py-3 align-middle">
+          <td class="border-r border-line px-4 py-3 align-middle">
             <img
               :src="assetUrl(game.coverImage)"
               :alt="`${game.title} 封面`"
-              class="h-12 w-20 border border-black bg-[#f9f9f9] object-cover md:h-14 md:w-24"
+              class="h-12 w-20 border border-black bg-surface object-cover md:h-14 md:w-24"
               loading="lazy"
               decoding="async"
             />
           </td>
 
           <!-- 游戏名称 —— 点标题直接进编辑页；作者 / 系列收进第二行，少两列 -->
-          <td class="border-r border-[#cccccc] px-4 py-3 align-middle">
+          <td class="border-r border-line px-4 py-3 align-middle">
             <RouterLink
               :to="{ name: 'admin-game-edit', params: { id: game.id } }"
-              class="font-sans text-sm font-bold transition-colors duration-150 ease-out hover:text-[#ff0000]"
+              class="font-sans text-sm font-bold transition-colors duration-150 ease-out hover:text-accent"
             >
               {{ game.title }}
             </RouterLink>
@@ -196,12 +196,12 @@ const CHECKBOX_CLASS =
           </td>
 
           <!-- 标签 -->
-          <td class="border-r border-[#cccccc] px-4 py-3 align-middle">
+          <td class="border-r border-line px-4 py-3 align-middle">
             <div v-if="game.tags.length" class="flex flex-wrap gap-2">
               <span
                 v-for="tag in game.tags"
                 :key="tag"
-                class="border border-[#cccccc] px-2 py-1 font-sans text-[11px] whitespace-nowrap"
+                class="border border-line px-2 py-1 font-sans text-[11px] whitespace-nowrap"
               >
                 {{ tag }}
               </span>
@@ -210,12 +210,12 @@ const CHECKBOX_CLASS =
           </td>
 
           <!-- 状态 -->
-          <td class="border-r border-[#cccccc] px-4 py-3 align-middle">
+          <td class="border-r border-line px-4 py-3 align-middle">
             <AdminStatusTag :status="game.status" :archived="game.archived" />
           </td>
 
           <!-- 更新时间（含操作者） -->
-          <td class="border-r border-[#cccccc] px-4 py-3 align-middle text-right">
+          <td class="border-r border-line px-4 py-3 align-middle text-right">
             <span class="font-sans text-xs tabular-nums text-black/70">
               {{ formatTimestamp(game.updatedAt) }}
             </span>
@@ -230,14 +230,14 @@ const CHECKBOX_CLASS =
             <div class="flex flex-col items-start gap-2">
               <RouterLink
                 :to="{ name: 'admin-game-edit', params: { id: game.id } }"
-                class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:text-[#ff0000]"
+                class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:text-accent"
               >
                 编辑
               </RouterLink>
 
               <button
                 type="button"
-                class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:text-[#ff0000]"
+                class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:text-accent"
                 :title="`预览 ${game.title}（草稿和已下线也能看）`"
                 @click="openPreview(game)"
               >
@@ -249,8 +249,8 @@ const CHECKBOX_CLASS =
                 class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:text-black/30"
                 :class="
                   game.status === 'published'
-                    ? 'text-[#ff0000] hover:text-black'
-                    : 'text-black/60 hover:text-[#ff0000]'
+                    ? 'text-accent hover:text-black'
+                    : 'text-black/60 hover:text-accent'
                 "
                 :disabled="Boolean(busyId)"
                 :title="`马上${toggleLabel(game)}（会保存到数据仓）`"
@@ -261,7 +261,7 @@ const CHECKBOX_CLASS =
 
               <button
                 type="button"
-                class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-black/35 transition-colors duration-150 ease-out hover:text-[#ff0000]"
+                class="font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-black/35 transition-colors duration-150 ease-out hover:text-accent"
                 title="从数据仓永久删除（不可撤销）"
                 @click="requestDelete(game)"
               >
@@ -308,7 +308,7 @@ const CHECKBOX_CLASS =
     <!-- ============ 删除成功（就地确认） ============ -->
     <div
       v-if="deleteDone && !deleteTarget"
-      class="mt-4 border border-[#cccccc] border-l-4 border-l-[#ff0000] px-6 py-4"
+      class="mt-4 border border-line border-l-4 border-l-accent px-6 py-4"
       role="status"
       aria-live="polite"
     >
@@ -325,7 +325,7 @@ const CHECKBOX_CLASS =
         </div>
         <button
           type="button"
-          class="rounded-none border border-transparent px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-black/55 transition-colors duration-150 ease-out hover:text-[#ff0000]"
+          class="rounded-none border border-transparent px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-black/55 transition-colors duration-150 ease-out hover:text-accent"
           @click="deleteDone = null"
         >
           知道了

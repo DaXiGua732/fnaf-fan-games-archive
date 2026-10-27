@@ -18,6 +18,14 @@
  */
 import type { ComputedRef } from 'vue'
 import type { AdminGame, GamePatch, StorageKind } from '../types/admin'
+import type {
+  Taxonomy,
+  VocabularyCollection,
+  VocabularyEntry,
+  VocabularyEntryInput,
+  VocabularyEntryPatch,
+  VocabularyMutationResult,
+} from '../types/taxonomy'
 
 export interface GameRepository {
   /**
@@ -28,6 +36,20 @@ export interface GameRepository {
    * 由实现方负责在写入后更新这个快照，消费方因此不必知道数据究竟存在哪里。
    */
   readonly games: ComputedRef<AdminGame[]>
+
+  /**
+   * 分类词表（玩法类型 / 机制 / 平台）的响应式快照。
+   *
+   * 与 `games` 来自同一份数据仓文件；旧数据没有 taxonomy 时由仓储补内置初始词表。
+   * 公开查询只应把**可见作品**交给词表统计，不要直接拿这里的全量做前台选项。
+   */
+  readonly taxonomy: ComputedRef<Taxonomy>
+
+  /**
+   * 数据源里的词表结构问题（缺字段、重复 id、名称冲突等）。
+   * 前台可以忽略；后台词表页应当显示，避免「词条看起来少了但不知道为什么」。
+   */
+  readonly taxonomyIssues: ComputedRef<string[]>
 
   /**
    * 写入实际会落在哪里。
@@ -58,8 +80,11 @@ export interface GameRepository {
    *
    * 前台启动 / 回到公开页时，用它把「构建期快照」换成数据仓的最新数据。
    * 刻意**不写本机存档**：这是「读最新」，不是「本地编辑」。
+   *
+   * `taxonomy` 省略时保留当前词表 —— 数据仓还没有 taxonomy 字段的旧快照
+   * 不应该把本机已有的词表清空。
    */
-  hydrate(games: AdminGame[]): void
+  hydrate(games: AdminGame[], taxonomy?: Taxonomy): void
 
   /** 全量列表（返回副本，调用方无法借此改到内部数据） */
   listGames(): Promise<AdminGame[]>
@@ -81,6 +106,43 @@ export interface GameRepository {
   publishGame(id: string): Promise<AdminGame>
   /** 下线：把状态置为 `offline`。**不删数据** */
   unpublishGame(id: string): Promise<AdminGame>
+
+  /* -------------------------------------------------------------------------
+     分类词表
+     -------------------------------------------------------------------------
+     每个实现都必须在**最新数据**上重新校验重名 / 合并 / 删除保护，
+     不能只相信调页面时的内存快照。两个实现共用 utils/taxonomy 的纯函数。
+     ------------------------------------------------------------------------- */
+
+  /** 新建词条；`id` 省略时按名称生成稳定标识 */
+  createVocabularyEntry(
+    collection: VocabularyCollection,
+    input: VocabularyEntryInput,
+  ): Promise<VocabularyEntry>
+
+  /** 改名 / 改定义；id 不可改，改名不触碰任何作品 */
+  updateVocabularyEntry(
+    collection: VocabularyCollection,
+    id: string,
+    patch: VocabularyEntryPatch,
+  ): Promise<VocabularyEntry>
+
+  /** 把 source 合并到 target，并删除 source；同时改写作品引用（整次操作一个提交） */
+  mergeVocabularyEntries(
+    collection: VocabularyCollection,
+    sourceId: string,
+    targetId: string,
+  ): Promise<VocabularyMutationResult>
+
+  /**
+   * 删除词条。
+   * 仍被作品引用时默认抛错；显式传 `removeFromGames: true` 才同时从作品移除。
+   */
+  deleteVocabularyEntry(
+    collection: VocabularyCollection,
+    id: string,
+    options?: { removeFromGames?: boolean },
+  ): Promise<VocabularyMutationResult>
 
   /**
    * 上传一张图片到数据仓，返回它的**公开访问地址**。

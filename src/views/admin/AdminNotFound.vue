@@ -27,7 +27,7 @@ const route = useRoute()
 
     <RouterLink
       to="/admin/games"
-      class="group inline-flex items-center gap-4 border border-black bg-black px-8 py-4 font-sans text-xs font-bold uppercase tracking-[0.16em] text-white transition-colors duration-150 ease-out hover:border-[#ff0000] hover:bg-[#ff0000]"
+      class="group inline-flex items-center gap-4 border border-black bg-black px-8 py-4 font-sans text-xs font-bold uppercase tracking-[0.16em] text-white transition-colors duration-150 ease-out hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent"
     >
       <span>前往游戏管理</span>
       <span class="u-arrow" aria-hidden="true">&#8594;</span>

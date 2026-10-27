@@ -8,7 +8,7 @@ import { copyText } from '../utils/clipboard'
  * DownloadPanel —— 资源下载核心区
  *
  * Swiss 约束：
- *  - 下载按钮使用 Button 的 solid 变体：黑底白字直角，悬停整块转 #ff0000
+ *  - 下载按钮使用 Button 的 solid 变体：墨色底、纸色字，悬停整块转强调色
  *  - 提取码【绝对不能】用等宽字体（font-mono 属违规 token），
  *    改用无衬线 + 大字距（tracking）来获得「码」的可读性
  *  - 行与行之间用 1px 网格线分割，不用卡片和阴影
@@ -65,7 +65,7 @@ function isFailed(index: number): boolean {
 
     <p
       v-if="downloads.length === 0"
-      class="border border-[#cccccc] px-5 py-10 font-sans text-sm text-black/55"
+      class="border border-line px-5 py-10 font-sans text-sm text-black/55"
     >
       暂未提供下载渠道。
     </p>
@@ -74,7 +74,7 @@ function isFailed(index: number): boolean {
       <li
         v-for="(link, index) in downloads"
         :key="`${link.provider}-${index}`"
-        class="grid gap-6 border-b border-[#cccccc] py-8 md:grid-cols-[minmax(0,1fr)_260px] md:items-center"
+        class="grid gap-6 border-b border-line py-8 md:grid-cols-[minmax(0,1fr)_260px] md:items-center"
       >
         <div>
           <p class="font-sans text-sm font-bold uppercase tracking-[0.16em]">{{ link.provider }}</p>
@@ -83,7 +83,7 @@ function isFailed(index: number): boolean {
             <div class="flex flex-wrap items-center gap-x-4 gap-y-3">
               <span class="swiss-meta text-black/60">提取码</span>
               <span
-                class="cursor-text select-all border border-[#cccccc] px-3 py-1 font-sans text-sm font-bold tracking-[0.34em]"
+                class="cursor-text select-all border border-line px-3 py-1 font-sans text-sm font-bold tracking-[0.34em]"
                 title="点击可全选"
               >
                 {{ link.password }}
@@ -93,8 +93,8 @@ function isFailed(index: number): boolean {
                 class="swiss-meta border px-3 py-1 transition-colors duration-150 ease-out"
                 :class="
                   isFailed(index)
-                    ? 'border-[#ff0000] text-[#ff0000]'
-                    : 'border-[#cccccc] hover:border-[#ff0000] hover:text-[#ff0000]'
+                    ? 'border-accent text-accent'
+                    : 'border-line hover:border-accent hover:text-accent'
                 "
                 @click="copyPassword(link, index)"
               >
@@ -104,7 +104,7 @@ function isFailed(index: number): boolean {
 
             <p
               v-if="isFailed(index)"
-              class="mt-3 font-sans text-xs font-bold text-[#ff0000]"
+              class="mt-3 font-sans text-xs font-bold text-accent"
               role="status"
             >
               当前浏览器环境禁止自动写入剪贴板，请点击上方提取码全选后手动复制。

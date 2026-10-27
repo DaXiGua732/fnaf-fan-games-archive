@@ -60,6 +60,10 @@ jobs:
       - name: GameJolt import tests
         run: npm run test:gamejolt
 
+      # 数据仓文档读写：必须保留 taxonomy 等未知顶层字段，不能被旧代码抹掉
+      - name: Catalog document tests
+        run: npm run test:catalog
+
       - name: Build browser extension
         run: npm run build:extension
 
@@ -69,8 +73,14 @@ jobs:
       - name: SSR smoke test
         run: npm run smoke
 
+      # 催资源的跨用户共享由 Supabase 提供。anon public key 本来就是公开的，
+      # 因此放在 Actions Variables（不是 Secrets）里也可以；留空则构建出「本机模式」。
+      # 变量在 GitHub → Settings → Secrets and variables → Actions → Variables 配置。
       - name: Build
         run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

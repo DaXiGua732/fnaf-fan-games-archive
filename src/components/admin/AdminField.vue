@@ -34,12 +34,12 @@ withDefaults(
   <div>
     <label class="swiss-meta mb-2 flex items-baseline gap-2 text-black/60" :for="controlId">
       <span>{{ label }}</span>
-      <span v-if="required" class="text-[#ff0000]" aria-hidden="true">*</span>
+      <span v-if="required" class="text-accent" aria-hidden="true">*</span>
     </label>
 
     <slot />
 
-    <p v-if="error" class="mt-2 font-sans text-xs leading-relaxed text-[#ff0000]" role="alert">
+    <p v-if="error" class="mt-2 font-sans text-xs leading-relaxed text-accent" role="alert">
       {{ error }}
     </p>
     <p v-else-if="hint" class="mt-2 font-sans text-xs leading-relaxed text-black/45">

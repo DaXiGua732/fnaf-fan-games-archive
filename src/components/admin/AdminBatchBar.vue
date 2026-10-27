@@ -191,7 +191,7 @@ function actionClass(danger: boolean): string {
   return [
     ACTION_BUTTON,
     danger
-      ? 'border-[#ff0000] bg-white text-[#ff0000] hover:bg-[#ff0000] hover:text-white'
+      ? 'border-accent bg-white text-accent hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent'
       : 'border-black bg-white text-black hover:bg-black hover:text-white',
   ].join(' ')
 }
@@ -199,41 +199,41 @@ function actionClass(danger: boolean): string {
 const SUBMIT_CLASS =
   'rounded-none border border-black bg-black px-5 py-2 font-sans text-[11px] font-bold ' +
   'uppercase tracking-[0.14em] text-white transition-colors duration-150 ease-out ' +
-  'hover:border-[#ff0000] hover:bg-[#ff0000] ' +
-  'disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:bg-white disabled:text-black/30 ' +
-  'disabled:hover:border-[#cccccc] disabled:hover:bg-white disabled:hover:text-black/30'
+  'hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent ' +
+  'disabled:cursor-not-allowed disabled:border-line disabled:bg-white disabled:text-black/30 ' +
+  'disabled:hover:border-line disabled:hover:bg-white disabled:hover:text-black/30'
 
 const GHOST_CLASS =
   'rounded-none border border-transparent px-4 py-2 font-sans text-[11px] font-bold ' +
-  'uppercase tracking-[0.14em] text-black/60 transition-colors duration-150 ease-out hover:text-[#ff0000]'
+  'uppercase tracking-[0.14em] text-black/60 transition-colors duration-150 ease-out hover:text-accent'
 
 const INPUT_CLASS =
   'w-full max-w-[520px] rounded-none border border-black bg-white px-4 py-3 font-sans text-sm ' +
-  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-[#ff0000] focus:outline-none'
+  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-accent focus:outline-none'
 
 function chipClass(active: boolean): string {
   return [
     'rounded-none border px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em]',
     'transition-colors duration-150 ease-out',
     active
-      ? 'border-[#ff0000] bg-black text-white'
-      : 'border-[#cccccc] bg-white text-black hover:border-black',
+      ? 'border-accent bg-black text-white'
+      : 'border-line bg-white text-black hover:border-black',
   ].join(' ')
 }
 </script>
 
 <template>
   <!-- ============ 未选择：一行细提示 ============ -->
-  <section v-if="selectedCount === 0" class="border border-[#cccccc] px-6 py-4">
+  <section v-if="selectedCount === 0" class="border border-line px-6 py-4">
     <p class="swiss-meta text-black/45">还没选中作品 · 勾选表格左边的方框，就能一次处理多款作品</p>
   </section>
 
   <!-- ============ 已选择 ============ -->
   <section v-else class="border border-black">
     <div
-      class="flex flex-wrap items-center justify-between gap-4 border-b border-[#cccccc] px-6 py-4"
+      class="flex flex-wrap items-center justify-between gap-4 border-b border-line px-6 py-4"
     >
-      <p class="swiss-meta font-bold text-[#ff0000]" aria-live="polite">
+      <p class="swiss-meta font-bold text-accent" aria-live="polite">
         已选择 {{ selectedCount }} 项
       </p>
       <button type="button" :class="GHOST_CLASS" @click="clearSelection">取消选择</button>
@@ -253,7 +253,7 @@ function chipClass(active: boolean): string {
 
     <!-- ---------- 二次确认 ---------- -->
     <div v-if="panel === 'confirm' && pending" class="border-t border-black px-6 py-5">
-      <p class="swiss-meta font-bold text-[#ff0000]">
+      <p class="swiss-meta font-bold text-accent">
         确认执行「{{ pending.label }}」· 影响 {{ selectedCount }} 项
       </p>
       <p class="mt-3 max-w-[74ch] font-sans text-xs leading-relaxed text-black/70">

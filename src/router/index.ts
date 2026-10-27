@@ -13,8 +13,12 @@ const SITE_NAME = 'FNAF FAN GAMES ARCHIVE'
 const router = createRouter({
   history: createWebHashHistory(),
   routes,
-  scrollBehavior(_to, _from, savedPosition) {
-    return savedPosition ?? { top: 0 }
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    // 只有 query 变化（首页筛选用 replace 同步 URL）时保持当前位置，
+    // 否则每敲一个字都会被拉回页面顶部。
+    if (to.path === from.path && to.hash === from.hash) return false
+    return { top: 0 }
   },
 })
 

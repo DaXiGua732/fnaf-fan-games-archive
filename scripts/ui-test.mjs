@@ -261,6 +261,205 @@ async function resetLocalData() {
 // 整个测试从出厂数据开始（此时**未登录**，正好用来验门禁）
 await resetLocalData()
 
+/* ======================================================================
+   〇、主题系统 —— 模式 / 强调色 / 持久化 / 深色首屏
+   ====================================================================== */
+await step('主题 · 切夜间 + 靛蓝，颜色与设置都持久化', async () => {
+  await go('/', 'FNAF Fan Games')
+  const themeButton = page.getByRole('button', { name: '主题', exact: true }).first()
+
+  await themeButton.click()
+  await page.getByRole('button', { name: '夜间', exact: true }).click()
+  await page.getByRole('button', { name: '靛蓝', exact: true }).click()
+  // body 的颜色过渡是 150ms，等它落定再读 computed style
+  await page.waitForTimeout(250)
+
+  const darkState = await page.evaluate(() => ({
+    mode: document.documentElement.dataset.mode,
+    theme: document.documentElement.dataset.theme,
+    colorScheme: document.documentElement.style.colorScheme,
+    bodyBg: getComputedStyle(document.body).backgroundColor,
+  }))
+  assert(darkState.mode === 'dark', `data-mode 应为 dark，实际 ${darkState.mode}`)
+  assert(darkState.theme === 'blue', `data-theme 应为 blue，实际 ${darkState.theme}`)
+  assert(darkState.colorScheme === 'dark', 'color-scheme 应同步为 dark')
+  assert(
+    darkState.bodyBg === 'rgb(20, 20, 19)',
+    `夜间 body 背景应取深纸色，实际 ${darkState.bodyBg}`,
+  )
+
+  // 刷新后由 index.html 的早期脚本恢复，不能先闪回日间
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(250)
+  const persisted = await page.evaluate(() => ({
+    mode: document.documentElement.dataset.mode,
+    theme: document.documentElement.dataset.theme,
+  }))
+  assert(persisted.mode === 'dark', `刷新后 data-mode 应为 dark，实际 ${persisted.mode}`)
+  assert(persisted.theme === 'blue', `刷新后 data-theme 应为 blue，实际 ${persisted.theme}`)
+
+  // 复位到默认浅色 + 赤红，保证后续截图与对比度断言稳定
+  await page.getByRole('button', { name: '主题', exact: true }).first().click()
+  await page.getByRole('button', { name: '日间', exact: true }).click()
+  await page.getByRole('button', { name: '赤红', exact: true }).click()
+  await page.keyboard.press('Escape')
+  const reset = await page.evaluate(() => ({
+    mode: document.documentElement.dataset.mode,
+    theme: document.documentElement.dataset.theme,
+  }))
+  assert(reset.mode === 'light' && reset.theme === 'red', '主题应复位为 light/red')
+  await shot('02-theme')
+})
+
+/* ======================================================================
+   〇、催资源 —— 先搜站内、再提交、+1 与自动已收录（本机模式）
+   ====================================================================== */
+const REQUEST_TITLE = 'ZZZ UI Resource Request Probe'
+
+await step('催资源 · 站内精确命中时只给详情入口，不引导提交', async () => {
+  await go('/', '游戏库')
+  // 这些用例会写本机 localStorage；如果开发服务器配了 Supabase，
+  // 必须在这里停住，否则探针数据会写进真实共享榜单。
+  const modeNote = await page.locator('#request-board').innerText()
+  assert(
+    modeNote.includes('本机模式'),
+    '催资源 UI 测试必须在本机模式运行（不要给测试用 dev server 配置 Supabase）',
+  )
+
+  await page.getByRole('button', { name: /催一个资源/ }).first().click()
+  const dialog = page.getByRole('dialog')
+  const input = dialog.getByLabel('想要什么资源？')
+
+  // 只有符号的输入不应被允许提交
+  await input.fill('★★')
+  const submit = dialog.getByRole('button', { name: /提交催资源/ })
+  assert(await submit.isDisabled(), '只有符号时提交按钮应禁用')
+  await dialog.getByText('请至少输入一个文字或数字。').waitFor()
+
+  // 输入法组合中的 Escape 只取消候选词，不能关掉弹窗
+  await input.fill('Jolly')
+  await page.evaluate(() => {
+    const el = document.querySelector('#resource-request-input')
+    if (!el) return
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    Object.defineProperty(event, 'isComposing', { value: true })
+    el.dispatchEvent(event)
+  })
+  await page.waitForTimeout(100)
+  assert((await page.getByRole('dialog').count()) === 1, '输入法组合中的 Escape 不应关闭弹窗')
+
+  // 用「去掉冒号 / 追加标点」的写法命中同一款作品，验证归一化匹配
+  const punctuatedTitle = `${TEST_GAME_TITLE}!!`
+  await input.fill(punctuatedTitle)
+  await dialog.getByText('站内已收录').waitFor({ timeout: 5000 })
+  await dialog.getByText('打开详情').waitFor()
+  const submitButtons = await dialog.getByRole('button', { name: /提交催资源/ }).count()
+  assert(submitButtons === 0, '站内已精确命中时不应出现提交按钮')
+
+  // 「在游戏库中筛选」必须落到作品本身，而不是原始带标点的输入
+  await dialog.getByRole('button', { name: '在游戏库中筛选' }).click()
+  await page.getByRole('dialog').waitFor({ state: 'detached' })
+  await page.waitForFunction(() => document.activeElement?.id === 'library-search')
+  const libraryQuery = await page.inputValue('#library-search')
+  assert(libraryQuery === TEST_GAME_TITLE, `游戏库搜索词应为作品标题，实际 ${libraryQuery}`)
+  await page.locator('#library').getByText(TEST_GAME_TITLE, { exact: false }).first().waitFor()
+  assert((await page.getByText('No Results').count()) === 0, '站内已命中时游戏库不应显示无结果')
+
+  // 清掉搜索，避免影响后面的「首页渲染全部作品」用例
+  await page.getByRole('button', { name: '清除全部筛选' }).click()
+  await page.waitForFunction(
+    (count) => document.querySelectorAll('article').length === count,
+    VISIBLE_COUNT,
+  )
+})
+
+await step('催资源 · 提交后在排行榜出现，且同浏览器不能重复投票', async () => {
+  await go('/', '游戏库')
+  await page.getByRole('button', { name: /催一个资源/ }).first().click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('想要什么资源？').fill(REQUEST_TITLE)
+  await dialog.getByRole('button', { name: /提交催资源/ }).click()
+  await dialog.getByText('已记录').waitFor({ timeout: 5000 })
+  await need(REQUEST_TITLE)
+  await dialog.getByRole('button', { name: '完成', exact: true }).click()
+
+  const item = page.locator('#request-board li').filter({ hasText: REQUEST_TITLE }).first()
+  await item.waitFor({ timeout: 5000 })
+  assert((await item.innerText()).includes('1 人催'), '新请求应显示 1 人催')
+
+  // 再打开对话框：应识别为已有请求，并因本浏览器已投过而禁用 +1
+  await page.getByRole('button', { name: /催一个资源/ }).first().click()
+  const again = page.getByRole('dialog')
+  await again.getByLabel('想要什么资源？').fill(REQUEST_TITLE)
+  await again.getByText('已有 1 人催过').waitFor({ timeout: 5000 })
+  const votedButton = again.getByRole('button', { name: /加一票/ })
+  assert(await votedButton.isDisabled(), '同一浏览器重复催同一资源时 +1 应禁用')
+  assert(
+    (await votedButton.innerText()).includes('你已催过'),
+    '同浏览器已投时按钮文案应为「你已催过」',
+  )
+  assert(
+    (await again.getByRole('button', { name: /提交催资源/ }).count()) === 0,
+    '已有同标题请求时不应再显示提交按钮',
+  )
+  await page.keyboard.press('Escape')
+  await page.getByRole('dialog').waitFor({ state: 'detached' })
+})
+
+await step('催资源 · 换一个浏览器身份 +1，票数增加到 2', async () => {
+  // 清掉浏览器身份与「已投」标记，模拟另一位访客；请求本身保留
+  await page.evaluate(() => {
+    localStorage.removeItem('fnaf-archive:request-client:v1')
+    localStorage.removeItem('fnaf-archive:request-voted:v1')
+  })
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(300)
+
+  const item = page.locator('#request-board li').filter({ hasText: REQUEST_TITLE }).first()
+  await item.waitFor({ timeout: 5000 })
+  const voteButton = item.getByRole('button', { name: /加一票/ })
+  await voteButton.click()
+  await page.getByText(`已为《${REQUEST_TITLE}》加一票。`).waitFor({ timeout: 5000 })
+  assert((await item.innerText()).includes('2 人催'), '第二位访客 +1 后应显示 2 人催')
+  assert(await voteButton.isDisabled(), '+1 成功后按钮应禁用')
+  assert((await voteButton.innerText()).includes('已催'), '+1 成功后按钮应显示「已催」')
+})
+
+await step('催资源 · 站内出现同名作品后自动移入「已收录」', async () => {
+  await page.evaluate((gameTitle) => {
+    const key = 'fnaf-archive:resource-requests:v1'
+    const fallback = { version: 1, requests: [], votes: {} }
+    let state
+    try {
+      state = JSON.parse(localStorage.getItem(key) || 'null') || fallback
+    } catch {
+      state = fallback
+    }
+    const id = 'ui-fulfilled-request'
+    state.requests = (state.requests || []).filter((request) => request.id !== id)
+    state.requests.push({
+      id,
+      title: gameTitle,
+      votes: 3,
+      createdAt: new Date().toISOString(),
+      createdBy: 'ui-fulfilled-client',
+    })
+    state.votes = state.votes || {}
+    state.votes[id] = ['ui-fulfilled-client']
+    localStorage.setItem(key, JSON.stringify(state))
+  }, TEST_GAME_TITLE)
+
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(300)
+  const details = page.locator('#request-board details')
+  await details.waitFor({ timeout: 5000 })
+  assert((await details.innerText()).includes('已收录'), '同名作品出现后应显示已收录折叠区')
+  // 折叠状态下 innerText 不含内部内容，先展开再断言标题与详情链接
+  await details.locator('summary').click()
+  assert((await details.innerText()).includes(TEST_GAME_TITLE), '已收录区应链接到同名作品')
+  await shot('03-request-board')
+})
+
 /**
  * 用浏览器自己的 canvas 生成一张**指定尺寸的真实 PNG**。
  *
@@ -896,6 +1095,163 @@ await step('Phase 6 · 作者管理：重命名并同步到作品，再复原', 
   await authorSection.getByRole('button', { name: '保存', exact: true }).first().click()
   await page.waitForTimeout(700)
   await need(`重命名作者「${temporaryAuthor}」→「${originalAuthor}」`)
+})
+/* ======================================================================
+   六·四、Phase 2 —— 玩法与机制词表 + 编辑器结构化字段
+   ====================================================================== */
+const vocabSection = (collection) => page.locator(`section#vocab-${collection}`)
+const MECH_A = 'UI 断言机制甲'
+const MECH_A_RENAMED = 'UI 断言机制甲改'
+const MECH_B = 'UI 断言机制乙'
+
+await step('Phase 2 · 词表页列出三分区与内置词条', async () => {
+  await go('/admin/vocabulary', '玩法与机制')
+  await need('玩法类型')
+  await need('游戏机制')
+  await need('支持平台')
+  await need('未标玩法')
+  // 数据仓还没有 taxonomy 时，用内置初始词表兜底
+  await need('传统守夜式')
+  await need('监控摄像头')
+  await need('Windows')
+  await need('使用数量')
+  await shot('18a-vocabulary')
+})
+
+await step('Phase 2 · 新建并编辑机制词条', async () => {
+  const section = vocabSection('mechanics')
+  await page.fill('#vocab-mechanics-name', MECH_A)
+  await page.fill('#vocab-mechanics-desc', '仅用于 UI 断言，稍后会删除')
+  await section.getByRole('button', { name: '新建', exact: true }).click()
+  await page.waitForTimeout(700)
+
+  await need(`已新建游戏机制「${MECH_A}」`)
+  let row = section.locator('tbody tr', { hasText: MECH_A }).first()
+  assert((await row.count()) === 1, '新建的机制没有出现在列表里')
+  assert((await row.innerText()).includes('0 款'), '新机制的使用次数应为 0')
+
+  await row.getByRole('button', { name: '编辑', exact: true }).click()
+  await page.waitForTimeout(200)
+  await section.locator('tbody input[aria-label="游戏机制名称"]').first().fill(MECH_A_RENAMED)
+  await section.getByRole('button', { name: '保存', exact: true }).first().click()
+  await page.waitForTimeout(700)
+  await need(`已更新游戏机制「${MECH_A_RENAMED}」`)
+
+  row = section.locator('tbody tr', { hasText: MECH_A_RENAMED }).first()
+  assert((await row.count()) === 1, '改名后列表里找不到新名称')
+})
+
+await step('Phase 2 · 合并词条：来源消失、目标保留', async () => {
+  const section = vocabSection('mechanics')
+  await page.fill('#vocab-mechanics-name', MECH_B)
+  await section.getByRole('button', { name: '新建', exact: true }).click()
+  await page.waitForTimeout(700)
+
+  const sourceRow = section.locator('tbody tr', { hasText: MECH_A_RENAMED }).first()
+  await sourceRow.getByRole('button', { name: '合并', exact: true }).click()
+  await page.waitForTimeout(200)
+  await section
+    .locator('select[aria-label="选择合并目标"]')
+    .selectOption({ label: MECH_B })
+  await section.getByRole('button', { name: '确认合并', exact: true }).click()
+  await page.waitForTimeout(700)
+
+  await need('合并到')
+  const tableText = await section.locator('tbody').innerText()
+  assert(!tableText.includes(MECH_A_RENAMED), '合并后来源词条仍在列表里')
+  assert(tableText.includes(MECH_B), '合并后目标词条应保留')
+  await shot('18b-vocabulary-merge')
+})
+
+await step('Phase 2 · 删除保护：被作品引用时不能直接删', async () => {
+  // 先把这个机制挂到作品上
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
+  await page.getByRole('button', { name: `+ ${MECH_B}`, exact: true }).click()
+  await page.waitForTimeout(300)
+  await btn('保存').click()
+  await page.waitForTimeout(900)
+  await need('保存结果')
+
+  await go('/admin/vocabulary', '玩法与机制')
+  const section = vocabSection('mechanics')
+  const row = section.locator('tbody tr', { hasText: MECH_B }).first()
+  await row.getByRole('button', { name: '删除', exact: true }).click()
+  await page.waitForTimeout(300)
+  await need('仍被 1 款作品使用')
+  await need('从作品移除并删除')
+  await shot('18c-vocabulary-delete-protected')
+
+  await section.getByRole('button', { name: '从作品移除并删除', exact: true }).click()
+  await page.waitForTimeout(700)
+  await need('并从 1 款作品上移除')
+
+  // 作品上的引用也应同步消失
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
+  await needNot(MECH_B)
+})
+
+await step('Phase 2 · 编辑器结构化字段保存后重新读取一致', async () => {
+  const ALIAS = 'UI 上的另一个名字'
+  const SOURCE = 'https://example.com/ui-test-source'
+
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
+  await page.getByRole('button', { name: '+ 传统守夜式', exact: true }).click()
+  await page.getByRole('button', { name: '+ 监控摄像头', exact: true }).click()
+  await page.getByRole('button', { name: '+ Windows', exact: true }).click()
+  await page.fill('#f-alt-title-input', ALIAS)
+  await page.locator('#f-alt-title-input').press('Enter')
+  await page.fill('#f-source', SOURCE)
+  await page.selectOption('#f-development', 'in-development')
+  await page.waitForTimeout(300)
+
+  // 玩法第一项必须带「主要」标记
+  const gameplayText = await page.locator('#section-vocab').innerText()
+  assert(gameplayText.includes('主要'), '第一个玩法类型没有标出「主要」')
+
+  await btn('保存').click()
+  await page.waitForTimeout(900)
+  await need('保存结果')
+  await shot('18d-structured-saved')
+
+  // —— 重新加载，确认不是只改了内存里的草稿 ——
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
+  assert(
+    (await page.inputValue('#f-source')) === SOURCE,
+    '来源页没有保存成功',
+  )
+  assert(
+    (await page.inputValue('#f-development')) === 'in-development',
+    '开发状态没有保存成功',
+  )
+  await need('传统守夜式')
+  await need('监控摄像头')
+  await need('Windows')
+  await need(ALIAS)
+
+  await shot('18e-structured-reloaded')
+})
+
+await step('Phase 2 · 预览用真实详情页展示新字段', async () => {
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
+  const [previewPage] = await Promise.all([
+    context.waitForEvent('page'),
+    btn('预览').click(),
+  ])
+  await previewPage.waitForLoadState('domcontentloaded')
+  await previewPage
+    .getByText('预览 · 未保存', { exact: false })
+    .first()
+    .waitFor({ timeout: 10000 })
+  await previewPage.getByText('传统守夜式', { exact: false }).first().waitFor({ timeout: 10000 })
+
+  const text = await previewPage.locator('body').innerText()
+  assert(text.includes('监控摄像头'), '预览里没有显示机制')
+  assert(text.includes('Windows'), '预览里没有显示平台')
+  assert(text.includes('开发中'), '预览里没有显示开发状态')
+  assert(text.includes('UI 上的另一个名字'), '预览里没有显示其他名称')
+  assert(text.includes('example.com/ui-test-source'), '预览里没有显示来源页')
+  await previewPage.screenshot({ path: `${SHOTS}/18f-structured-preview.png`, fullPage: true })
+  await previewPage.close()
 })
 
 /* ======================================================================
@@ -1697,6 +2053,443 @@ await step('GameJolt 导入 · 扩展 ZIP 拖入 → 预览 → 传图 → 保�
     fakeDb = JSON.parse(JSON.stringify(localDb))
     fakeSha = 'sha-1'
   }
+})
+/* ======================================================================
+   十三、Phase 3 —— 前台可点击索引 / URL 状态
+   ======================================================================
+   这一组直接在 **本机仓储** 里放两条一次性可见作品 + 一条草稿：
+     - 公共前台在 dev 下读的就是 localStorage 里的目录；
+     - 草稿用来验证「索引不绕过公开可见性」；
+     - 结束后不再还原，因为这是测试的最后一段（下一次运行会先 resetLocalData）。
+   ====================================================================== */
+const indexTaxonomy = {
+  gameplayTypes: [
+    { id: 'traditional-night-watch', name: '传统守夜式', description: '' },
+    { id: 'exploration', name: '探索式', description: '' },
+    { id: 'unused-style', name: '未使用玩法', description: '' },
+  ],
+  mechanics: [{ id: 'security-cameras', name: '监控摄像头', description: '' }],
+  platforms: [
+    { id: 'windows', name: 'Windows', description: '' },
+    { id: 'web', name: 'Web', description: '' },
+  ],
+}
+
+const indexGameA = {
+  ...JSON.parse(JSON.stringify(TEST_GAME)),
+  id: 'index-probe-a',
+  title: '索引探针甲',
+  author: '索引作者甲',
+  releaseYear: 2019,
+  status: 'published',
+  archived: false,
+  altTitles: ['索引别名'],
+  gameplayTypes: ['traditional-night-watch'],
+  mechanics: ['security-cameras'],
+  platforms: ['windows'],
+}
+const indexGameB = {
+  ...indexGameA,
+  id: 'index-probe-b',
+  title: '索引探针乙',
+  author: '索引作者乙',
+  releaseYear: 2021,
+  altTitles: [],
+  gameplayTypes: ['exploration'],
+  mechanics: [],
+  platforms: ['web'],
+  tags: ['ProbeTag'],
+}
+const indexDraft = {
+  ...indexGameA,
+  id: 'index-probe-draft',
+  title: '不可见索引探针',
+  status: 'draft',
+}
+
+await step('Phase 3 · 详情页属性可点击 → 首页索引结果', async () => {
+  await page.evaluate(
+    ({ games, taxonomy }) => {
+      localStorage.setItem('fnaf-archive:admin-catalog:v1', JSON.stringify(games))
+      localStorage.setItem('fnaf-archive:taxonomy:v1', JSON.stringify(taxonomy))
+    },
+    { games: [indexGameA, indexGameB, indexDraft], taxonomy: indexTaxonomy },
+  )
+
+  await go(`/game/${indexGameA.id}`, indexGameA.title)
+  const facts = page.locator('table')
+  await facts.getByRole('button', { name: '传统守夜式', exact: true }).click()
+  await page.waitForTimeout(600)
+
+  assert(
+    page.url().includes('gameplay=traditional-night-watch'),
+    `URL 没有带上玩法条件：${page.url()}`,
+  )
+  await need('当前索引条件')
+  await need('命中 1 款')
+  await need(indexGameA.title)
+  await needNot(indexGameB.title)
+  await needNot(indexDraft.title)
+  await shot('45-index-gameplay')
+})
+
+await step('Phase 3 · 平台 / 机制 / 标签 / 作者都是索引入口', async () => {
+  const clickFactThenCheck = async (label, expectedParam, expectedHits) => {
+    await go(`/game/${indexGameA.id}`, indexGameA.title)
+    await page.locator('table').getByRole('button', { name: label, exact: true }).click()
+    await page.waitForTimeout(600)
+    assert(page.url().includes(expectedParam), `URL 缺少 ${expectedParam}：${page.url()}`)
+    await need(`命中 ${expectedHits} 款`)
+  }
+
+  await clickFactThenCheck('Windows', 'platform=windows', 1)
+  await clickFactThenCheck('监控摄像头', 'mechanic=security-cameras', 1)
+  await clickFactThenCheck(indexGameA.author, 'author=', 1)
+  await clickFactThenCheck('2019', 'year=2019', 1)
+
+  const tag = indexGameA.tags?.[0]
+  if (tag) {
+    await go(`/game/${indexGameA.id}`, indexGameA.title)
+    await page
+      .locator('ul[aria-label="作品标签"]')
+      .getByRole('button', { name: tag, exact: true })
+      .click()
+    await page.waitForTimeout(600)
+    assert(page.url().includes('tag='), `标签没有进入 URL：${page.url()}`)
+    await need('命中 1 款')
+  }
+})
+
+await step('Phase 3 · 刷新 / 后退 / 前进保留索引状态', async () => {
+  await go(`/game/${indexGameA.id}`, indexGameA.title)
+  await page.locator('table').getByRole('button', { name: '传统守夜式', exact: true }).click()
+  await page.waitForTimeout(600)
+  await need('命中 1 款')
+
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(600)
+  await need('当前索引条件')
+  await need('命中 1 款')
+  assert(page.url().includes('gameplay='), '刷新后 URL 丢了索引条件')
+
+  await page.goBack()
+  await page.waitForTimeout(500)
+  assert(page.url().includes(`/game/${indexGameA.id}`), `后退没有回到详情页：${page.url()}`)
+  await need(indexGameA.title)
+
+  await page.goForward()
+  await page.waitForTimeout(600)
+  await need('当前索引条件')
+  await need('命中 1 款')
+})
+
+await step('Phase 3 · 同维多选 OR / 跨维 AND / 搜索别名', async () => {
+  await go(`/?year=2019&year=2021`, '游戏库')
+  await page.waitForTimeout(600)
+  await need('命中 2 款')
+
+  await go(`/?author=${encodeURIComponent(indexGameA.author)}&gameplay=exploration`, '游戏库')
+  await page.waitForTimeout(600)
+  await need('命中 0 款')
+
+  await go(`/?author=${encodeURIComponent(indexGameB.author)}&gameplay=exploration`, '游戏库')
+  await page.waitForTimeout(600)
+  await need('命中 1 款')
+  await need(indexGameB.title)
+
+  await go('/', '游戏库')
+  await page.fill('#library-search', '索引别名')
+  await page.waitForTimeout(600)
+  await need('命中 1 款')
+  assert(decodeURIComponent(page.url()).includes('q=索引别名'), '搜索词没有写进 URL')
+  await shot('46-index-search')
+})
+
+await step('Phase 3 · 失效索引条件可见、可清除，且不静默显示全部', async () => {
+  await go('/?gameplay=deleted-index-entry', '游戏库')
+  await page.waitForTimeout(600)
+  await need('已失效')
+  await need('清除失效条件')
+  await need('命中 0 款')
+  await shot('47-index-invalid')
+
+  await btn('清除失效条件').click()
+  await page.waitForTimeout(600)
+  await need('命中 2 款')
+  assert(!page.url().includes('deleted-index-entry'), '清除后 URL 里仍有失效条件')
+})
+
+await step('Phase 3 · 清除全部筛选恢复完整公开集合', async () => {
+  await go('/?gameplay=traditional-night-watch', '游戏库')
+  await page.waitForTimeout(600)
+  await need('命中 1 款')
+  await btn('清除全部筛选').click()
+  await page.waitForTimeout(600)
+  await need('命中 2 款')
+  assert(!page.url().includes('gameplay='), '清除后 URL 仍有筛选条件')
+})
+
+/* ======================================================================
+   十四、Phase 4 —— 组合筛选 UI（分组 / 多选 / 移动端）
+   ====================================================================== */
+await step('Phase 4 · 筛选面板展示八个可用分组，空分组不渲染', async () => {
+  await go('/', '游戏库')
+
+  for (const label of [
+    '玩法类型',
+    '游戏机制',
+    '支持平台',
+    '作者',
+    'IP 系列',
+    '年份',
+    '开发引擎',
+    '标签',
+  ]) {
+    const group = page.getByRole('group', { name: label })
+    await group.first().waitFor({ timeout: 5000 })
+    assert((await group.count()) === 1, `分组「${label}」出现了 ${await group.count()} 次`)
+  }
+
+  // 词表里存在但没有任何可见作品使用的词条不能出现在公开面板里
+  await needNot('未使用玩法')
+
+  const gameplayButtons = page
+    .getByRole('group', { name: '玩法类型' })
+    .getByRole('button')
+  assert(
+    (await gameplayButtons.count()) === 2,
+    `玩法分组应只有 2 个被使用的词条，实际 ${await gameplayButtons.count()}`,
+  )
+  await shot('48-filter-groups')
+})
+
+await step('Phase 4 · 同维多选 OR、跨维 AND、aria-pressed 与 URL', async () => {
+  await go('/', '游戏库')
+  const gameplay = page.getByRole('group', { name: '玩法类型' })
+  const traditional = gameplay.getByRole('button', { name: '传统守夜式', exact: true })
+
+  await traditional.click()
+  await page.waitForTimeout(600)
+  await need('命中 1 款')
+  assert(
+    (await traditional.getAttribute('aria-pressed')) === 'true',
+    '选中的筛选 chip 没有 aria-pressed=true',
+  )
+
+  const exploration = gameplay.getByRole('button', { name: '探索式', exact: true })
+  await exploration.click()
+  await page.waitForTimeout(600)
+  await need('命中 2 款')
+  const url = decodeURIComponent(page.url())
+  assert(
+    url.includes('gameplay=traditional-night-watch') && url.includes('gameplay=exploration'),
+    `同维多值没有写进 URL：${url}`,
+  )
+
+  const windows = page
+    .getByRole('group', { name: '支持平台' })
+    .getByRole('button', { name: 'Windows', exact: true })
+  await windows.click()
+  await page.waitForTimeout(600)
+  await need('命中 1 款')
+  await need(indexGameA.title)
+  await needNot(indexGameB.title)
+  await shot('49-filter-combined')
+})
+
+await step('Phase 4 · 搜索与筛选叠加、清除全部恢复', async () => {
+  await go('/', '游戏库')
+  await page.fill('#library-search', '索引探针')
+  await page.waitForTimeout(600)
+  await need('命中 2 款')
+
+  await page
+    .getByRole('group', { name: '玩法类型' })
+    .getByRole('button', { name: '传统守夜式', exact: true })
+    .click()
+  await page.waitForTimeout(600)
+  await need('命中 1 款')
+
+  await page.fill('#library-search', '不存在的关键词')
+  await page.waitForTimeout(600)
+  await need('命中 0 款')
+
+  await btn('清除全部筛选').click()
+  await page.waitForTimeout(600)
+  await need('命中 2 款')
+  assert((await page.inputValue('#library-search')) === '', '清除后搜索框没有清空')
+  assert(!page.url().includes('q='), '清除后 URL 仍有搜索词')
+})
+
+await step('Phase 4 · 移动端筛选面板可用且无横向溢出', async () => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await go('/', '游戏库')
+
+  const layout = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    viewport: innerWidth,
+    groups: document.querySelectorAll('[role="group"]').length,
+  }))
+  assert(
+    layout.scrollWidth <= layout.viewport + 1,
+    `移动端出现横向溢出：${layout.scrollWidth} > ${layout.viewport}`,
+  )
+  assert(layout.groups >= 8, `移动端分组数量不足：${layout.groups}`)
+
+  await page
+    .getByRole('group', { name: '玩法类型' })
+    .getByRole('button', { name: '传统守夜式', exact: true })
+    .click()
+  await page.waitForTimeout(600)
+  await need('命中 1 款')
+  await shot('50-filter-mobile')
+
+  await page.setViewportSize({ width: 1440, height: 1000 })
+})
+
+/* ======================================================================
+   十五、Phase 5 —— 作品关联
+   ====================================================================== */
+await step('Phase 5 · 后台添加关联、保存、预览、移除', async () => {
+  // 让公开详情页能看到目标作品（预览用真实 GameDetail + 公开可见目录）
+  await page.evaluate(
+    ({ games, taxonomy }) => {
+      localStorage.setItem('fnaf-archive:admin-catalog:v1', JSON.stringify(games))
+      localStorage.setItem('fnaf-archive:taxonomy:v1', JSON.stringify(taxonomy))
+    },
+    { games: localDb.games, taxonomy: indexTaxonomy },
+  )
+
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
+  const section = page.locator('#section-relations')
+  await section.waitFor({ timeout: 5000 })
+  await need('还没有关联作品')
+
+  await page.selectOption('#relation-type', 'sequel')
+  await section
+    .getByRole('button')
+    .filter({ hasText: OTHER_GAME.title })
+    .first()
+    .click()
+  await page.waitForTimeout(300)
+  await need('续作')
+  assert(
+    (await section.getByRole('button', { name: `移除关联 ${OTHER_GAME.title}` }).count()) === 1,
+    '添加关系后没有出现对应的移除入口',
+  )
+
+  await btn('保存').click()
+  await page.waitForTimeout(900)
+  await need('保存结果')
+
+  // 重新加载后关系仍在
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
+  assert(
+    (await page.locator(`#section-relations button[aria-label="移除关联 ${OTHER_GAME.title}"]`).count()) === 1,
+    '保存后重新加载，关系没有保留',
+  )
+
+  // 预览：真实详情页展示关联作品
+  const [previewPage] = await Promise.all([
+    context.waitForEvent('page'),
+    btn('预览').click(),
+  ])
+  await previewPage.waitForLoadState('domcontentloaded')
+  await previewPage.getByText('相关作品', { exact: false }).first().waitFor({ timeout: 10000 })
+  const previewText = await previewPage.locator('body').innerText()
+  assert(previewText.includes('续作'), '预览里没有关系文案')
+  assert(previewText.includes(OTHER_GAME.title), '预览里没有关联目标作品')
+  await previewPage.close()
+
+  // 移除并保存，恢复原状
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
+  await page.getByRole('button', { name: `移除关联 ${OTHER_GAME.title}` }).click()
+  await page.waitForTimeout(300)
+  await btn('保存').click()
+  await page.waitForTimeout(900)
+  await go(`/admin/games/${TEST_GAME_ID}/edit`, '基本信息')
+  await need('还没有关联作品')
+  await shot('51-relations-editor')
+})
+
+await step('Phase 5 · 详情页：方向 / 反向 / 同作者 / 同系列 / 可见性', async () => {
+  const gameA = {
+    ...indexGameA,
+    relations: [{ type: 'sequel', targetId: indexGameB.id }],
+  }
+  const gameB = { ...indexGameB, relations: [] }
+  const gameC = {
+    ...indexGameA,
+    id: 'index-probe-c',
+    title: '索引探针丙',
+    ipSeries: 'Other Series',
+    relations: [],
+    altTitles: [],
+  }
+  const gameD = {
+    ...indexGameA,
+    id: 'index-probe-d',
+    title: '索引探针丁',
+    author: '索引作者丁',
+    relations: [],
+    altTitles: [],
+  }
+  const gameE = {
+    ...indexGameA,
+    id: 'index-probe-e',
+    title: '独行探针',
+    author: '独行作者',
+    ipSeries: '独行系列',
+    relations: [],
+    altTitles: [],
+  }
+  const draftPeer = {
+    ...indexGameA,
+    id: 'index-probe-draft-peer',
+    title: '隐藏关联探针',
+    status: 'draft',
+    relations: [{ type: 'prequel', targetId: indexGameA.id }],
+    altTitles: [],
+  }
+
+  await page.evaluate(
+    ({ games, taxonomy }) => {
+      localStorage.setItem('fnaf-archive:admin-catalog:v1', JSON.stringify(games))
+      localStorage.setItem('fnaf-archive:taxonomy:v1', JSON.stringify(taxonomy))
+    },
+    {
+      games: [gameA, gameB, gameC, gameD, gameE, draftPeer],
+      taxonomy: indexTaxonomy,
+    },
+  )
+
+  await go(`/game/${gameA.id}`, gameA.title)
+  await need('相关作品')
+  await need('关联作品')
+  await need('续作')
+  await need(gameB.title)
+  await need('同作者的其他作品')
+  await need(gameC.title)
+  await need('同系列的其他作品')
+  await need(gameD.title)
+  await needNot(draftPeer.title)
+
+  // 反向文案：B 页显示 A 是「前传」
+  await go(`/game/${gameB.id}`, gameB.title)
+  await need('前传')
+  await need(gameA.title)
+
+  // 没有关系、没有同作者 / 同系列 → 整个区块不渲染
+  await go(`/game/${gameE.id}`, gameE.title)
+  await needNot('相关作品')
+
+  // 点击相关作品进入详情页
+  await go(`/game/${gameA.id}`, gameA.title)
+  await page.getByRole('link', { name: new RegExp(gameB.title) }).first().click()
+  await page.waitForTimeout(500)
+  assert(page.url().includes(`/game/${gameB.id}`), `相关作品链接没有跳到目标页：${page.url()}`)
+  await need('前传')
+  await shot('52-related-works')
 })
 
 await step('控制台无 JS 报错 / 无业务请求 4xx', async () => {

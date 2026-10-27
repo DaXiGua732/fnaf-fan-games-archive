@@ -192,13 +192,13 @@ function clear(): void {
 
 const URL_INPUT =
   'min-w-[220px] flex-1 rounded-none border border-black bg-white px-4 py-3 font-sans text-sm ' +
-  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-[#ff0000] focus:outline-none'
+  'transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-accent focus:outline-none'
 </script>
 
 <template>
   <AdminField :label="label" :control-id="`${controlId}-url`" :error="error" :hint="hint">
     <!-- 预览 -->
-    <div class="border border-[#cccccc] bg-[#f9f9f9]">
+    <div class="border border-line bg-surface">
       <img
         v-if="value"
         :src="preview"
@@ -220,7 +220,7 @@ const URL_INPUT =
       已自动处理：{{ uploadNote }}
     </p>
 
-    <p v-else-if="isLocal" class="swiss-meta mt-2 font-bold text-[#ff0000]">
+    <p v-else-if="isLocal" class="swiss-meta mt-2 font-bold text-accent">
       只是本地预览，还没上传（刷新就没了）
     </p>
 
@@ -232,7 +232,7 @@ const URL_INPUT =
     <div
       :class="[
         'mt-3 cursor-pointer border px-4 py-5 transition-colors duration-150 ease-out',
-        dragging ? 'border-black bg-[#f9f9f9]' : 'border-[#cccccc] hover:border-black',
+        dragging ? 'border-black bg-surface' : 'border-line hover:border-black',
       ]"
       role="button"
       tabindex="0"
@@ -286,7 +286,7 @@ const URL_INPUT =
       />
       <button
         type="button"
-        class="rounded-none border border-black bg-white px-5 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30"
+        class="rounded-none border border-black bg-white px-5 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:border-line disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30"
         :disabled="!value"
         @click="clear"
       >
@@ -295,7 +295,7 @@ const URL_INPUT =
     </div>
 
     <div v-if="notice" class="mt-2 flex flex-wrap items-baseline gap-4" role="alert">
-      <p class="font-sans text-xs text-[#ff0000]">{{ notice }}</p>
+      <p class="font-sans text-xs text-accent">{{ notice }}</p>
       <button
         v-if="failedFile"
         type="button"

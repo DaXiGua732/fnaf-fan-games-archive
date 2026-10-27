@@ -13,6 +13,11 @@ const {
   availableAuthors,
   availableYears,
   availableSeries,
+  availableGameplayTypes,
+  availableMechanics,
+  availablePlatforms,
+  availableTags,
+  availableEngines,
   activeFilters,
   hasActiveFilters,
   setSearchQuery,
@@ -22,18 +27,75 @@ const {
   isFilterActive,
 } = useGameLibrary()
 
+interface FilterOption {
+  /** 写进查询状态 / URL 的值：词条场景是稳定 id */
+  value: string
+  /** 展示文案：词条场景是名称 */
+  label: string
+}
+
 interface FilterGroup {
   category: FilterCategory
   label: string
-  /** 用函数取值，保证 options 始终反映最新的元数据 */
-  options: () => string[]
+  /** 用函数取值，保证 options 始终反映最新的可见目录；空分组由模板跳过 */
+  options: () => FilterOption[]
 }
 
+/**
+ * 分组顺序：玩法 → 机制 → 平台 → 作者 → 系列 → 年份 → 引擎 → 标签。
+ * 先按「怎么玩」组织，再按标准资料，最后是自由标签。
+ */
 const GROUPS: FilterGroup[] = [
-  { category: 'year', label: '年份', options: () => availableYears.value.map(String) },
-  { category: 'author', label: '作者', options: () => availableAuthors.value },
-  { category: 'series', label: 'IP 系列', options: () => availableSeries.value },
+  {
+    category: 'gameplay',
+    label: '玩法类型',
+    options: () =>
+      availableGameplayTypes.value.map((entry) => ({ value: entry.id, label: entry.name })),
+  },
+  {
+    category: 'mechanic',
+    label: '游戏机制',
+    options: () =>
+      availableMechanics.value.map((entry) => ({ value: entry.id, label: entry.name })),
+  },
+  {
+    category: 'platform',
+    label: '支持平台',
+    options: () =>
+      availablePlatforms.value.map((entry) => ({ value: entry.id, label: entry.name })),
+  },
+  {
+    category: 'author',
+    label: '作者',
+    options: () => availableAuthors.value.map((author) => ({ value: author, label: author })),
+  },
+  {
+    category: 'series',
+    label: 'IP 系列',
+    options: () => availableSeries.value.map((series) => ({ value: series, label: series })),
+  },
+  {
+    category: 'year',
+    label: '年份',
+    options: () =>
+      availableYears.value.map((year) => ({ value: String(year), label: String(year) })),
+  },
+  {
+    category: 'engine',
+    label: '开发引擎',
+    options: () => availableEngines.value.map((engine) => ({ value: engine, label: engine })),
+  },
+  {
+    category: 'tag',
+    label: '标签',
+    options: () => availableTags.value.map((tag) => ({ value: tag, label: tag })),
+  },
 ]
+
+/** 每次元数据变化只算一次选项；空分组由模板跳过 */
+const groups = computed(() =>
+  GROUPS.map((group) => ({ ...group, options: group.options() })),
+)
 
 const SORTS: { key: SortKey; label: string }[] = [
   { key: 'recommended', label: '推荐' },
@@ -49,8 +111,8 @@ function chipClass(active: boolean): string {
     'rounded-none border px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em]',
     'transition-colors duration-150 ease-out',
     active
-      ? 'border-[#ff0000] bg-black text-white'
-      : 'border-[#cccccc] bg-white text-black hover:border-black',
+      ? 'border-accent bg-black text-white'
+      : 'border-line bg-white text-black hover:border-black',
   ].join(' ')
 }
 
@@ -68,39 +130,42 @@ const searchText = useSearchField(
 <template>
   <section class="border border-black">
     <!-- 搜索 -->
-    <div class="border-b border-[#cccccc] p-6 md:p-8">
+    <div class="border-b border-line p-6 md:p-8">
       <label class="swiss-meta mb-3 block text-black/60" for="library-search">关键词搜索</label>
       <input
         id="library-search"
         v-model="searchText"
         type="search"
         autocomplete="off"
-        placeholder="输入标题 / 作者 / 系列 / 引擎…"
-        class="w-full rounded-none border border-black bg-white px-4 py-3 font-sans text-sm transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-[#ff0000] focus:outline-none"
+        placeholder="输入标题 / 别名 / 作者 / 系列 / 引擎 / 玩法 / 机制 / 平台…"
+        class="w-full rounded-none border border-black bg-white px-4 py-3 font-sans text-sm transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-accent focus:outline-none"
         />
     </div>
 
-    <!-- 三组分类标签 -->
-    <div class="divide-y divide-[#cccccc]">
-      <div
-        v-for="group in GROUPS"
-        :key="group.category"
-        class="grid gap-4 p-6 md:grid-cols-[120px_minmax(0,1fr)] md:p-8"
-      >
-        <p class="swiss-meta pt-2 text-black/60">{{ group.label }}</p>
-        <div class="flex flex-wrap gap-3">
-          <button
-            v-for="option in group.options()"
-            :key="option"
-            type="button"
-            :class="chipClass(isFilterActive(group.category, option))"
-            :aria-pressed="isFilterActive(group.category, option)"
-            @click="setFilter(group.category, option)"
-          >
-            {{ option }}
-          </button>
+    <!-- 分类标签：空分组不渲染（数据里没有的分类不会留下一排空标题） -->
+    <div class="divide-y divide-line">
+      <template v-for="group in groups" :key="group.category">
+        <div
+          v-if="group.options.length > 0"
+          role="group"
+          :aria-label="group.label"
+          class="grid gap-4 p-6 md:grid-cols-[120px_minmax(0,1fr)] md:p-8"
+        >
+          <p class="swiss-meta pt-2 text-black/60">{{ group.label }}</p>
+          <div class="flex flex-wrap gap-3">
+            <button
+              v-for="option in group.options"
+              :key="option.value"
+              type="button"
+              :class="chipClass(isFilterActive(group.category, option.value))"
+              :aria-pressed="isFilterActive(group.category, option.value)"
+              @click="setFilter(group.category, option.value)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- 排序 + 清除 -->
@@ -121,7 +186,7 @@ const searchText = useSearchField(
 
       <button
         type="button"
-        class="ml-auto rounded-none border border-black px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-30 enabled:hover:border-[#ff0000] enabled:hover:bg-[#ff0000] enabled:hover:text-white"
+        class="ml-auto rounded-none border border-black px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-30 enabled:hover:border-accent-surface enabled:hover:bg-accent-surface enabled:hover:text-on-accent"
         :disabled="!hasActiveFilters"
         @click="clearFilters"
       >

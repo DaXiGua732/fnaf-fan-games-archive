@@ -57,15 +57,15 @@ const searchText = useSearchField(computed(() => activeQuery.value.search), setS
 
 const SELECT_CLASS =
   'w-full appearance-none rounded-none border border-black bg-white px-3 py-2.5 pr-9 font-sans text-xs ' +
-  'transition-colors duration-150 ease-out focus:border-[#ff0000] focus:outline-none ' +
-  'disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/40'
+  'transition-colors duration-150 ease-out focus:border-accent focus:outline-none ' +
+  'disabled:cursor-not-allowed disabled:border-line disabled:text-black/40'
 
 /** 状态标签页：选中态整块反白（创作中心同款的信息层级，不用彩色） */
 function tabClass(active: boolean): string {
   return [
-    'shrink-0 border-r border-[#cccccc] px-5 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.14em]',
+    'shrink-0 border-r border-line px-5 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.14em]',
     'transition-colors duration-150 ease-out last:border-r-0',
-    active ? 'bg-black text-white' : 'bg-white text-black hover:bg-[#f9f9f9]',
+    active ? 'bg-black text-white' : 'bg-white text-black hover:bg-surface',
   ].join(' ')
 }
 </script>
@@ -99,7 +99,7 @@ function tabClass(active: boolean): string {
           autocomplete="off"
           placeholder="标题 / 作者 / IP 系列 / 引擎 / 标签…"
           v-model="searchText"
-          class="w-full rounded-none border border-black bg-white px-3 py-2.5 font-sans text-xs transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-[#ff0000] focus:outline-none"
+          class="w-full rounded-none border border-black bg-white px-3 py-2.5 font-sans text-xs transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-accent focus:outline-none"
         />
       </div>
 
@@ -158,7 +158,7 @@ function tabClass(active: boolean): string {
 
       <button
         type="button"
-        class="rounded-none border border-black px-4 py-2.5 font-sans text-[10px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30 enabled:hover:border-[#ff0000] enabled:hover:bg-[#ff0000] enabled:hover:text-white"
+        class="rounded-none border border-black px-4 py-2.5 font-sans text-[10px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:border-line disabled:text-black/30 enabled:hover:border-accent-surface enabled:hover:bg-accent-surface enabled:hover:text-on-accent"
         :disabled="!hasActiveQuery"
         @click="clearQuery"
       >
@@ -168,7 +168,7 @@ function tabClass(active: boolean): string {
 
     <p
       v-if="availableTags.length === 0"
-      class="border-t border-[#cccccc] px-5 py-2 swiss-meta text-black/35 md:px-6"
+      class="border-t border-line px-5 py-2 swiss-meta text-black/35 md:px-6"
     >
       还没有任何标签，所以暂时不能按标签筛选
     </p>

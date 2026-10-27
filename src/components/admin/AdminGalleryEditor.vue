@@ -252,14 +252,14 @@ function remove(index: number): void {
 }
 
 const TILE_BUTTON =
-  'rounded-none border border-[#cccccc] bg-white px-2 py-1 font-sans text-[10px] font-bold ' +
+  'rounded-none border border-line bg-white px-2 py-1 font-sans text-[10px] font-bold ' +
   'uppercase tracking-[0.1em] transition-colors duration-150 ease-out hover:border-black ' +
-  'disabled:cursor-not-allowed disabled:text-black/25 disabled:hover:border-[#cccccc]'
+  'disabled:cursor-not-allowed disabled:text-black/25 disabled:hover:border-line'
 
 const SMALL_BUTTON =
   'rounded-none border border-black bg-white px-5 py-3 font-sans text-[11px] font-bold ' +
   'uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:bg-black hover:text-white ' +
-  'disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30'
+  'disabled:cursor-not-allowed disabled:border-line disabled:text-black/30 disabled:hover:bg-white disabled:hover:text-black/30'
 </script>
 
 <template>
@@ -269,9 +269,9 @@ const SMALL_BUTTON =
       <figure
         v-for="(image, index) in draftImages"
         :key="image"
-        class="border border-[#cccccc]"
+        class="border border-line"
       >
-        <div class="border-b border-[#cccccc] bg-[#f9f9f9]">
+        <div class="border-b border-line bg-surface">
           <img
             :src="assetUrl(image)"
             :alt="`图库第 ${index + 1} 张`"
@@ -305,13 +305,13 @@ const SMALL_BUTTON =
               :href="assetUrl(image)"
               target="_blank"
               rel="noopener noreferrer"
-              class="font-sans text-[10px] font-bold uppercase tracking-[0.1em] transition-colors duration-150 ease-out hover:text-[#ff0000]"
+              class="font-sans text-[10px] font-bold uppercase tracking-[0.1em] transition-colors duration-150 ease-out hover:text-accent"
             >
               查看 &#8599;
             </a>
             <button
               type="button"
-              class="ml-auto font-sans text-[10px] font-bold uppercase tracking-[0.1em] text-[#ff0000] transition-colors duration-150 ease-out hover:text-black"
+              class="ml-auto font-sans text-[10px] font-bold uppercase tracking-[0.1em] text-accent transition-colors duration-150 ease-out hover:text-black"
               :aria-label="`删除第 ${index + 1} 张`"
               @click="remove(index)"
             >
@@ -328,7 +328,7 @@ const SMALL_BUTTON =
     <div
       :class="[
         'mt-5 cursor-pointer border px-4 py-5 transition-colors duration-150 ease-out',
-        dragging ? 'border-black bg-[#f9f9f9]' : 'border-[#cccccc] hover:border-black',
+        dragging ? 'border-black bg-surface' : 'border-line hover:border-black',
       ]"
       role="button"
       tabindex="0"
@@ -375,7 +375,7 @@ const SMALL_BUTTON =
         type="text"
         autocomplete="off"
         placeholder="/images/xxx-banner.svg 或 https://…"
-        class="min-w-[220px] flex-1 rounded-none border border-black bg-white px-4 py-3 font-sans text-sm transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-[#ff0000] focus:outline-none"
+        class="min-w-[220px] flex-1 rounded-none border border-black bg-white px-4 py-3 font-sans text-sm transition-colors duration-150 ease-out placeholder:text-black/35 focus:border-accent focus:outline-none"
         @keyup.enter="addFromInput"
       />
       <button
@@ -389,7 +389,7 @@ const SMALL_BUTTON =
     </div>
 
     <div v-if="notice" class="mt-3 flex flex-wrap items-baseline gap-4" role="alert">
-      <p class="font-sans text-xs text-[#ff0000]">{{ notice }}</p>
+      <p class="font-sans text-xs text-accent">{{ notice }}</p>
       <button
         v-if="failedFiles.length > 0"
         type="button"

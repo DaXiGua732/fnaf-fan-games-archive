@@ -38,11 +38,21 @@ Phase 0–20 全部落地，并已在线上实际使用。**后续改动仍按�
 | --- | --- |
 | `admin_backend_development_plan.md` | 计划书：20 个阶段的定义、执行协议（规则 1–6）、回复格式 |
 | `admin_phase0_design_freeze.md` | 设计冻结：审计结论、架构决策、数据模型增量方案、路由与文件规划 |
+| `structured_data_phase0_design_freeze.md` | 结构化资料库升级：审计、数据模型、词表边界、关系、分阶段验收 |
+| `structured_data_phase1_report.md` | 结构化资料库 Phase 1 实施报告：数据契约、测试结果、已知限制 |
+| `structured_data_phase2_report.md` | 结构化资料库 Phase 2 实施报告：词表后台页、编辑器新字段、测试结果 |
+| `structured_data_phase3_report.md` | 结构化资料库 Phase 3 实施报告：可点击索引、URL 状态、失效条件 |
+| `structured_data_phase4_report.md` | 结构化资料库 Phase 4 实施报告：组合筛选面板、多选 UI、移动端 |
+| `structured_data_phase5_report.md` | 结构化资料库 Phase 5 实施报告：作品关系编辑、相关作品展示 |
+| `structured_data_phase6_report.md` | 结构化资料库 Phase 6 实施报告：只读质量检查、集成回归、文档收尾 |
 
 已完成：**Phase 0–20 全部**。其中 Phase 14（数据库设计）不适用 —— `db.json` 就是库；
 Phase 20（测试）由贯穿全程的门禁体系覆盖：
-`typecheck + test:gamejolt + build:extension + selftest + smoke + build`
+`typecheck + test:gamejolt + test:catalog + build:extension + selftest + smoke + build`
 （UI 点击测试与扩展 E2E 需要本机浏览器，单独运行）。
+
+> 结构化资料库升级是另一条分阶段工作流：Phase 0–6 全部完成，
+> 包含数据层、后台维护、前台索引、组合筛选、作品关系与只读质量检查。
 
 > **后台能改线上数据、能传图、能预览、能永久删除作品**：登录后读写数据仓的 `db.json`，
 > 图片上传到数据仓的 `images/`，保存 = 一次提交，git 历史即回滚手段。
@@ -63,6 +73,7 @@ Phase 20（测试）由贯穿全程的门禁体系覆盖：
 | `/#/admin/games/:id/edit` | `AdminGameEditor.vue` | ✅ 全部区块（P5–P9）+ 永久删除 |
 | `/#/admin/preview` | `AdminGamePreview.vue` | ✅ 未保存草稿的预览（Phase 18） |
 | `/#/admin/taxonomy` | `AdminTaxonomy.vue` | ✅ 标签与作者合并管理：搜索 / 重命名 / 删除标签（Phase 6） |
+| `/#/admin/vocabulary` | `AdminVocabulary.vue` | ✅ 玩法类型 / 机制 / 平台词表：新增 / 编辑 / 合并 / 删除保护（Phase 2） |
 | `/#/admin/tags`、`/#/admin/authors` | 重定向 → `admin-taxonomy` | ✅ 旧地址保留，避免书签 404 |
 | `/#/admin/*`（兜底） | `AdminNotFound.vue` | ✅ |
 
@@ -97,6 +108,8 @@ Phase 20（测试）由贯穿全程的门禁体系覆盖：
 **不需要本机助手或任何终端进程**。没有安装扩展时，仍可用本机助手作为开发备用。
 **下载渠道仍需人工下载、上传、填写**；导入后条目仍是草稿，不会自动保存或发布。
 详见 §7.3。
+
+**前台新增能力**：主题切换（§5.4）与公开的「资源请求（催资源）」榜单（§7.4）。
 
 
 ### 前台可见性（Phase 10 起生效）
@@ -444,10 +457,97 @@ UI 于是如实说「只写入了内存」。**写失败绝不假装成功。**
 
 本地模式没有账号，`updatedBy` 保持缺省，界面显示「—」，**不伪造署名**。
 
+### 结构化资料库：Phase 1–6（2026-10-27）
+
+Phase 1 建立了数据层：类型、词表、默认值、关系结构与两套仓储的读写契约。
+Phase 2 把它接进后台：新增 `/admin/vocabulary` 词表页，编辑器增加其他名称、
+来源页、开发状态、玩法类型、机制与平台；详情页（含后台预览）展示这些字段。
+Phase 3 把详情页的关键属性变成索引入口，并把筛选状态写进 URL（刷新 / 分享 / 前进后退都保留）。
+Phase 4 把筛选面板扩成八组，支持同维多选、空分组不渲染与移动端单列布局。
+Phase 5 接入有向作品关系：后台选择目标、详情页展示正向 / 反向与同作者 / 同系列。
+Phase 6 增加只读资料质量检查 `npm run check:data`，并完成跨模块回归与文档收尾。
+现有记录在读取时自动补齐默认值，但**没有批量改写数据仓**，也没有自动给任何作品打分类。
+
+`db.json` 顶层现在是 `{ "games": [...], "taxonomy": {...} }`：
+
+```json
+{
+  "games": [{ "id": "...", "gameplayTypes": ["traditional-night-watch"], "relations": [] }],
+  "taxonomy": {
+    "gameplayTypes": [{ "id": "traditional-night-watch", "name": "传统守夜", "description": "..." }],
+    "mechanics": [],
+    "platforms": []
+  }
+}
+```
+
+| 规则 | 说明 |
+| --- | --- |
+| 词表存顶层 | 三套集合：`gameplayTypes` / `mechanics` / `platforms`；作品只存**稳定 id** |
+| 改名不碰作品 | 后台改的是词条 `name`；作品引用 id，所以无需批量改写 |
+| 合并 / 删除一次生效 | 远程仓一次提交；本地仓一次持久化（第二个 key 写失败时尽力回滚）。合并会替换并去重所有引用；仍被使用的词条默认拒绝删除，除非明确要求从作品移除 |
+| 缺省与损坏分开 | `taxonomy` 缺失时用内置初始词表兜底；三个集合齐全但为空时尊重「管理员删空」，不回填；缺集合 / 类型不对则不让它覆盖当前词表 |
+| 普通保存不写词表 | 数据仓里没有 `taxonomy` 时，保存作品**不会**把内置词表塞进去；已有 `taxonomy` 时原样保留（包括 `null` / 损坏值），只有词表操作才改写 |
+| 保留未知字段 | 顶层、词条、关系上的未知扩展字段在读写与 `data:pull` 后都保留，避免新旧代码互删数据 |
+| 关系只存一条边 | 作品上存 `{ type, targetId }`；目标页的反向文案由 `inverseRelationLabel()` 派生，删除作品会清理指向它的入边 |
+| 未知引用不丢 | 归一化**不做数量截断**，也不因为词表暂时没有该 id 就删掉作品上的值；关系坏输入在写入前报错，而不是静默消失 |
+| 开发状态 ≠ 发布状态 | `developmentStatus` 描述作品做到哪一步（已发布 / 开发中 / 暂停 / 取消 / 未知）；`status` / `archived` 只控制本站是否展示，两者互不推导 |
+
+作品新增 / 启用的字段：`altTitles`、`sourceUrl`、`developmentStatus`、
+`gameplayTypes`、`mechanics`、`relations`，以及此前一直为空、现在纳入词表的 `platforms`。
+本地模式的词表单独存在 `fnaf-archive:taxonomy:v1`，不改旧作品存档格式。
+
+**Phase 2 已包含**：
+- `/admin/vocabulary`：玩法类型 / 机制 / 平台三分区；新建、改名、改定义、合并、
+  删除保护、使用次数（全部作品 / 前台可见）、未分类计数、跨集合同名提示。
+- 编辑器：其他名称（≤5）、来源页（http(s)）、开发状态、玩法类型（≤3，第一项为主要）、
+  机制（≤12）、平台（≤8）；非法词条 id、超限、非法 URL **阻止保存**，未标注不阻止。
+- 详情页与后台预览：按词表把 id 解析成名称后展示；来源页只对 http(s) 生成外链。
+
+**Phase 3 已包含**：
+- 详情页的作者 / 年份 / IP 系列 / 引擎 / 玩法 / 机制 / 平台 / 标签都可点击，
+  进入首页游戏库的对应索引结果；点击会**清空其他筛选**、回到第 1 页与默认排序。
+- 查询引擎支持八个维度、同维多选（OR）与跨维（AND），搜索覆盖标题、其他名称、
+  作者、系列、引擎、标签、玩法 / 机制 / 平台名称。
+- URL 约定：`q` / `sort` / `page`，筛选维度用重复参数
+  `author` / `year` / `series` / `gameplay` / `mechanic` / `tag` / `platform` / `engine`；
+  默认值不写进 URL。首页内改动用 `replace`，从详情进索引用 `push`。
+- 失效条件（词条被删除、值不在可见目录里）**保留并标红**，给出单个移除与
+  「清除失效条件」入口；索引结果始终只来自 `isPubliclyVisible()`。
+
+**Phase 4 已包含**：
+- 筛选面板分组顺序：玩法类型 → 游戏机制 → 支持平台 → 作者 → IP 系列 → 年份 →
+  开发引擎 → 标签；只渲染至少有一个可见选项的分组。
+- 同组多选 toggle（`aria-pressed`），跨组 AND；选项只来自当前可见目录，
+  草稿作品用过的词条不会出现在公开面板里。
+- 搜索与筛选叠加；清除全部同时清空搜索；排序与分页行为不变。
+- 移动端单列堆叠、chip 自动换行；390px 实测无横向溢出。
+
+**Phase 5 已包含**：
+- 编辑器「关联作品」区块：关系类型 + 作品选择器（标题 / id / 作者搜索），
+  排除自身与已选目标；草稿 / 下线目标可选并标注「前台暂不展示」。
+- 保存前共享 `inspectGameRelations()` 校验：自关联、目标不存在、重复目标、
+  目标端已有反向记录、数量上限（20）都会阻断并逐行提示。
+- 详情页「相关作品」：出边用关系文案，入边由反向文案派生（不要求两端各存一条）；
+  只展示公开可见目标；同作者 / 同系列由标准字段派生，并与显式关系去重；
+  没有相关数据时整段不渲染。后台预览使用同一套详情组件。
+
+**Phase 6 已包含**：
+- `npm run check:data`：只读扫描构建快照或 `--file=` 指定的 `db.json`，
+  报告未分类作品、失效词条引用、悬挂 / 自关联 / 重复关系、两端重复记录、
+  标签与词条同名、重复标签 / 别名、缺封面 / Banner / 下载、词表结构与跨集合同名。
+- 只报告不改数据；默认退出码 0，`--strict` 在有 error 时退出 1，`--json` 输出机器可读结果。
+- 跨模块回归：旧记录兼容、公开可见性、组合筛选、关系方向与删除清理均由 selftest / smoke / UI 覆盖。
+
+> 结构化资料库的 Phase 0–6 已全部完成。**没有**批量标注任何作品 ——
+> 分类与关系必须由管理员按资料逐条录入；质量检查只负责把问题列出来。
+>
+> 完整设计见 `structured_data_phase0_design_freeze.md`。
+
 ### 测试覆盖对照（Phase 20）
 
 计划书 §21（后台专项）/ §22（前台回归）逐项对照。`selftest` = 纯函数与深模块断言，
-`UI` = `npm run test:ui`（76 步真实浏览器点击），`冒烟` = SSR 渲染 14 条路由，
+`UI` = `npm run test:ui`（99 步真实浏览器点击），`冒烟` = SSR 渲染 16 条路由，
 `字节对比` = 公开站产物逐字节基线。
 
 **§21 后台专项**
@@ -609,29 +709,32 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 | `npm run build` | 生产构建（base = `/fnaf-fan-games-archive/`），输出到 `dist/` |
 | `npm run preview` | 预览生产产物 |
 | `npm run typecheck` | `vue-tsc --noEmit` 类型检查 |
-| `npm run selftest` | 深模块行为断言（前台 + 后台 + 浏览量三套，见 §2.1） |
-| `npm run smoke` | SSR 冒烟：逐路由真实渲染并断言内容（14 条路由） |
+| `npm run selftest` | 深模块行为断言（前台 + 后台 + 资料质量 + 筛选 URL + 浏览量 + 主题 + 催资源 + 结构化资料八套，见 §2.1） |
+| `npm run smoke` | SSR 冒烟：逐路由真实渲染并断言内容（16 条路由） |
 | `npm run test:gamejolt` | GameJolt 链接解析 / 字段转换 / 扩展打包的单元测试（不联网） |
+| `npm run test:catalog` | 数据仓文档解析 / 序列化测试（保留 `taxonomy` 等未知顶层字段） |
 | `npm run gamejolt:helper` | 启动 GameJolt 导入助手（只监听 127.0.0.1:4317，见 §7.3） |
 | `npm run build:extension` | 构建 Chrome / Edge 扩展到 `extension/dist/` |
 | `npm run test:extension` | 扩展端到端测试（需系统 Chrome；会先构建扩展） |
 | `npm run test:ui` | Playwright 真实浏览器点击测试（需先另开终端 `npm run dev`） |
 | `npm run assets` | 按 `db.json` 重新生成占位图到 `public/images/` |
-| `npm run verify` | `typecheck` + `test:gamejolt` + `build:extension` + `selftest` + `smoke` + `build` |
+| `npm run verify` | `typecheck` + `test:gamejolt` + `test:catalog` + `build:extension` + `selftest` + `smoke` + `build` |
+| `npm run check:data` | **只读**资料质量检查：默认读 `src/data/db.json`，支持 `--file=` / `--json` / `--strict` |
 
 ---
 
-## 2. 质量门禁：为什么有六道关卡
+## 2. 质量门禁：为什么有七道关卡
 
-本项目开发期间**无法在浏览器里手动点击验证**，所以用六个自动化关卡替代人工验收。
-`npm run verify` 必须全绿才允许提交，CI 里也会跑同样六步（见 `.github/workflows/deploy.yml`）。
+本项目开发期间**无法在浏览器里手动点击验证**，所以用七个自动化关卡替代人工验收。
+`npm run verify` 必须全绿才允许提交，CI 里也会跑同样七步（见 `.github/workflows/deploy.yml`）。
 
 | 关卡 | 覆盖什么 | 抓不到什么 |
 | --- | --- | --- |
 | `typecheck` | 类型错误、拼写错误的属性名 | 运行时逻辑 |
 | `test:gamejolt` | GameJolt 链接解析 / 富文本转换 / 图片选择 / 网络降级 / 扩展 ZIP 打包 | 真实接口改版（靠失败提示兜底） |
+| `test:catalog` | 数据仓文档的解析 / 序列化；未知顶层字段与 `taxonomy` 必须原样保留 | 真实 GitHub 并发（由 selftest 的 409 桩覆盖） |
 | `build:extension` | 扩展能否打包、manifest / 图标 / 依赖是否齐全 | 真实浏览器里的扩展行为 |
-| `selftest` | 深模块的搜索/过滤/排序/分页逻辑是否正确 | UI |
+| `selftest` | 深模块的搜索/过滤/排序/分页逻辑是否正确；主题解析、催资源去重/匹配/仓储契约；结构化字段 / 词表 / 关系 / 仓储契约 | UI |
 | `smoke` | 每个路由能否真实渲染出 DOM（**防白屏**） | 样式是否正确 |
 | `build` | 生产构建能否通过、代码分割是否正常 | — |
 
@@ -640,22 +743,34 @@ Node 版本 22+。本项目在 `C:\Users\wangjinling\.workbuddy\binaries\node\ve
 
 ### 2.1 `selftest` 的设计要点
 
-断言集放在 `src/dev/`，目前三份：
+断言集放在 `src/dev/`，目前六份：
 
 | 文件 | 覆盖的深模块 |
 | --- | --- |
 | `libraryAssertions.ts` | 前台 `useGameLibrary`（搜索 / 交叉过滤 / 排序 / 分页） |
 | `adminAssertions.ts` | 后台 `useAdminGames`（状态统计 / 筛选 / 排序 / 分页 / 勾选） |
 | `viewCounterAssertions.ts` | 浏览量适配器（请求形状 / 响应解析 / 非法 id / 降级；注入 fetch，不出网） |
+| `themeAssertions.ts` | 主题模式解析（跟随系统 / 日间 / 夜间）、强调色白名单、主题清单稳定性（纯函数，不依赖 DOM） |
+| `requestAssertions.ts` | 催资源标题归一化 / 精确匹配、本机仓储去重与每日上限、Supabase 请求形状与错误映射（注入 storage / fetch，不出网） |
+| `structuredDataAssertions.ts` | 新字段默认值 / 关系方向与校验 / 词表归一化与合并删除 / 本地与 GitHub 仓储的原子写入、409 重放、未知字段保留（注入 storage / fetch，不出网） |
 
-三份断言集都由 `scripts/selftest.mts` 在命令行消费（原先公开站的调试台已随
-`/debug` 入口一起移除，避免开发页面进入生产包）。
+六份断言集都由 `scripts/selftest.mts` 在命令行消费（原先公开站的调试台已随
+`/debug` 入口一起移除，避免开发页面进入生产包）。同一支脚本还跑**静态守卫**：
+除了原有的「只有仓储能读 db.json」等三条，还新增「催资源仓储只能装配一次」
+「Supabase SQL 的安全不变量（RLS / security definer / 不暴露身份列 / 不出现
+`service_role` 等）」「`.vue` 不写死 hex 颜色」「`.vue` 不用固定 Tailwind 调色板」
+「前端不出现 `service_role`」「index.html 与 useTheme 使用同一组 storage key」等源码扫描。
+
+> ⚠️ 催资源的 **SQL 本身没有自动化测试**：selftest 只验证客户端仓储与请求形状，
+> 真实 RLS / RPC / PostgREST 行为必须在 Supabase 项目里按 §7.4 的步骤实测。
 
 > **后台断言不依赖线上数据内容**：`runAdminAssertions` 启动时先向本地仓储注入
 > 一组合成 fixture（`FIXTURE_GAMES`），再跑状态统计 / 批量 / 标签 / 作者等断言。
 > CI 在 `data:pull` 之后运行，站长随时可能删改真实条目 —— 断言不能把条目标题或 id 编码进去。
 
-`scripts/selftest.mts` 顺序跑三份断言集并分组汇总。
+> 截至 2026-10-27 结构化资料 Phase 6 收尾：`selftest` **880/880**、`test:catalog` **3/3**、
+> `smoke` **16/16**、UI 点击测试 **99/99**，完整 `npm run verify` 通过（含 build）。
+> 条数会随断言增长，后续以运行输出为准 —— 这也是下面提醒不要写死条数的原因。
 
 > ⚠️ **不要在文档里写死断言条数**（比如"29 项"）。条数每个阶段都在涨，
 > 写死就意味着每加一条断言都要回来改文档，很快就会失真。
@@ -737,6 +852,14 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 >
 > 扩展本身的端到端流程（同源抓取 → 下载图片 → 打包 ZIP）用 `npm run test:extension` 单独跑；
 > 它同样用系统 Chrome，并把构建好的 `content.js` 注入一个被接管的 GameJolt 页面。
+>
+> 本轮起，UI 测试脚本还包含主题持久化（刷新后仍是同一模式 / 强调色）与本机模式催资源的
+> 提交 / +1 / 自动「已收录」用例。远程 Supabase 路径**不连真实项目**，由 selftest 的
+> 注入 fetch 覆盖；SQL 本身需要按 §7.4 的步骤手动验证。
+>
+> ⚠️ 催资源 UI 用例开头会断言首页显示「本机模式」。跑 `test:ui` 的 dev server
+> **不要**配置 `VITE_SUPABASE_*`，否则测试会在写入前直接失败，避免把探针数据
+> 提交到真实的共享榜单。
 
 > ⚠️ **三个必须知道的坑**（写这个脚本时全踩过）：
 > 1. **脚本必须自己定位项目根目录**（`import.meta.url`），不要依赖 cwd ——
@@ -756,15 +879,19 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 ## 3. 目录结构
 
 ```
-├── .github/workflows/deploy.yml    # Pages 自动部署（构建前跑三道门禁）
+├── .github/workflows/deploy.yml    # Pages 自动部署（构建前跑完整质量门禁）
 ├── public/
 │   └── images/*.svg                # 占位图，由 npm run assets 生成
 ├── scripts/
 │   ├── gen-placeholders.mjs        # 占位图生成器
-│   ├── pull-data.mjs               # 从数据仓同步 db.json（部署前自动）
-│   ├── selftest.mts                # 命令行入口：深模块自检
+│   ├── pull-data.mjs               # 从数据仓同步 db.json（保留 taxonomy 与未知顶层键）
+│   ├── catalog-document.mjs        # 数据仓文档解析 / 序列化（未知字段保留）
+│   ├── catalog.test.mjs            # 数据仓文档测试（node --test）
+│   ├── selftest.mts                # 命令行入口：深模块自检 + 静态守卫
 │   ├── smoke.ts                    # 命令行入口：SSR 冒烟
 │   └── ui-test.mjs                 # 命令行入口：浏览器点击测试（需 dev server + Chrome）
+├── supabase/
+│   └── resource_requests.sql       # 催资源初始化：表 / RLS / 公开视图 / security definer RPC
 ├── src/
 │   ├── components/                 # 公开站可复用 UI 组件
 │   │   ├── Button.vue              # 基础按钮（solid/outline/ghost × md/lg）
@@ -772,6 +899,9 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 │   │   ├── GameCard.vue            # 格子卡片（复用 Card）
 │   │   ├── FilterPanel.vue         # 筛选与排序面板
 │   │   ├── DownloadPanel.vue       # 下载区 + 提取码复制
+│   │   ├── ThemeSwitcher.vue       # 主题切换（模式 + 5 种强调色；公开站 / 后台共用）
+│   │   ├── ResourceRequestBoard.vue  # 首页「催资源」榜单（待上传 + 已收录）
+│   │   ├── ResourceRequestDialog.vue # 催资源弹窗（先搜站内，再提交 / +1）
 │   │   ├── StyleAuditBadge.vue     # 视觉规范运行期哨兵（后台布局挂载）
 │   │   └── admin/                  # 后台专用组件（与公开站组件不混放）
 │   │       ├── AdminNav.vue        # 后台分区导航（未实现的模块显示为禁用 + PLANNED）
@@ -794,18 +924,28 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 │   │   ├── useAdminAuth.ts         # 令牌登录状态
 │   │   ├── useGamePreview.ts       # 草稿 → 预览页的跨标签页传递
 │   │   ├── useSearchField.ts       # 搜索框绑定（避免受控输入回写光标）
+│   │   ├── useTheme.ts             # ★ 主题单例：模式偏好 / 强调色 / 系统监听 / 跨标签页同步
+│   │   ├── useResourceRequests.ts  # ★ 催资源深模块：加载 / 提交 / 投票 / 缓存 / 已收录推导
 │   │   └── useViewCounter.ts       # 浏览量（remote / static 双模式；后台预览不计数）
+│   ├── config/
+│   │   ├── requests.ts             # 催资源 Supabase 配置（URL + anon public key；任一为空 = 本机模式）
+│   │   └── taxonomy.ts             # 初始词表（仅 taxonomy 缺失时兜底，不自动写入数据仓）
 │   ├── data/
 │   │   └── db.json                 # ★ 构建期单一事实来源：所有游戏数据
 │   ├── repositories/               # ★ 数据访问层（Phase 11）
 │   │   ├── gameRepository.ts       # 接口契约：后台只允许通过它读写数据
 │   │   ├── localGameRepository.ts  # 本地实现（localStorage，刷新不丢）· 唯一读 db.json 的地方
 │   │   ├── githubGameRepository.ts # 远程实现（数据仓 db.json + images/，含 409 重放与删图闸）
+│   │   ├── localResourceRequestRepository.ts     # 催资源本机实现（未配置 Supabase 时的真实降级）
+│   │   ├── supabaseResourceRequestRepository.ts  # 催资源远程实现（REST 视图 + RPC）
 │   │   ├── dataRepo.ts             # 数据仓坐标与 Pages 基址
 │   │   └── index.ts                # ★ 当前生效的仓储 —— 唯一的切换点
 │   ├── dev/
 │   │   ├── libraryAssertions.ts    # ★ 前台断言集（命令行消费）
 │   │   ├── adminAssertions.ts      # ★ 后台断言集（命令行消费，含合成 fixture）
+│   │   ├── themeAssertions.ts      # ★ 主题断言集（纯函数）
+│   │   ├── requestAssertions.ts    # ★ 催资源断言集（注入 storage / fetch，不出网）
+│   │   ├── structuredDataAssertions.ts # ★ 结构化字段 / 词表 / 关系 / 仓储断言集
 │   │   └── viewCounterAssertions.ts # ★ 浏览量断言集（注入 fetch 桩，不出网）
 │   ├── layouts/
 │   │   ├── Layout.vue              # 公开站骨架：Header + RouterView + Footer
@@ -818,16 +958,22 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 │   │   └── abacusViewProvider.ts   # Abacus 实时计数（仅生产构建注册）
 │   ├── styles/index.css            # Tailwind 入口 + 全局硬重置（视觉规范最后防线）
 │   ├── types/
-│   │   ├── game.ts                 # 领域模型 Game / DownloadLink / GameMetrics / GameStatus
-│   │   └── admin.ts                # 后台视图模型 AdminGame + 查询类型 + 状态文案表
+│   │   ├── game.ts                 # 领域模型 Game / DownloadLink / GameMetrics / GameStatus / 关系与开发状态
+│   │   ├── admin.ts                # 后台视图模型 AdminGame + 查询类型 + 状态文案表
+│   │   ├── taxonomy.ts             # 分类词表类型 / 限额 / 变更结果
+│   │   └── resourceRequest.ts      # 催资源模型 / 仓储接口 / 共享上限 / 可展示错误
 │   ├── utils/
 │   │   ├── asset.ts                # ★ assetUrl()：拼接 BASE_URL
 │   │   ├── clipboard.ts            # copyText()：两级回退的剪贴板写入
 │   │   ├── datetime.ts             # ★ formatTimestamp()：按查看者本地时区渲染
 │   │   ├── gameDefaults.ts         # ★ normalizeGame()：补齐可选字段的缺省值
 │   │   ├── gameFactory.ts          # ★ 新建 / 打补丁 / slugify / 深拷贝
+│   │   ├── relations.ts            # 关系类型 / 方向文案 / 归一化 / 保存前校验
+│   │   ├── taxonomy.ts             # 词表归一化 / 查询 / 创建 / 改名 / 合并 / 删除
 │   │   ├── imageInspect.ts         # 尺寸校验与比例提示（纯函数 + 浏览器读数）
-│   │   └── imageProcess.ts         # 上传前缩放 + 转 WebP（GIF/SVG 保持原样）
+│   │   ├── imageProcess.ts         # 上传前缩放 + 转 WebP（GIF/SVG 保持原样）
+│   │   ├── requestClient.ts        # 浏览器去重身份（UUID；不是安全凭据）
+│   │   └── requestMatch.ts         # 标题归一化 / 精确匹配 / 榜单排序
 │   └── views/
 │       ├── Home.vue                # 首页：Hero + 筛选 + 网格 + 分页
 │       ├── GameDetail.vue          # 详情页：标题 + Banner + 数据表格 + 下载 + 截图灯箱
@@ -838,6 +984,7 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 │           ├── AdminGameEditor.vue # /admin/games/new 与 /:id/edit：编辑页（含永久删除）
 │           ├── AdminGamePreview.vue # /admin/preview：未保存草稿的预览
 │           ├── AdminTaxonomy.vue   # /admin/taxonomy：标签与作者合并管理
+│           ├── AdminVocabulary.vue # /admin/vocabulary：玩法 / 机制 / 平台词表
 │           └── AdminNotFound.vue   # 后台 404（防止输错的后台地址掉回公开站外壳）
 ├── tailwind.config.js              # ★ 覆盖式配置：违规工具类直接不生成
 ├── vite.config.ts                  # base 按 command 区分
@@ -865,12 +1012,16 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 **前台是「快照兜底 + 非阻塞同步」，后台直接读写数据仓。**
 
 - **前台首屏**读构建期快照：访客不等网络、断网也能看。
-- **前台随后**在公开页挂载 / 标签页重新可见时拉一次数据仓，替换内存目录；
+- **前台随后**在公开页挂载 / 标签页重新可见时拉一次数据仓，替换内存目录
+  （作品与 `taxonomy` 一起 hydrate；词表缺失或结构不可用时保留当前词表）；
   这样后台改完不需要等构建，两个页面看到的是同一份数据。
 - **后台**读写数据仓：保存 = 一次提交，改动是真的线上数据。
 
 快照仍然有用：它保证首屏和离线可用；同步失败时也靠它。但「必须等构建才更新」
 这条旧语义已经不成立 —— UI 提示条也已改成「下次打开 / 切回页面时自动同步」。
+
+> **「催资源」是另一条独立侧链路**：请求数据在 Supabase（或访客本机 localStorage），
+> 不参与构建、不写数据仓。游戏目录仍然以 GitHub 数据仓为唯一事实来源。见 §7.4。
 
 > ⚠️ **未登录时 `adminGameRepository` 就是本地仓**，但登录门禁会先把 `/admin` 拦住，
 > 所以这条路径在生产上不可达（它是测试与开发用的）。
@@ -879,15 +1030,17 @@ BASE=http://localhost:4173/fnaf-fan-games-archive PROD=1 npm run test:ui
 
 ### 4.2 Repository 层（Phase 11）
 
-后台**只允许**通过 `GameRepository` 读写数据。接口有七个方法：
-`listGames` / `getGame` / `createGame` / `updateGame` / `deleteGame` / `publishGame` / `unpublishGame`。
+后台**只允许**通过 `GameRepository` 读写数据。核心读写方法仍是
+`listGames` / `getGame` / `createGame` / `updateGame` / `deleteGame` / `publishGame` / `unpublishGame`；
+Phase 1 另增加 `taxonomy` / `taxonomyIssues` / `hydrate(games, taxonomy?)` 与四个词表写方法
+（见「结构化资料库地基」一节）。
 
-**三条由自动化守住的规则**（`scripts/selftest.mts` 的「静态守卫」组，会扫源码、失败即中断构建）：
+**与仓储相关的三条规则由自动化守住**（`scripts/selftest.mts` 的「静态守卫」组，会扫源码、失败即中断构建）：
 
 | 守卫 | 规则 |
 | --- | --- |
 | 只有仓储可以读 `db.json` | 白名单只有 `localGameRepository.ts` |
-| 后台视图不引仓储的具体实现 | `views/admin` 与 `components/admin` 只能 import `../repositories` 的当前实例 |
+| 后台视图不引仓储的具体实现 | `views/admin` 与 `components/admin` 只能 import `../repositories` 的当前实例；`localGameRepository` / `githubGameRepository` 都算具体实现 |
 | 只有 `repositories/index.ts` 实例化仓储 | 否则会出现两份互不相干的数据（Phase 10 刚消除掉的问题） |
 
 > 守卫会先 **strip 注释**再扫 —— 否则仓储文件里「禁止 import db.json」这句**文档**
@@ -1004,7 +1157,9 @@ assetUrl(path)  // → `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
 
 ### 5.2 设计系统速查
 
-- **色彩**：纸 `#ffffff` / 墨 `#000000` / 强调红 `#ff0000` / 辅助线 `#cccccc` / 悬停底 `#f9f9f9`
+- **色彩（浅色默认值）**：纸 `#fafaf8` / 墨 `#1a1a18` / 强调赤红 `#a94a4a` / 辅助线 `#d4d4d0` / 浅层表面 `#f2f2ef`。
+  深色模式整体替换为另一组变量（纸 `#141413` / 墨 `#e8e8e4`）；强调色有赤红 / 靛蓝 / 青绿 / 藕粉 / 紫灰五种，
+  全部通过语义 token 使用，详见 §5.4。不要再往组件里写死色值。
 - **网格**：12 列衍生，常用 `grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8`
 - **动效上限**：`duration-150 ease-out`
 - **留白优先**：用大间距（`py-24`、`mb-12`）而非分隔线建立层级
@@ -1055,6 +1210,74 @@ grep -o 'box-shadow:[^;}]*' "$CSS" | sort -u      # 只应出现 none / none!imp
 grep -o 'linear-gradient([^)]*)' "$CSS" | sort -u # 应为空
 grep -o '\.rounded-md\|\.shadow{\|\.font-serif\|\.font-mono' "$CSS" | sort -u  # 应为空
 ```
+
+### 5.4 主题系统（浅色 / 深色 + 强调色）
+
+**它只改颜色，不改形状。** 圆角、阴影、渐变、对齐、字体、间距与动效上限全部不变 ——
+主题不是「换一套皮肤」，而是把颜色从组件里抽成一层语义变量。
+
+- **模式偏好**：跟随系统（默认）/ 日间 / 夜间。跟随系统时监听 `prefers-color-scheme`，
+  系统主题变化会实时生效；切到日间 / 夜间后移除该监听。
+- **强调色**：赤红（默认）/ 靛蓝 / 青绿 / 藕粉 / 紫灰，五种低饱和色。
+- **作用范围**：公开站与后台共用同一份设置（模块级单例），但**只保存在当前设备**，
+  不跨设备同步。切换器在 `Layout.vue` 与 `AdminLayout.vue` 里都挂了一份。
+
+| 文件 | 职责 |
+| --- | --- |
+| `src/styles/index.css` | `:root` 下的 CSS 变量；`data-mode` / `data-theme` 切换浅色、深色与五种强调色 |
+| `tailwind.config.js` | 把变量映射成语义工具类（`ink` / `paper` / `line` / `surface` / `accent` 等） |
+| `src/composables/useTheme.ts` | 模块级单例：读取 / 写入本机偏好、解析系统模式、跨标签页同步 |
+| `src/components/ThemeSwitcher.vue` | 顶部「主题」下拉：模式 + 强调色；Esc / 外部点击 / 路由变化关闭 |
+| `src/layouts/Layout.vue`、`AdminLayout.vue` | 两套外壳都挂同一个切换器 |
+| `index.html` | 样式与 Vue 之前的内联脚本：先按 storage 设置根元素属性，避免深色模式首屏闪白 |
+| `src/dev/themeAssertions.ts` | 模式解析 / 强调色白名单 / 主题清单的纯函数断言 |
+
+**storage key（内联脚本与 `useTheme.ts` 必须完全一致）**：
+
+```
+fnaf-archive:theme-mode:v1      # system | light | dark
+fnaf-archive:theme-accent:v1    # red | blue | teal | pink | purple
+```
+
+> `selftest` 有一条静态守卫专门比对 `index.html` 与 `useTheme.ts` 的 key；
+> 改一处漏一处会直接让门禁失败。内联脚本还会在 `localStorage` 不可用时按「跟随系统」降级。
+
+**语义 token 规则**（新组件、改旧组件都按这个来）：
+
+| token | 用途 |
+| --- | --- |
+| `ink` / `paper` | 正文 / 背景 |
+| `line` / `surface` | 分隔线 / 低层表面 |
+| `inverse` / `inverse-fg` | 页脚、灯箱等反色区域 |
+| `overlay` | 弹窗遮罩 |
+| `accent` | 文字、边框、小面积悬停 |
+| `accent-surface` | 大面积色块（主按钮悬停、错误条、已收录提示） |
+| `accent-bright` | 反色底（页脚 / 灯箱）上的链接与强调文字 |
+| `on-accent` | `accent-surface` 上的前景色（不随主题反转） |
+
+- **颜色只在 `src/styles/index.css` 的变量里定义。** `.vue` 里写死 hex、或用 Tailwind 固定调色板
+  （`bg-red-500`、`text-gray-600` 之类）会被 `selftest` 的静态守卫拦下 —— 它们不会跟随主题变化。
+- `accent` 的取值要保证在 paper 上可读；`accent-surface` 要保证与 `on-accent` 有足够对比度。
+  深色模式下 `accent` 会变浅（用于深纸上的文字 / 边框），`accent-surface` 会变深（承载近白字）。
+- 根元素同时切换 `color-scheme`，`body` 的背景 / 文字跟着变量走，`<meta name="theme-color">` 也会换，
+  移动端地址栏不会和页面颜色打架。
+
+**⚠️ `white` / `black` 已被重映射**：
+
+```
+white → paper   浅色是纸白，深色是深纸底
+black → ink     浅色是墨色，深色是浅色文字
+```
+
+这样存量组件里的 `bg-white` / `text-black` / `bg-black` / `text-white` 不用批量改写，
+也能随主题反转。**但不要在强调色 / 反色底色上用 `white` / `black` 指定前景** ——
+它们在深色模式下会反转成错误的方向：
+
+- `bg-accent*` 上必须用 `text-on-accent`；
+- 页脚 / 灯箱等反色区域必须用 `inverse` / `inverse-fg`。
+
+> 新增颜色前先问一句：它在浅色和深色下都成立吗？只成立一边的，就不该是语义 token，
+> 而应该是某个模式下单独覆盖的变量。
 
 ---
 
@@ -1264,6 +1487,136 @@ npm run dev
 - `src/services/gamejoltImport.ts` —— 后台字段映射与图片导入
 - `src/components/admin/AdminGameJoltImport.vue` —— 两种导入方式的 UI
 
+### 7.4 资源请求（催资源）—— 首页公开榜单
+
+**它做什么**：访客在首页「资源请求」区提交「想要但站内还没有」的游戏；榜单按催更人数排序，
+管理员按呼声补资源。它**不写游戏目录、不参与构建**，与 GitHub 数据仓是两条独立链路。
+
+**用户流程**：
+
+1. 首页点「＋ 催一个资源」打开弹窗。**先搜站内，再提交** —— 避免为已经存在的作品重复建请求。
+2. 输入至少 2 个字符后，弹窗列出站内可能相关的作品（`useGameLibrary.searchGames`）。
+3. **归一化标题精确命中**站内可见作品时，只给详情链接，不出现提交按钮。
+4. 已有同标题的开放请求时，只显示「已有 N 人催过」和「+1 催」，不重复建条目。
+5. 两者都没有才允许提交；提交者自动算该请求的第一票。
+6. 站内后来出现同名作品时，请求自动移入「已收录」并链接到详情页，不再占用待上传榜位。
+
+**排名与公平性**：
+
+- **一票 = 一个不同的浏览器 client id**。同一浏览器对同一请求只计一票；提交者自己算第一票。
+- 排序是**票数降序 → 提交时间升序 → id**（最后一项保证顺序稳定）。
+- 每个 client **24 小时内最多新建 5 条**请求；达到上限后仍可给已有请求 +1。
+  每日上限只限制「新建」，不限制投票。
+- ⚠️ client id 是 `localStorage` 里的浏览器生成随机 ID（通常是 UUID），只是**去重身份，不是安全凭据**：
+  清掉浏览器存储就能重新投。它防的是正常访客的重复点击，不是恶意刷票；
+  要更强的公平性，得引入真实账号 / 服务端限流。
+
+**两种存储模式**：
+
+| 场景 | 数据在哪 | 行为 |
+| --- | --- | --- |
+| 两个 `VITE_` 变量没有同时配置 | 本机 `localStorage` | **本机模式**：刷新不丢、去重与每日上限仍生效，但别的访客看不到；支持 Web Locks 的浏览器会串行化多标签页写入 |
+| URL + anon key 都配置 | Supabase | **全站共享**：读公开视图，提交 / 投票走 RPC |
+| 配了 Supabase 但连不上 | 最近一次缓存 | 榜单显示缓存 + 明确提示；**提交 / 投票直接报错**，不会偷偷写本机队列 |
+
+本机模式的数据键是 `fnaf-archive:resource-requests:v1`（请求 + 投票明细同一份 JSON）；
+远程模式的榜单缓存键是 `fnaf-archive:resource-requests-cache:v1`；
+本机已投记录是 `fnaf-archive:request-voted:v1`；浏览器身份是 `fnaf-archive:request-client:v1`。
+
+> 「配了但不可达」时刻意**不退回本机写入**：否则同一台浏览器会同时存在两套互不相干的请求数据，
+> 用户以为提交成功、实际上没有任何人能看到。宁可报错，也不制造分叉。
+
+**Supabase 接入步骤**：
+
+1. 在 Supabase Dashboard → SQL Editor 执行 [`supabase/resource_requests.sql`](./supabase/resource_requests.sql)。
+   脚本可重复运行（`IF NOT EXISTS` / `CREATE OR REPLACE` / 先 DROP 再建策略）。
+2. 在项目根目录新建 `.env.local`（**不要提交**）：
+
+   ```bash
+   VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+   VITE_SUPABASE_ANON_KEY=<Project Settings → API → anon public key>
+   ```
+
+3. 重启 `npm run dev`，或重新 `npm run build` —— `VITE_*` 是**构建期变量**，改完必须重启 / 重建。
+4. 如果 PostgREST 报找不到函数或视图，先在 SQL Editor 执行
+   `notify pgrst, 'reload schema';`，再重试。
+
+> ⚠️ `.env.local` 只影响本地 `npm run dev` / `npm run build`，**不会带到线上**。
+> 线上 Pages 的构建在 Actions 里，`deploy.yml` 已从仓库 Variables 读取
+> `${{ vars.VITE_SUPABASE_URL }}` 与 `${{ vars.VITE_SUPABASE_ANON_KEY }}` 注入 Build 步骤。
+> 要开启线上全站共享，去 GitHub → Settings → Secrets and variables → Actions → **Variables**
+> 新增这两项。anon public key 本来就是公开的，放 Variables 即可；
+> **绝不要放 `service_role`**（它根本不该出现在前端构建里）。
+> 任一变量缺失时，线上构建就是**本机模式**（请求只存在每个访客自己的浏览器里）。
+
+**SQL 做了什么 / 安全边界**：
+
+- `resource_requests` 存请求，`resource_request_votes` 存投票明细；两表都启用 **RLS**，
+  且对 `anon` / `authenticated` 直接 `REVOKE` 表权限。
+- 只授予安全列的 `SELECT`：`created_by_client`（创建者身份）与 `normalized`（归一化标题）不暴露；
+  公开视图 `resource_request_board`（`security_invoker`）只含 `status = 'open'` 的展示列。
+- 提交与投票只能调用 **security definer 函数**（`submit_resource_request` / `vote_resource_request`）。
+  函数内做标题 2–80 / client id 8–64 校验、归一化去重、每日 5 条上限（advisory lock 防并发穿透）、
+  `ON CONFLICT` 防重复投票。
+- 同名 open 请求有**唯一索引**；两个 client 并发提交同名请求时，后到者会落到同一条并计票，
+  不会把数据库错误抛给访客。
+- **前端只使用 anon public key**。它本来就是公开的浏览器密钥，权限由 RLS / GRANT 决定。
+  **绝对不要把 `service_role` key 放进前端、仓库或文档** —— 它会绕过 RLS，等于把整个数据库交给访客。
+- 没有后台审核页。要人工下架某条请求，在 SQL Editor 把 `status` 改成 `hidden`；
+  要手工标记完成，改成 `done`。两者都不再出现在公开视图里。
+
+**「已收录」是推导出来的，不是人工状态**：
+
+- 用**当前可见目录**（`isPubliclyVisible()`：`published` 且未归档）匹配；只认**归一化标题完全相等**。
+- 归一化规则：**NFKC → 小写 → 去掉空白、标点与符号**。
+  `'  Jolly  4!! '`、`'JOLLY-4'`、`'Jolly+4'`、`'ＪＯＬＬＹ－４'` 都会得到 `jolly4`。
+  前端 `src/utils/requestMatch.ts` 与 SQL 的 `normalize_resource_request_title` 各有一份，
+  **改一处必须同步另一处**。
+- ⚠️ SQL 的 POSIX `[[:punct:]]` 对 emoji / 非 ASCII 符号的覆盖依赖数据库 locale，
+  不一定与前端 `\p{S}` 完全一致（例如 `★`）。这类标题需要在真实 Supabase 项目实测；
+  若出现同名请求分裂成两条，用 SQL Editor 人工合并（改掉其中一条的 `status`）。
+- **为什么不用包含匹配**：请求《Jolly》时，站内已有《Jolly 4》并不代表前作已经上传。
+  包含匹配会把《Jolly》静默判成已收录、从待上传榜消失 —— 这比多显示一条请求严重得多。
+- 已收录只是展示层推导，数据库里的 `status` 仍是 `open`，因此它仍占着同名 open 唯一位。
+  要彻底清掉，按上面的方式人工改成 `done` / `hidden`。
+- 作品被下线或归档后不再算可见，请求会重新回到待上传榜。
+
+**已知限制**：
+
+- **远程榜单一次最多读 50 条**（PostgREST `limit=50`，按票数降序 —— 不是按提交时间取最近 50 条）。
+  第 51 条之后即使有人催也看不到；本机模式没有这个上限。
+- **本机模式的数据不会自动迁移到 Supabase**：后来配置远程模式时，之前只存在某台浏览器里的请求 /
+  投票记录仍然只在那台浏览器，不会上传，也不会出现在全站榜。目前没有内置迁移工具，
+  要保留只能手工导出 / 重建。
+- **SQL 尚未在真实 Supabase 项目上执行过**。RLS / RPC / 视图 / PostgREST 缓存的真实行为，
+  需要按上面的步骤实测后才能算验证完成。
+- 没有后台审核页 / 限流面板；隐藏、标记完成只能进 SQL Editor。
+- client id 可被清空重投，不是反滥用；投票结果只适合作为需求排序参考，不适合作为严格票选。
+- Supabase 免费项目长期不活动会被暂停；这只影响请求榜，游戏目录仍由静态站 / GitHub 数据仓提供。
+- 请求数据不写数据仓，因此不在 git 历史里，也没有 git 级别的回滚 / 审计；
+  Supabase 免费版不含自动备份，清理 / 恢复要自己想办法（这也是它只用于低价值投票数据的原因）。
+
+**测试覆盖**：
+
+- `selftest` 的主题组覆盖模式解析、强调色白名单与主题清单稳定性。
+- `selftest` 的催资源组覆盖标题归一化 / 精确匹配、本机仓储的提交 / 去重 / 投票 / 每日上限 /
+  损坏存档 / 写入失败，以及 Supabase 请求形状、鉴权头、错误映射（注入 `fetch` 与 `storage`，**不出网**）。
+- UI 点击测试覆盖本机模式的提交 / +1 / 自动「已收录」与主题持久化；
+  **远程 Supabase 路径与 SQL 本身不在自动化门禁内**。
+
+相关文件：
+
+- `supabase/resource_requests.sql` —— 表 / RLS / 公开视图 / RPC
+- `src/config/requests.ts` —— Supabase URL + anon key（任一为空 = 本机模式）
+- `src/types/resourceRequest.ts` —— 模型 / 仓储接口 / 共享上限 / 可展示错误
+- `src/utils/requestMatch.ts` —— 标题归一化 / 匹配 / 排序
+- `src/utils/requestClient.ts` —— 浏览器去重身份
+- `src/repositories/localResourceRequestRepository.ts` —— 本机实现
+- `src/repositories/supabaseResourceRequestRepository.ts` —— Supabase REST + RPC 实现
+- `src/composables/useResourceRequests.ts` —— 加载 / 提交 / 投票 / 缓存 / 已收录推导
+- `src/components/ResourceRequestBoard.vue`、`ResourceRequestDialog.vue` —— 首页榜单与弹窗
+- `src/dev/requestAssertions.ts` —— 催资源断言集
+
 ---
 
 ## 8. 部署
@@ -1275,6 +1628,9 @@ npm run dev
 → selftest → smoke → build → configure-pages → upload-pages-artifact → deploy-pages。
 
 **部署前跑全部门禁是刻意的**，保证线上永远不会出现"编译通过但页面白屏"的版本。
+
+Build 步骤会从仓库 **Actions Variables** 读取 `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`
+（配置方法见 §7.4）；两个变量缺失时，线上构建就是本机模式。
 
 Pages 配置：`build_type = workflow`。
 
@@ -1477,7 +1833,7 @@ Chrome / Edge 的 `content_scripts` **不支持** `"type": "module"`，直接写
 ### 收尾清单（每次改动）
 
 ```bash
-npm run verify     # 四道关卡必须全绿
+npm run verify     # 七道关卡必须全绿
 # 若改了样式，再跑 §5.3 的产物 CSS 审计
 # 然后按 §8.3 发布
 ```

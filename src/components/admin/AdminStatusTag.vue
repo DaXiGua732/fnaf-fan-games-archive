@@ -27,7 +27,7 @@ const TONES: Record<GameStatus, { box: string; mark: string }> = {
   published: { box: 'border-black bg-black text-white', mark: 'bg-white' },
   draft: { box: 'border-black bg-white text-black', mark: 'border border-black bg-transparent' },
   offline: {
-    box: 'border-[#cccccc] bg-white text-black/40',
+    box: 'border-line bg-white text-black/40',
     mark: 'border border-black/30 bg-transparent',
   },
 }
@@ -48,7 +48,7 @@ const tone = computed(() => TONES[props.status])
 
     <span
       v-if="archived"
-      class="swiss-meta inline-flex items-center gap-2 border border-[#cccccc] px-3 py-1 font-bold whitespace-nowrap text-black/50"
+      class="swiss-meta inline-flex items-center gap-2 border border-line px-3 py-1 font-bold whitespace-nowrap text-black/50"
     >
       <span class="h-2 w-2 shrink-0 bg-black/25" aria-hidden="true" />
       <span>已归档</span>

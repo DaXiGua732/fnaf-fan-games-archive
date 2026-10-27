@@ -16,14 +16,19 @@
  *   3. 带着 sha 提交 —— GitHub 用 sha 做乐观锁，内容被别处改过就返回 409
  *   4. 撞上 409 就回到第 1 步重试
  *
- * 之所以敢直接重试，是因为**重放永远正确**：我们改的是「某一条作品的某几个字段」，
- * 不是一段文本。这一点和合并文本 diff 有本质区别 —— 后者需要人来裁决。
+ * 之所以敢直接重试，是因为**重放永远正确**：我们改的是「某一条作品的某几个字段」
+ * 或「某一个词条」，不是一段文本。这一点和合并文本 diff 有本质区别 ——
+ * 后者需要人来裁决。
  *
  * ---------------------------------------------------------------------------
- * 【和本地仓的差异】
- * - `storage` 是 `remote`（提示条文案随之改变）
- * - `ready` 初始为 false：数据要先把 db.json 拉下来
- * - `resetToSeed()` **拒绝执行** —— 「一键把线上数据仓覆盖回出厂内容」不是后台该有的能力
+ * 【整个文档，而不是只有 games】
+ * ---------------------------------------------------------------------------
+ * 文件顶层现在有 `games` 与 `taxonomy`，而且未来可能继续加字段。
+ * 解析时保留整个对象；序列化时 spread 原对象再覆盖这两个键 ——
+ * 这样旧版本代码、或还没认识新字段的代码，不会在保存作品时把词表静默抹掉。
+ *
+ * 分类编辑（新建 / 改名 / 合并 / 删除）与作品编辑共用同一个提交函数，
+ * 因此「合并词条 + 改写所有作品引用」是一个原子操作，不会出现改了一半的状态。
  * ============================================================================
  */
 import { computed, ref } from 'vue'
@@ -39,42 +44,101 @@ import {
 } from '../services/githubApi'
 import type { AdminGame, GamePatch, StorageKind } from '../types/admin'
 import type { Game } from '../types/game'
+import type { Taxonomy, VocabularyEntry } from '../types/taxonomy'
+import { VOCABULARY_LABELS } from '../types/taxonomy'
 import { normalizeGames } from '../utils/gameDefaults'
 import { applyPatch, createGameFrom, slugify } from '../utils/gameFactory'
+import { validateGameRelations, validateRelationInput } from '../utils/relations'
+import {
+  createVocabularyEntryIn,
+  deleteVocabularyEntryIn,
+  mergeVocabularyEntriesIn,
+  normalizeTaxonomy,
+  updateVocabularyEntryIn,
+} from '../utils/taxonomy'
 import { DATA_REPO, dataRepoPagesBase } from './dataRepo'
 import type { GameRepository } from './gameRepository'
 
 /** 冲突重试次数。3 次已经足够 —— 再撞上说明是真的人多手快，该让人重试而不是死循环 */
 const MAX_CONFLICT_RETRY = 3
 
+/** 数据仓 db.json 的完整内存形态：原始对象 + 归一化后的两份数据 */
+interface CatalogDocument {
+  /** 原封不动的顶层对象，用于保留未知字段与键顺序 */
+  raw: Record<string, unknown>
+  games: AdminGame[]
+  taxonomy: Taxonomy
+  taxonomyIssues: string[]
+}
+
 /** 一次提交的计划：新内容 + 提交信息摘要 */
 interface CommitPlan {
   games: AdminGame[]
+  taxonomy: Taxonomy
   /**
    * 提交信息里的摘要，用**最新**内容生成（而不是提交前的快照）。
    * git 历史就是这个后台的审计日志，所以信息要写清改了什么。
    */
   summary: string
+  /**
+   * 是否把 taxonomy 写入本次提交。
+   *
+   * 只有词表操作才置 true。普通作品保存不能因为「内存里有一份初始词表」
+   * 就把种子词条写进数据仓 —— 那是一次未经确认的生产数据变更。
+   * 数据仓里原本就有 taxonomy 时，`serializeCatalog` 保留 raw 原值；
+   * 即使它的形状不可用（如 null / []），也不在普通保存时替用户改写。
+   */
+  writeTaxonomy?: boolean
+  /** 词表被本次提交重写时传 []，让后台不再显示已经修掉的旧 issue */
+  taxonomyIssues?: string[]
 }
 
-/** db.json 的结构就是 `{ games: [...] }` —— 与代码仓那份保持一致 */
-function parseGames(text: string): AdminGame[] {
+/**
+ * 解析整个 db.json。
+ * `games` 必须是数组（空数组合法）；词表缺失时由 normalizeTaxonomy 补内置初始词表，
+ * 结构损坏时保留 issue 但不阻断读取。
+ */
+function parseCatalog(text: string): CatalogDocument {
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
   } catch {
     throw new Error('数据仓的 db.json 不是合法 JSON，无法解析。')
   }
-  const games = (parsed as { games?: unknown } | null)?.games
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('数据仓里 db.json 的格式不对：顶层应当是一个对象。')
+  }
+
+  const raw = parsed as Record<string, unknown>
+  const games = raw.games
   if (!Array.isArray(games)) {
     throw new Error('数据仓里 db.json 的格式不对：找不到 games 列表。')
   }
-  return normalizeGames(games as Game[])
+
+  const normalized = normalizeTaxonomy(raw.taxonomy)
+  return {
+    raw,
+    games: normalizeGames(games as Game[]),
+    taxonomy: normalized.taxonomy,
+    taxonomyIssues: normalized.issues,
+  }
 }
 
-/** 与仓库里那份保持同样的 2 空格缩进，方便逐行 diff */
-function serializeGames(games: AdminGame[]): string {
-  return `${JSON.stringify({ games }, null, 2)}\n`
+/** 与仓库里那份保持同样的 2 空格缩进，方便逐行 diff；保留全部未知顶层键 */
+function serializeCatalog(
+  document: CatalogDocument,
+  games: AdminGame[],
+  taxonomy: Taxonomy,
+  writeTaxonomy: boolean,
+): string {
+  const next: Record<string, unknown> = { ...document.raw, games }
+  // 普通作品保存只覆盖 games：taxonomy（无论原值是否可用、是否等于 null）
+  // 都通过 raw 原样保留，绝不用内存里的兜底词表替用户改写数据仓。
+  // 只有词表操作才写入归一化后的新词表。
+  if (writeTaxonomy) {
+    next.taxonomy = taxonomy
+  }
+  return `${JSON.stringify(next, null, 2)}\n`
 }
 
 /** MIME → 扩展名。只认图片；其余一律 .bin，宁可怪也不要编错 */
@@ -105,7 +169,7 @@ function extensionOf(mime: string): string {
  */
 function timestampTag(): string {
   const now = new Date()
-  const pad = (value: number, width = 2): string => String(value).padStart(width, '0')
+  const pad = (value: number, width = 2) => String(value).padStart(width, '0')
   const nonce = Math.random().toString(36).slice(2, 6).padEnd(4, '0')
   return (
     `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}` +
@@ -133,6 +197,12 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
   const account = options.account
 
   const store = ref<AdminGame[]>([])
+  const taxonomyStore = ref<Taxonomy>({
+    gameplayTypes: [],
+    mechanics: [],
+    platforms: [],
+  })
+  const taxonomyIssues = ref<string[]>([])
   const ready = ref(false)
   const error = ref('')
 
@@ -147,7 +217,10 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
   async function load(): Promise<void> {
     try {
       const { text } = await fetchFile(repositoryRef, token)
-      store.value = parseGames(text)
+      const document = parseCatalog(text)
+      store.value = document.games
+      taxonomyStore.value = document.taxonomy
+      taxonomyIssues.value = document.taxonomyIssues
       error.value = ''
     } catch (cause) {
       error.value = describe(cause)
@@ -160,17 +233,21 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
    * 提交一次改动。
    * 返回 `null` 表示「本来就已经是目标状态」，没有产生提交。
    */
-  async function commit(plan: (current: AdminGame[]) => CommitPlan | null): Promise<AdminGame[] | null> {
+  async function commit(
+    plan: (current: CatalogDocument) => CommitPlan | null,
+  ): Promise<CatalogDocument | null> {
     let lastError: unknown = null
 
     for (let attempt = 1; attempt <= MAX_CONFLICT_RETRY; attempt += 1) {
       const { text, sha } = await fetchFile(repositoryRef, token)
-      const current = parseGames(text)
+      const current = parseCatalog(text)
 
       const intent = plan(current)
       if (intent === null) {
         // 不发无谓的提交，但顺手把最新内容收进来
-        store.value = current
+        store.value = current.games
+        taxonomyStore.value = current.taxonomy
+        taxonomyIssues.value = current.taxonomyIssues
         error.value = ''
         return null
       }
@@ -179,13 +256,15 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
         await putFile(
           repositoryRef,
           token,
-          serializeGames(intent.games),
+          serializeCatalog(current, intent.games, intent.taxonomy, intent.writeTaxonomy === true),
           sha,
           `（后台）${intent.summary}`,
         )
         store.value = intent.games
+        taxonomyStore.value = intent.taxonomy
+        taxonomyIssues.value = intent.taxonomyIssues ?? current.taxonomyIssues
         error.value = ''
-        return intent.games
+        return { ...current, games: intent.games, taxonomy: intent.taxonomy }
       } catch (cause) {
         lastError = cause
         // 409 = 内容刚被别处改过。重新读一遍再来（重放永远正确，所以不需要人裁决）
@@ -203,18 +282,37 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
     )
   }
 
-  async function updateGame(id: string, patch: GamePatch): Promise<AdminGame> {    let updated: AdminGame | null = null
+  async function updateGame(id: string, patch: GamePatch): Promise<AdminGame> {
+    let updated: AdminGame | null = null
 
     await commit((current) => {
-      const index = current.findIndex((game) => game.id === id)
+      const index = current.games.findIndex((game) => game.id === id)
       if (index === -1) throw new Error(`找不到 id 为「${id}」的作品，可能已经被删掉了。`)
 
-      const next = applyPatch(current[index], patch, account?.())
+      // 先拒绝非法形状，再归一化 —— 否则非法关系会被静默丢弃，保存却显示成功
+      if (patch.relations !== undefined) {
+        const inputErrors = validateRelationInput(patch.relations, id)
+        if (inputErrors.length > 0) throw new Error(inputErrors.join('；'))
+      }
+
+      const next = applyPatch(current.games[index], patch, account?.())
+      const games = current.games.map((game, i) => (i === index ? next : game))
+
+      // 只校验本次提交的关系。历史数据里可能有悬挂 / 双端关系；
+      // 它们不应阻塞标题、状态、归档等无关字段的保存 —— 否则该作品会永远改不动。
+      if (patch.relations !== undefined) {
+        const relationErrors = validateGameRelations(games, next)
+        if (relationErrors.length > 0) throw new Error(relationErrors.join('；'))
+      }
+
       updated = next
-      const games = current.map((game, i) => (i === index ? next : game))
       // 只列出**实际改了哪些字段**，让 git 历史读起来有意义
       const fields = Object.keys(patch).join('、')
-      return { games, summary: `更新《${next.title || id}》的 ${fields || '字段'}` }
+      return {
+        games,
+        taxonomy: current.taxonomy,
+        summary: `更新《${next.title || id}》的 ${fields || '字段'}`,
+      }
     })
 
     if (!updated) throw new Error(`「${id}」没有任何改动。`)
@@ -232,6 +330,8 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
 
   return {
     games: computed(() => store.value),
+    taxonomy: computed(() => taxonomyStore.value),
+    taxonomyIssues: computed(() => taxonomyIssues.value),
     storage: computed<StorageKind>(() => 'remote'),
     ready: computed(() => ready.value),
     error: computed(() => error.value),
@@ -255,9 +355,22 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
       let created: AdminGame | null = null
 
       await commit((current) => {
-        created = createGameFrom(current, patch, account?.())
+        created = createGameFrom(current.games, patch, account?.())
+
+        // id 是创建时才生成的；必须在它之后校验，否则「目标正好等于新 id」
+        // 会被 normalizeRelations 当作自关联静默丢弃。
+        if (patch.relations !== undefined) {
+          const inputErrors = validateRelationInput(patch.relations, created.id)
+          if (inputErrors.length > 0) throw new Error(inputErrors.join('；'))
+        }
+
+        const games = [created, ...current.games]
+        const relationErrors = validateGameRelations(games, created)
+        if (relationErrors.length > 0) throw new Error(relationErrors.join('；'))
+
         return {
-          games: [created, ...current],
+          games,
+          taxonomy: current.taxonomy,
           summary: `新增作品《${created.title || '未命名'}》`,
         }
       })
@@ -272,13 +385,27 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
       let removed = false
 
       await commit((current) => {
-        const target = current.find((game) => game.id === id)
+        const target = current.games.find((game) => game.id === id)
         if (!target) return null
 
         removed = true
+        let cleanedRelations = 0
+        const games = current.games
+          .filter((game) => game.id !== id)
+          .map((game) => {
+            const relations = game.relations ?? []
+            const kept = relations.filter((relation) => relation.targetId !== id)
+            if (kept.length === relations.length) return game
+            cleanedRelations += relations.length - kept.length
+            return { ...game, relations: kept }
+          })
+
         return {
-          games: current.filter((game) => game.id !== id),
-          summary: `删除作品《${target.title || id}》`,
+          games,
+          taxonomy: current.taxonomy,
+          summary:
+            `删除作品《${target.title || id}》` +
+            (cleanedRelations > 0 ? `，并清理 ${cleanedRelations} 条关联` : ''),
         }
       })
 
@@ -292,6 +419,99 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
     async unpublishGame(id) {
       // 下线改状态、不删数据
       return updateGame(id, { status: 'offline' })
+    },
+
+    /* -----------------------------------------------------------------------
+       分类词表
+       ----------------------------------------------------------------------- */
+
+    async createVocabularyEntry(collection, input) {
+      let entry: VocabularyEntry | null = null
+
+      await commit((current) => {
+        const result = createVocabularyEntryIn(current.taxonomy, collection, input)
+        entry = result.entry
+        return {
+          games: current.games,
+          taxonomy: result.taxonomy,
+          summary: `新增${VOCABULARY_LABELS[collection]}「${result.entry.name}」`,
+          writeTaxonomy: true,
+          taxonomyIssues: [],
+        }
+      })
+
+      // 赋值发生在 commit 的回调里，TS 的控制流不会追踪到；显式收窄避免被当成 never
+      const created = entry as VocabularyEntry | null
+      if (!created) throw new Error('新建词条时没有产生任何改动。')
+      return { ...created }
+    },
+
+    async updateVocabularyEntry(collection, id, patch) {
+      let entry: VocabularyEntry | null = null
+
+      await commit((current) => {
+        const result = updateVocabularyEntryIn(current.taxonomy, collection, id, patch)
+        entry = result.entry
+        return {
+          games: current.games,
+          taxonomy: result.taxonomy,
+          summary: `更新${VOCABULARY_LABELS[collection]}「${result.entry.name}」`,
+          writeTaxonomy: true,
+          taxonomyIssues: [],
+        }
+      })
+
+      const updated = entry as VocabularyEntry | null
+      if (!updated) throw new Error('更新词条时没有产生任何改动。')
+      return { ...updated }
+    },
+
+    async mergeVocabularyEntries(collection, sourceId, targetId) {
+      let affectedGames = 0
+
+      await commit((current) => {
+        const result = mergeVocabularyEntriesIn(
+          current.taxonomy,
+          current.games,
+          collection,
+          sourceId,
+          targetId,
+        )
+        affectedGames = result.affectedGames
+        return {
+          games: result.games,
+          taxonomy: result.taxonomy,
+          summary: `合并${VOCABULARY_LABELS[collection]}「${sourceId}」→「${targetId}」`,
+          writeTaxonomy: true,
+          taxonomyIssues: [],
+        }
+      })
+
+      return { taxonomy: taxonomyStore.value, affectedGames }
+    },
+
+    async deleteVocabularyEntry(collection, id, options = {}) {
+      let affectedGames = 0
+
+      await commit((current) => {
+        const result = deleteVocabularyEntryIn(
+          current.taxonomy,
+          current.games,
+          collection,
+          id,
+          options,
+        )
+        affectedGames = result.affectedGames
+        return {
+          games: result.games,
+          taxonomy: result.taxonomy,
+          summary: `删除${VOCABULARY_LABELS[collection]}「${id}」`,
+          writeTaxonomy: true,
+          taxonomyIssues: [],
+        }
+      })
+
+      return { taxonomy: taxonomyStore.value, affectedGames }
     },
 
     async resetToSeed() {

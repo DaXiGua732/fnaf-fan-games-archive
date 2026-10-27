@@ -534,3 +534,20 @@ gh api -X PUT repos/DaXiGua732/fnaf-fan-games-data/collaborators/[管理员GitHu
 
 > ⚠️ 登录门禁**必须与你拿到 PAT 同时上线**，否则你会被自己锁在后台外面。
 
+---
+
+## 17. 2026-10-26 补充：Supabase 仅用于「催资源」侧链路（不改变上面的决定）
+
+上面的最终决定**仍然成立**：游戏目录以 GitHub 数据仓的 `db.json` 为唯一事实来源，
+后台写入、构建期快照、Pages 部署与 git 回滚方式都没有改变。
+
+Supabase 只承担首页公开的**「资源请求（催资源）」**榜单：匿名访客提交 / +1，
+使用 **anon public key + RLS + security definer RPC**；这些请求数据不参与构建，
+也不写回数据仓，更不存 games / authors / tags / downloads 表。
+
+- 未配置 Supabase：请求保存在访客自己的 `localStorage`（本机模式）。
+- 配置后连不上：显示最近一次缓存；提交 / 投票返回错误，**不会**偷偷写本机队列造成分叉。
+- Supabase 免费项目暂停或故障：只影响请求榜，游戏目录仍由静态站 / GitHub 数据仓正常提供。
+- 因此本节**不是** Phase 14 的替代方案，也没有把站点改成运行时查库。
+  详见 `README.md` §7.4 与 `supabase/resource_requests.sql`。
+

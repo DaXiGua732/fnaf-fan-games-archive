@@ -36,8 +36,8 @@ const backTo = computed(() =>
 <template>
   <div class="py-12 md:py-16">
     <!-- ============ 预览说明条 ============ -->
-    <div class="border border-[#ff0000] px-6 py-5" role="status">
-      <p class="swiss-meta font-bold text-[#ff0000]">预览 · 未保存</p>
+    <div class="border border-accent px-6 py-5" role="status">
+      <p class="swiss-meta font-bold text-accent">预览 · 未保存</p>
       <p class="mt-2 max-w-[78ch] font-sans text-sm leading-relaxed text-black/70">
         下面就是<span class="font-bold text-black">前台详情页的真实样子</span>，
         用的是编辑页里<span class="font-bold text-black">当前的内容（可能还没保存）</span>。
@@ -47,14 +47,14 @@ const backTo = computed(() =>
       <div class="mt-4 flex flex-wrap items-center gap-6">
         <RouterLink
           :to="backTo"
-          class="group inline-flex items-baseline gap-3 font-sans text-[11px] font-bold uppercase tracking-[0.16em] text-black transition-colors duration-150 ease-out hover:text-[#ff0000]"
+          class="group inline-flex items-baseline gap-3 font-sans text-[11px] font-bold uppercase tracking-[0.16em] text-black transition-colors duration-150 ease-out hover:text-accent"
         >
           <span class="u-arrow-back" aria-hidden="true">&#8594;</span>
           <span>回到编辑页</span>
         </RouterLink>
         <RouterLink
           :to="{ name: 'admin-games' }"
-          class="font-sans text-[11px] font-bold uppercase tracking-[0.16em] text-black/60 transition-colors duration-150 ease-out hover:text-[#ff0000]"
+          class="font-sans text-[11px] font-bold uppercase tracking-[0.16em] text-black/60 transition-colors duration-150 ease-out hover:text-accent"
         >
           游戏管理
         </RouterLink>
@@ -62,7 +62,7 @@ const backTo = computed(() =>
     </div>
 
     <!-- ============ 没有可预览的内容 ============ -->
-    <div v-if="!game" class="mt-8 border border-[#cccccc] px-6 py-5">
+    <div v-if="!game" class="mt-8 border border-line px-6 py-5">
       <p class="swiss-meta text-black/60">没有可预览的内容</p>
       <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
         预览内容只在这一次打开里有效，刷新或直接打开这个地址都会丢失。

@@ -12,12 +12,14 @@
     "gamejolt:helper": "node scripts/gamejolt/helper.mjs",
     "build:extension": "node scripts/build-extension.mjs",
     "test:gamejolt": "node --test scripts/gamejolt/test.mjs extension/capture.test.mjs",
+    "test:catalog": "node --test scripts/catalog.test.mjs",
     "selftest": "esbuild scripts/selftest.mts --bundle --platform=node --format=esm --external:vue --outfile=.tmp/selftest.mjs --log-level=warning && node .tmp/selftest.mjs",
     "smoke": "vite build --config vite.smoke.config.ts --logLevel warn && node .tmp/smoke-build/smoke.js",
     "test:ui": "node scripts/ui-test.mjs",
-    "verify": "npm run typecheck && npm run test:gamejolt && npm run build:extension && npm run selftest && npm run smoke && npm run build",
+    "verify": "npm run typecheck && npm run test:gamejolt && npm run test:catalog && npm run build:extension && npm run selftest && npm run smoke && npm run build",
     "preview": "vite preview",
-    "test:extension": "npm run build:extension && node scripts/extension-test.mjs"
+    "test:extension": "npm run build:extension && node scripts/extension-test.mjs",
+    "check:data": "esbuild scripts/data-quality.mts --bundle --platform=node --format=esm --outfile=.tmp/data-quality.mjs --log-level=warning && node .tmp/data-quality.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.3",

@@ -51,14 +51,14 @@ const lastSaved = computed(() => {
   <section class="border border-black">
     <header class="flex items-center justify-between gap-3 border-b border-black px-5 py-4">
       <h2 class="swiss-meta font-bold">发布概览</h2>
-      <p class="swiss-meta" :class="ready ? 'text-black/45' : 'font-bold text-[#ff0000]'">
+      <p class="swiss-meta" :class="ready ? 'text-black/45' : 'font-bold text-accent'">
         上线准备 {{ readyCount }} / {{ readiness.length }}
       </p>
     </header>
 
     <div class="px-5 py-5">
       <!-- 封面预览 -->
-      <div class="border border-[#cccccc] bg-[#f9f9f9]">
+      <div class="border border-line bg-surface">
         <img
           v-if="cover"
           :src="cover"
@@ -75,13 +75,13 @@ const lastSaved = computed(() => {
       </p>
       <div class="mt-3 flex flex-wrap items-center gap-2">
         <AdminStatusTag :status="draft.status" :archived="draft.archived" />
-        <span v-if="draft.featured" class="border border-[#cccccc] px-2 py-1 font-sans text-[10px] font-bold uppercase tracking-[0.1em]">
+        <span v-if="draft.featured" class="border border-line px-2 py-1 font-sans text-[10px] font-bold uppercase tracking-[0.1em]">
           推荐
         </span>
       </div>
 
       <!-- 上线清单 -->
-      <div class="mt-6 border-t border-[#cccccc] pt-5">
+      <div class="mt-6 border-t border-line pt-5">
         <p class="swiss-meta text-black/60">上线清单</p>
         <ul class="mt-3 flex flex-col gap-3">
           <li
@@ -97,7 +97,7 @@ const lastSaved = computed(() => {
             <span :class="item.ok ? 'text-black' : 'text-black/50'">
               {{ item.label }}
             </span>
-            <span class="ml-auto swiss-meta" :class="item.ok ? 'text-black/45' : 'text-[#ff0000]'">
+            <span class="ml-auto swiss-meta" :class="item.ok ? 'text-black/45' : 'text-accent'">
               {{ item.ok ? '已完成' : '缺失' }}
             </span>
           </li>
@@ -105,14 +105,14 @@ const lastSaved = computed(() => {
 
         <p
           v-if="draft.status === 'published' && publishIssues.length"
-          class="mt-4 font-sans text-xs leading-relaxed text-[#ff0000]"
+          class="mt-4 font-sans text-xs leading-relaxed text-accent"
         >
           现在是「已上线」，但还差 {{ publishIssues.length }} 项；补齐之前无法保存。
         </p>
       </div>
 
       <!-- 操作与保存信息 -->
-      <div class="mt-6 border-t border-[#cccccc] pt-5">
+      <div class="mt-6 border-t border-line pt-5">
         <button
           type="button"
           class="group inline-flex w-full items-center justify-between gap-3 border border-black bg-white px-4 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:bg-black hover:text-white"

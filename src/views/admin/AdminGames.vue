@@ -79,7 +79,7 @@ const pageSizeValue = computed<string>({
 
       <RouterLink
         :to="{ name: 'admin-game-new' }"
-        class="group inline-flex items-center gap-4 border border-black bg-black px-6 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.16em] text-white transition-colors duration-150 ease-out hover:border-[#ff0000] hover:bg-[#ff0000]"
+        class="group inline-flex items-center gap-4 border border-black bg-black px-6 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.16em] text-white transition-colors duration-150 ease-out hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent"
       >
         <span>新增游戏</span>
         <span class="u-arrow" aria-hidden="true">&#8594;</span>
@@ -94,7 +94,7 @@ const pageSizeValue = computed<string>({
     <!-- ============ 删除结果 ============ -->
     <div
       v-if="lastDelete"
-      class="mt-8 border border-[#cccccc] border-l-4 border-l-[#ff0000] px-6 py-5"
+      class="mt-8 border border-line border-l-4 border-l-accent px-6 py-5"
       role="status"
       aria-live="polite"
     >
@@ -114,7 +114,7 @@ const pageSizeValue = computed<string>({
         </div>
         <button
           type="button"
-          class="rounded-none border border-transparent px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-black/60 transition-colors duration-150 ease-out hover:text-[#ff0000]"
+          class="rounded-none border border-transparent px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-black/60 transition-colors duration-150 ease-out hover:text-accent"
           @click="dismissDelete"
         >
           知道了
@@ -123,7 +123,7 @@ const pageSizeValue = computed<string>({
     </div>
 
     <!-- ============ 数据现状（默认收起，别让一段说明挡住列表） ============ -->
-    <details class="mt-8 border border-[#cccccc] border-l-4 border-l-black">
+    <details class="mt-8 border border-line border-l-4 border-l-black">
       <summary
         class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-6 py-4 [&::-webkit-details-marker]:hidden"
       >
@@ -142,7 +142,7 @@ const pageSizeValue = computed<string>({
         <span class="swiss-meta text-black/35">展开 / 收起</span>
       </summary>
 
-      <div class="border-t border-[#cccccc] px-6 py-5">
+      <div class="border-t border-line px-6 py-5">
 
       <!-- 三种写入位置各说各的实话，不能笼统写「已保存」 -->
       <template v-if="storage === 'remote'">
@@ -170,13 +170,13 @@ const pageSizeValue = computed<string>({
       <div v-if="storage !== 'remote'" class="mt-5 flex flex-wrap items-center gap-4">
         <button
           type="button"
-          class="rounded-none border border-[#cccccc] bg-white px-4 py-2 font-sans text-[10px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:border-black"
+          class="rounded-none border border-line bg-white px-4 py-2 font-sans text-[10px] font-bold uppercase tracking-[0.14em] transition-colors duration-150 ease-out hover:border-black"
           :disabled="confirmingReset"
           @click="((confirmingReset = true), (resetDone = false))"
         >
           恢复出厂数据
         </button>
-        <p v-if="resetDone" class="swiss-meta font-bold text-[#ff0000]" role="status">
+        <p v-if="resetDone" class="swiss-meta font-bold text-accent" role="status">
           已恢复出厂数据
         </p>
       </div>
@@ -184,11 +184,11 @@ const pageSizeValue = computed<string>({
       <!-- 破坏性动作走页内确认条，不用原生弹窗 -->
       <div
         v-if="confirmingReset"
-        class="mt-4 border border-[#ff0000] px-5 py-4"
+        class="mt-4 border border-accent px-5 py-4"
         role="alert"
         aria-live="assertive"
       >
-        <p class="swiss-meta font-bold text-[#ff0000]">确定恢复出厂数据？</p>
+        <p class="swiss-meta font-bold text-accent">确定恢复出厂数据？</p>
         <p class="mt-2 max-w-[78ch] font-sans text-xs leading-relaxed text-black/70">
           所有作品都会变回 db.json 里的内容 ——
           <span class="font-bold text-black">你在后台做过的改动会全部丢失，而且无法撤销。</span>
@@ -196,7 +196,7 @@ const pageSizeValue = computed<string>({
         <div class="mt-4 flex flex-wrap gap-3">
           <button
             type="button"
-            class="rounded-none border border-[#ff0000] bg-white px-4 py-2 font-sans text-[10px] font-bold uppercase tracking-[0.14em] text-[#ff0000] transition-colors duration-150 ease-out hover:bg-[#ff0000] hover:text-white"
+            class="rounded-none border border-accent bg-white px-4 py-2 font-sans text-[10px] font-bold uppercase tracking-[0.14em] text-accent transition-colors duration-150 ease-out hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent"
             @click="confirmReset"
           >
             确认恢复
@@ -226,7 +226,7 @@ const pageSizeValue = computed<string>({
     <!-- ============ 操作结果提示条 ============ -->
     <div
       v-if="lastOutcome"
-      class="mt-8 border border-[#cccccc] border-l-4 border-l-[#ff0000] px-6 py-5"
+      class="mt-8 border border-line border-l-4 border-l-accent px-6 py-5"
       role="status"
       aria-live="polite"
     >
@@ -239,12 +239,12 @@ const pageSizeValue = computed<string>({
             >
               ，跳过 {{ lastOutcome.skipped }} 项（本来就是目标状态）</template
             ><template v-if="lastOutcome.failed > 0">
-              ，<span class="text-[#ff0000]">失败 {{ lastOutcome.failed }} 项</span></template
+              ，<span class="text-accent">失败 {{ lastOutcome.failed }} 项</span></template
             >
           </p>
           <p
             v-if="lastOutcome.failed > 0 && lastOutcome.error"
-            class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-[#ff0000]"
+            class="mt-3 max-w-[78ch] font-sans text-xs leading-relaxed text-accent"
           >
             失败原因：{{ lastOutcome.error }}。已经改好的部分不会退回，你可以只重试失败的那些。
           </p>
@@ -254,7 +254,7 @@ const pageSizeValue = computed<string>({
         </div>
         <button
           type="button"
-          class="rounded-none border border-transparent px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-black/60 transition-colors duration-150 ease-out hover:text-[#ff0000]"
+          class="rounded-none border border-transparent px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-black/60 transition-colors duration-150 ease-out hover:text-accent"
           @click="dismissOutcome"
         >
           知道了
@@ -274,7 +274,7 @@ const pageSizeValue = computed<string>({
       <button
         v-if="total === 0 && hasActiveQuery"
         type="button"
-        class="rounded-none border border-black bg-black px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-white transition-colors duration-150 ease-out hover:border-[#ff0000] hover:bg-[#ff0000]"
+        class="rounded-none border border-black bg-black px-4 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.14em] text-white transition-colors duration-150 ease-out hover:border-accent-surface hover:bg-accent-surface hover:text-on-accent"
         @click="clearQuery"
       >
         清除全部条件
@@ -299,7 +299,7 @@ const pageSizeValue = computed<string>({
           <select
             id="admin-page-size"
             v-model="pageSizeValue"
-            class="appearance-none rounded-none border border-black bg-white px-4 py-2 pr-9 font-sans text-xs transition-colors duration-150 ease-out focus:border-[#ff0000] focus:outline-none"
+            class="appearance-none rounded-none border border-black bg-white px-4 py-2 pr-9 font-sans text-xs transition-colors duration-150 ease-out focus:border-accent focus:outline-none"
           >
             <option v-for="size in PAGE_SIZE_OPTIONS" :key="size" :value="String(size)">
               {{ size }}

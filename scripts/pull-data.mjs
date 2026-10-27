@@ -15,6 +15,10 @@
  * ============================================================================
  */
 import { writeFileSync } from 'node:fs'
+import {
+  parseCatalogDocument,
+  serializeCatalogDocument,
+} from './catalog-document.mjs'
 
 const DATA_REPO = 'DaXiGua732/fnaf-fan-games-data'
 const TARGET = 'src/data/db.json'
@@ -73,17 +77,24 @@ try {
   fail(error instanceof Error ? error.message : String(error))
 }
 
-// 校验：必须能解析、且有 games 数组。**校验不过绝不落盘** ——
+// 校验：必须能解析、且有非空 games 数组。**校验不过绝不落盘** ——
 // 一次把坏内容写进去，站点的全部数据就没了。
-let games
+//
+// 注意：序列化时保留整个顶层对象，而不是只写 { games }。
+// 数据仓现在还有 taxonomy（玩法 / 机制 / 平台词表），未来可能继续加字段；
+// 只写 games 会把它们从构建快照里静默抹掉。
+let document
 try {
-  games = JSON.parse(text)?.games
-} catch {
-  fail('拿到的不是合法 JSON')
+  document = parseCatalogDocument(text)
+} catch (error) {
+  fail(error instanceof Error ? error.message : String(error))
 }
-if (!Array.isArray(games) || games.length === 0) {
+if (document.games.length === 0) {
   fail('拿到的 db.json 里没有 games 数组（或它是空的）')
 }
 
-writeFileSync(TARGET, `${JSON.stringify({ games }, null, 2)}\n`)
-console.log(`✅ 已从数据仓同步 ${games.length} 条作品 → ${TARGET}`)
+writeFileSync(TARGET, serializeCatalogDocument(document.raw, document.games))
+const taxonomyNote = document.raw.taxonomy
+  ? `，含分类词表`
+  : '（数据仓还没有 taxonomy，前台使用内置初始词表）'
+console.log(`✅ 已从数据仓同步 ${document.games.length} 条作品${taxonomyNote} → ${TARGET}`)

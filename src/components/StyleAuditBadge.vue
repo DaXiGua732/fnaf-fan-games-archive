@@ -32,11 +32,11 @@ defineExpose({ audit })
 
 <template>
   <section class="border border-black">
-    <header class="flex items-center justify-between border-b border-[#cccccc] px-6 py-3">
+    <header class="flex items-center justify-between border-b border-line px-6 py-3">
       <span class="swiss-meta">Compliance — border-radius / box-shadow</span>
       <button
         type="button"
-        class="swiss-meta underline transition-colors duration-150 hover:text-[#ff0000]"
+        class="swiss-meta underline transition-colors duration-150 hover:text-accent"
         @click="audit"
       >
         重新扫描
@@ -52,7 +52,7 @@ defineExpose({ audit })
       </template>
 
       <template v-else-if="checked">
-        <p class="font-sans text-xl font-bold uppercase tracking-tight text-[#ff0000]">
+        <p class="font-sans text-xl font-bold uppercase tracking-tight text-accent">
           FAIL — 检出 {{ violations.length }} 处违规
         </p>
         <ul class="mt-2 space-y-1 font-sans text-xs text-black/60">
