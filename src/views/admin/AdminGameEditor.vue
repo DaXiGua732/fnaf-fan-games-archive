@@ -178,7 +178,7 @@ watch([() => props.id, dataOk, () => game.value?.id], syncDraftFromCatalog)
  *
  * 原因：内嵌 webview / 跨域 iframe 里原生弹窗可能被静默拦截，
  * 用户只会看到「点了没反应」，且无法区分「被拦了」和「没点到」——
- * 这与 README §9.6 记录的剪贴板事故是同一类问题。
+ * 这与 docs/PITFALLS.md 第 12 条记录的剪贴板事故是同一类问题。
  * 通用原则：任何用户触发的操作，失败或需要确认时都必须有**可见**的交互，不能依赖原生弹窗。
  */
 let allowLeave = false
@@ -207,7 +207,7 @@ function cancelLeave(): void {
    永久删除
    ---------------------------------------------------------------------------
    不可逆动作，所以走**二次确认弹窗**：点「删除这条作品」→ 弹窗里再点一次确认。
-   不用 window.confirm（可能被静默拦截，见 README §9.6）。
+   不用 window.confirm（可能被静默拦截，见 docs/PITFALLS.md 第 12 条）。
    --------------------------------------------------------------------------- */
 const confirmingDelete = ref(false)
 const deleting = ref(false)

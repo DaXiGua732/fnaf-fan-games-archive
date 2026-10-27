@@ -9,7 +9,7 @@ import { RouterView } from 'vue-router'
  * 由 routes.ts 的嵌套路由决定挂载 Layout（公开站）还是 AdminLayout（后台）。
  *
  * 公开站 URL 与渲染结果保持不变：`/#/` `/#/game/:id` `/#/*` 仍走 Layout，
- * 渲染结果经逐字节核对确认视觉零变化（详见 admin_phase0_design_freeze.md §3.1）。
+ * 渲染结果经逐字节核对确认视觉零变化（详见 docs/ARCHITECTURE.md §3）。
  */
 </script>
 

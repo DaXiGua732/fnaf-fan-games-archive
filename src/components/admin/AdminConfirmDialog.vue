@@ -5,7 +5,7 @@ import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
  * AdminConfirmDialog —— 后台二次确认弹窗
  *
  * 用于不可逆动作（永久删除）。两层确认：先点动作按钮，再在弹窗里点确认。
- * 不用 `window.confirm`（可能被静默拦截，见 README §9.6）。
+ * 不用 `window.confirm`（可能被静默拦截，见 docs/PITFALLS.md 第 12 条）。
  *
  * Swiss：全屏半透明黑遮罩 + 白底黑框面板，零圆角、零阴影；
  * 打开时锁页面滚动、Esc / 点遮罩关闭、焦点默认落在「取消」上。
