@@ -48,7 +48,17 @@ import type { Taxonomy, VocabularyEntry } from '../types/taxonomy'
 import { VOCABULARY_LABELS } from '../types/taxonomy'
 import { normalizeGames } from '../utils/gameDefaults'
 import { applyPatch, createGameFrom, slugify } from '../utils/gameFactory'
-import { validateGameRelations, validateRelationInput } from '../utils/relations'
+import {
+  buildGameWritePatch,
+  buildVocabularyWritePatches,
+  removeRelationTarget,
+} from '../utils/gamePersistence'
+import {
+  normalizeRelations,
+  sameRelations,
+  validateGameRelations,
+  validateRelationInput,
+} from '../utils/relations'
 import {
   createVocabularyEntryIn,
   deleteVocabularyEntryIn,
@@ -62,10 +72,12 @@ import type { GameRepository } from './gameRepository'
 /** 冲突重试次数。3 次已经足够 —— 再撞上说明是真的人多手快，该让人重试而不是死循环 */
 const MAX_CONFLICT_RETRY = 3
 
-/** 数据仓 db.json 的完整内存形态：原始对象 + 归一化后的两份数据 */
+/** 数据仓 db.json 的完整内存形态：原始记录 + 归一化后的两份数据 */
 interface CatalogDocument {
   /** 原封不动的顶层对象，用于保留未知字段与键顺序 */
   raw: Record<string, unknown>
+  /** 原始作品记录，按 id 索引；持久化时未编辑的记录原样写回 */
+  originals: Map<string, Record<string, unknown>>
   games: AdminGame[]
   taxonomy: Taxonomy
   taxonomyIssues: string[]
@@ -75,6 +87,14 @@ interface CatalogDocument {
 interface CommitPlan {
   games: AdminGame[]
   taxonomy: Taxonomy
+  /**
+   * 本次**显式改动**的字段，按作品 id 索引。
+   *
+   * 只有这里列出的记录才会与原始 JSON 合并；其余作品整条原样写回。
+   * 归一化结果只服务读取与展示，不能用来覆盖数据仓里的历史数据 ——
+   * 否则一次「只改标题」的保存会顺手删掉别的作品上的异常关系。
+   */
+  writes: ReadonlyMap<string, Record<string, unknown>>
   /**
    * 提交信息里的摘要，用**最新**内容生成（而不是提交前的快照）。
    * git 历史就是这个后台的审计日志，所以信息要写清改了什么。
@@ -115,28 +135,45 @@ function parseCatalog(text: string): CatalogDocument {
     throw new Error('数据仓里 db.json 的格式不对：找不到 games 列表。')
   }
 
+  const originals = new Map<string, Record<string, unknown>>()
+  for (const entry of games) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue
+    const record = entry as Record<string, unknown>
+    if (typeof record.id !== 'string' || !record.id.trim()) continue
+    // 键保持原始 id：归一化不改 id，持久化时 `game.id` 才能命中该记录
+    originals.set(record.id, record)
+  }
+
   const normalized = normalizeTaxonomy(raw.taxonomy)
   return {
     raw,
+    originals,
     games: normalizeGames(games as Game[]),
     taxonomy: normalized.taxonomy,
     taxonomyIssues: normalized.issues,
   }
 }
 
-/** 与仓库里那份保持同样的 2 空格缩进，方便逐行 diff；保留全部未知顶层键 */
-function serializeCatalog(
-  document: CatalogDocument,
-  games: AdminGame[],
-  taxonomy: Taxonomy,
-  writeTaxonomy: boolean,
-): string {
+/**
+ * 与仓库里那份保持同样的 2 空格缩进，方便逐行 diff；保留全部未知顶层键。
+ *
+ * 作品记录采用「原始记录 + 本次显式字段」合并：未编辑的作品连键顺序都不变，
+ * 编辑过的作品也只动真正改过的字段。这是关系持久化安全的核心 ——
+ * 归一化可以丢弃 UI 不该看到的东西，但不能成为写回数据仓的依据。
+ */
+function serializeCatalog(document: CatalogDocument, plan: CommitPlan): string {
+  const games = plan.games.map((game) => {
+    const original = document.originals.get(game.id)
+    const writes = plan.writes.get(game.id)
+    if (!original) return writes ? { ...game, ...writes } : game
+    return writes ? { ...original, ...writes } : original
+  })
   const next: Record<string, unknown> = { ...document.raw, games }
   // 普通作品保存只覆盖 games：taxonomy（无论原值是否可用、是否等于 null）
   // 都通过 raw 原样保留，绝不用内存里的兜底词表替用户改写数据仓。
   // 只有词表操作才写入归一化后的新词表。
-  if (writeTaxonomy) {
-    next.taxonomy = taxonomy
+  if (plan.writeTaxonomy) {
+    next.taxonomy = plan.taxonomy
   }
   return `${JSON.stringify(next, null, 2)}\n`
 }
@@ -256,7 +293,7 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
         await putFile(
           repositoryRef,
           token,
-          serializeCatalog(current, intent.games, intent.taxonomy, intent.writeTaxonomy === true),
+          serializeCatalog(current, intent),
           sha,
           `（后台）${intent.summary}`,
         )
@@ -298,9 +335,15 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
       const next = applyPatch(current.games[index], patch, account?.())
       const games = current.games.map((game, i) => (i === index ? next : game))
 
-      // 只校验本次提交的关系。历史数据里可能有悬挂 / 双端关系；
+      // 编辑器每次保存都会带上 relations；只有内容确实变了才算「明确修改了关系」。
+      // 未变化时持久化层会沿用原始 JSON，避免把归一化丢掉的异常关系写没。
+      const relationsChanged =
+        patch.relations !== undefined &&
+        !sameRelations(current.games[index].relations, normalizeRelations(patch.relations, id))
+
+      // 目录级校验只针对**明确修改过**的关系。历史数据里可能有悬挂 / 双端关系，
       // 它们不应阻塞标题、状态、归档等无关字段的保存 —— 否则该作品会永远改不动。
-      if (patch.relations !== undefined) {
+      if (relationsChanged) {
         const relationErrors = validateGameRelations(games, next)
         if (relationErrors.length > 0) throw new Error(relationErrors.join('；'))
       }
@@ -312,6 +355,9 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
         games,
         taxonomy: current.taxonomy,
         summary: `更新《${next.title || id}》的 ${fields || '字段'}`,
+        writes: new Map([
+          [id, buildGameWritePatch(current.games[index], next, patch, relationsChanged)],
+        ]),
       }
     })
 
@@ -372,6 +418,8 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
           games,
           taxonomy: current.taxonomy,
           summary: `新增作品《${created.title || '未命名'}》`,
+          // 新记录没有原始 JSON，序列化时会完整写入归一化结果
+          writes: new Map(),
         }
       })
 
@@ -400,12 +448,22 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
             return { ...game, relations: kept }
           })
 
+        // 内存里的归一化列表只负责 UI；落盘时从**原始记录**剔除入边，
+        // 同一记录上的其他历史异常关系仍然保留，交给质量检查继续报告。
+        const writes = new Map<string, Record<string, unknown>>()
+        for (const [gameId, record] of current.originals) {
+          if (gameId === id) continue
+          const cleaned = removeRelationTarget(record, id)
+          if (cleaned) writes.set(gameId, { relations: cleaned.relations })
+        }
+
         return {
           games,
           taxonomy: current.taxonomy,
           summary:
             `删除作品《${target.title || id}》` +
             (cleanedRelations > 0 ? `，并清理 ${cleanedRelations} 条关联` : ''),
+          writes,
         }
       })
 
@@ -437,6 +495,7 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
           summary: `新增${VOCABULARY_LABELS[collection]}「${result.entry.name}」`,
           writeTaxonomy: true,
           taxonomyIssues: [],
+          writes: new Map(),
         }
       })
 
@@ -458,6 +517,7 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
           summary: `更新${VOCABULARY_LABELS[collection]}「${result.entry.name}」`,
           writeTaxonomy: true,
           taxonomyIssues: [],
+          writes: new Map(),
         }
       })
 
@@ -484,6 +544,11 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
           summary: `合并${VOCABULARY_LABELS[collection]}「${sourceId}」→「${targetId}」`,
           writeTaxonomy: true,
           taxonomyIssues: [],
+          writes: buildVocabularyWritePatches(
+            result.games,
+            result.affectedGameIds,
+            collection,
+          ),
         }
       })
 
@@ -508,6 +573,11 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
           summary: `删除${VOCABULARY_LABELS[collection]}「${id}」`,
           writeTaxonomy: true,
           taxonomyIssues: [],
+          writes: buildVocabularyWritePatches(
+            result.games,
+            result.affectedGameIds,
+            collection,
+          ),
         }
       })
 

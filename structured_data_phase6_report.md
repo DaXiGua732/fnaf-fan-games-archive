@@ -31,15 +31,17 @@ npm run check:data -- --strict             # 有 error 时退出码 1（默认�
 
 | 类别 | 代码 | 级别 |
 | --- | --- | --- |
-| 结构 | `catalog-games-missing` / `game-invalid` / `game-duplicate-id` | error |
-| 必填 | `missing-title` / `missing-author` | error |
+| 结构 | `catalog-root-invalid` / `catalog-games-missing` / `game-invalid` / `game-duplicate-id` | error |
+| 必填 | `missing-title` / `missing-author` / `invalid-title` / `invalid-author` | error |
 | 资料完整度 | `missing-cover` / `missing-banner` / `missing-downloads` | warning |
+| 资料类型 | `invalid-cover` / `invalid-banner` / `invalid-downloads` / `invalid-download` | error |
 | 分类 | `unclassified` / `unknown-vocabulary` | warning / error |
 | 标签 | `tag-overlaps-vocabulary` / `duplicate-tag` / `duplicate-alt-title` / `duplicate-platform` | warning |
-| 关系 | `relation-self` / `relation-dangling` / `relation-invalid-type` / `relation-duplicate` / `relation-empty-target` / `relation-not-array` | error |
+| 关系 | `relation-self` / `relation-dangling` / `relation-invalid-type` / `relation-invalid-target` / `relation-duplicate` / `relation-empty-target` / `relation-not-array` | error |
 | 关系 | `relation-reverse-duplicate` / `relation-limit` | warning |
 | 关系 | `relation-target-hidden` | info（后台保留、前台不展示） |
 | 字段 | `invalid-development-status` / `implausible-year` | warning |
+| 字段类型 | `invalid-year` / `invalid-tags` / `invalid-alt-titles` / `invalid-platforms` / `invalid-gameplay-types` / `invalid-mechanics` | error |
 | 词表 | `taxonomy-missing` / `unused-vocabulary` | info |
 | 词表 | `taxonomy-unusable` | error |
 | 词表 | `taxonomy-issue` / `overlapping-vocabulary` | warning |
@@ -125,3 +127,30 @@ Phase 6 没有引入新的查询或写入路径，回归范围覆盖此前各阶
 | 6 | 只读质量检查、共享规则、集成回归、文档收尾 |
 
 Phase 0–6 按设计完成，没有批量修改生产数据，没有引入新的长期运行服务。
+
+## 8. 后续加固（2026-10-27）：异常输入与关系持久化
+
+本轮不新增资料库功能，只修两个工程问题：
+
+1. **质量检查对不可信 JSON 的健壮性**
+   `analyzeCatalog()` 现在先对原始记录逐字段做类型检查，再做归一化：
+   根对象 / `games` 类型错误、非对象条目、缺失或重复 id、`title` / `author` /
+   图片 / `downloads` / 关系 / 文本数组字段的类型错误都有独立代码（见 §2.2）。
+   类型错误不再导致 `TypeError`，也不会因为一条坏记录丢掉其他记录的问题；
+   检查全程只读，不改传入对象、不写文件、不调用远程 API。
+
+2. **关系持久化不再静默清理历史数据**
+   读取与展示继续使用归一化结果（前台看不到非法关系），但写入改为
+   「原始记录 + 本次显式字段」：
+   - 未编辑的作品整条原样写回；
+   - 编辑器每次保存都会带上 `relations`，只有内容确实变化才视为“明确修改关系”；
+   - 词表改名 / 合并 / 删除只 patch 对应的分类字段；
+   - 删除作品只剔除其他记录中指向它的入边，同一记录上的其他历史异常关系保留。
+
+   两套仓储（GitHub 远程仓与本地存档）共享 `src/utils/gamePersistence.ts`
+   的同一套语义；`npm run check:data` 仍能发现原始数据里的历史关系问题。
+
+回归覆盖（`selftest` 新增 65 条断言，总计 **945/945**）：
+异常输入与只读性、场景 A（无关字段编辑）、场景 B（显式关系编辑与非法输入拒绝）、
+场景 C（删除目标只清理入边）、场景 D（词表合并 / 改名不触碰关系），
+远程仓使用假 `fetch`，本地仓使用内存存档，均不出网。

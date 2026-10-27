@@ -119,6 +119,7 @@ export function runDataQualityAssertions(): Assertion[] {
     },
   }
 
+  const dirtySnapshot = JSON.stringify(raw)
   const report = analyzeCatalog(raw, 'dirty.json')
   const found = codes(report)
   check('脏数据 · ok=false', report.ok, false)
@@ -142,6 +143,7 @@ export function runDataQualityAssertions(): Assertion[] {
   check('脏数据 · 词表结构问题', found.includes('taxonomy-issue'), true)
   check('脏数据 · 重复词条 id 被记录', report.issues.some((issue) => issue.message.includes('重复')), true)
   check('脏数据 · 统计 error > 0', report.counts.errors > 0, true)
+  check('只读 · 脏数据检查不修改入参', JSON.stringify(raw), dirtySnapshot)
 
   /* ------------------------------------------------------------------ 结构损坏 */
   const broken = analyzeCatalog(null, 'broken.json')
@@ -157,6 +159,187 @@ export function runDataQualityAssertions(): Assertion[] {
     invalidGame.issues.some((issue) => issue.code === 'game-invalid'),
     true,
   )
+
+  /* ------------------------------------------------------------------ 不可信 JSON */
+  for (const rawRoot of [null, [], 'not-an-object', 42] as unknown[]) {
+    const rootReport = analyzeCatalog(rawRoot)
+    check(
+      `异常根 ${JSON.stringify(rawRoot)} · 报 catalog-root-invalid`,
+      rootReport.issues.some((issue) => issue.code === 'catalog-root-invalid'),
+      true,
+    )
+  }
+  const noGames = analyzeCatalog({ games: {} })
+  check(
+    'games 不是数组 · 报 catalog-games-missing',
+    noGames.issues.some((issue) => issue.code === 'catalog-games-missing'),
+    true,
+  )
+
+  const nonObjectRecords = analyzeCatalog({
+    games: [null, 7, 'game', { ...cleanGame(), id: 'ok' }],
+    taxonomy: cleanTaxonomy(),
+  })
+  check('非对象记录 · 报 game-invalid', codes(nonObjectRecords).includes('game-invalid'), true)
+  check('非对象记录 · 仍检查其他记录', nonObjectRecords.counts.games, 1)
+  check(
+    '非对象记录 · 正常记录不误报',
+    nonObjectRecords.issues.some((issue) => issue.gameId === 'ok'),
+    false,
+  )
+
+  const idReport = analyzeCatalog({
+    games: [
+      { title: 'no id' },
+      { ...cleanGame(), id: '   ' },
+      { ...cleanGame(), id: 'dup' },
+      { ...cleanGame(), id: 'dup' },
+    ],
+    taxonomy: cleanTaxonomy(),
+  })
+  check(
+    'id 缺失 / 空白 · 逐条报 game-invalid',
+    idReport.issues.filter((issue) => issue.code === 'game-invalid').length,
+    2,
+  )
+  check('重复 id · 报 game-duplicate-id', codes(idReport).includes('game-duplicate-id'), true)
+  check('重复 id · 只检查第一条', idReport.counts.games, 1)
+
+  const textCases = analyzeCatalog({
+    games: [
+      { ...cleanGame(), id: 'title-missing', title: undefined },
+      { ...cleanGame(), id: 'title-null', title: null },
+      { ...cleanGame(), id: 'title-number', title: 3 },
+      { ...cleanGame(), id: 'author-missing', author: undefined },
+      { ...cleanGame(), id: 'author-null', author: null },
+    ],
+    taxonomy: cleanTaxonomy(),
+  })
+  check(
+    '标题缺失 · missing-title',
+    textCases.issues.filter((issue) => issue.code === 'missing-title').length,
+    1,
+  )
+  check(
+    '标题为 null / 类型错误 · invalid-title',
+    textCases.issues.filter((issue) => issue.code === 'invalid-title').length,
+    2,
+  )
+  check(
+    '作者缺失 · missing-author',
+    textCases.issues.filter((issue) => issue.code === 'missing-author').length,
+    1,
+  )
+  check(
+    '作者类型错误 · invalid-author',
+    textCases.issues.filter((issue) => issue.code === 'invalid-author').length,
+    1,
+  )
+
+  const imageCases = analyzeCatalog({
+    games: [
+      { ...cleanGame(), id: 'cover-missing', coverImage: undefined },
+      { ...cleanGame(), id: 'cover-null', coverImage: null },
+      { ...cleanGame(), id: 'banner-missing', bannerImage: undefined },
+      { ...cleanGame(), id: 'banner-null', bannerImage: null },
+    ],
+    taxonomy: cleanTaxonomy(),
+  })
+  check('封面缺失 · missing-cover', codes(imageCases).includes('missing-cover'), true)
+  check('封面类型错误 · invalid-cover', codes(imageCases).includes('invalid-cover'), true)
+  check('Banner 缺失 · missing-banner', codes(imageCases).includes('missing-banner'), true)
+  check('Banner 类型错误 · invalid-banner', codes(imageCases).includes('invalid-banner'), true)
+
+  const downloadCases = analyzeCatalog({
+    games: [
+      { ...cleanGame(), id: 'dl-missing', downloads: undefined },
+      { ...cleanGame(), id: 'dl-null', downloads: null },
+      { ...cleanGame(), id: 'dl-object', downloads: {} },
+      {
+        ...cleanGame(),
+        id: 'dl-items',
+        downloads: [
+          null,
+          { provider: 1, url: '' },
+          { provider: 'Drive', url: 'https://example.com/x', password: 5 },
+        ],
+      },
+    ],
+    taxonomy: cleanTaxonomy(),
+  })
+  check('下载缺失 · missing-downloads', codes(downloadCases).includes('missing-downloads'), true)
+  check(
+    '下载不是数组 · invalid-downloads',
+    downloadCases.issues.filter((issue) => issue.code === 'invalid-downloads').length,
+    2,
+  )
+  check(
+    '下载元素格式错误 · 逐项 invalid-download',
+    downloadCases.issues.filter((issue) => issue.code === 'invalid-download').length >= 4,
+    true,
+  )
+
+  const relationCases = analyzeCatalog({
+    games: [
+      { ...cleanGame(), id: 'rel-object', relations: {} },
+      {
+        ...cleanGame(),
+        id: 'rel-items',
+        relations: [
+          5,
+          { type: 'related' },
+          { type: 'related', targetId: 9 },
+          { type: 'bogus', targetId: 'rel-object' },
+        ],
+      },
+    ],
+    taxonomy: cleanTaxonomy(),
+  })
+  check('relations 不是数组 · relation-not-array', codes(relationCases).includes('relation-not-array'), true)
+  check('关系元素不是对象 · relation-invalid', codes(relationCases).includes('relation-invalid'), true)
+  check('关系目标为空 · relation-empty-target', codes(relationCases).includes('relation-empty-target'), true)
+  check('关系目标类型错误 · relation-invalid-target', codes(relationCases).includes('relation-invalid-target'), true)
+  check('关系类型非法 · relation-invalid-type', codes(relationCases).includes('relation-invalid-type'), true)
+
+  const listCases = analyzeCatalog({
+    games: [
+      { ...cleanGame(), id: 'tags-bad', tags: 5 },
+      { ...cleanGame(), id: 'tags-items', tags: ['ok', 5] },
+      { ...cleanGame(), id: 'vocab-bad', gameplayTypes: 'traditional-night-watch' },
+      { ...cleanGame(), id: 'vocab-items', mechanics: [1, 'security-cameras'] },
+    ],
+    taxonomy: cleanTaxonomy(),
+  })
+  check('标签不是数组 · invalid-tags', codes(listCases).includes('invalid-tags'), true)
+  check('玩法字段不是数组 · invalid-gameplay-types', codes(listCases).includes('invalid-gameplay-types'), true)
+  check('机制含非字符串 · invalid-mechanics', codes(listCases).includes('invalid-mechanics'), true)
+
+  const yearCases = analyzeCatalog({
+    games: [
+      { ...cleanGame(), id: 'year-string', releaseYear: '2020' },
+      { ...cleanGame(), id: 'year-future', releaseYear: 2999 },
+    ],
+    taxonomy: cleanTaxonomy(),
+  })
+  check('年份类型错误 · invalid-year', codes(yearCases).includes('invalid-year'), true)
+  check('年份越界 · implausible-year', codes(yearCases).includes('implausible-year'), true)
+
+  const weird = {
+    games: [
+      {
+        id: 'weird',
+        title: null,
+        author: 7,
+        downloads: null,
+        tags: 3,
+        relations: [null],
+      },
+    ],
+    taxonomy: null,
+  }
+  const weirdSnapshot = JSON.stringify(weird)
+  analyzeCatalog(weird)
+  check('只读 · 异常输入不被修改', JSON.stringify(weird), weirdSnapshot)
 
   return results
 }

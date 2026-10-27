@@ -49,6 +49,8 @@ import {
   updateVocabularyEntryIn,
   vocabularyOptionsForGames,
 } from '../utils/taxonomy'
+import { analyzeCatalog } from '../utils/dataQuality'
+import { isRecord } from '../utils/guards'
 import type { Assertion } from './libraryAssertions'
 
 function check(
@@ -1099,6 +1101,297 @@ async function testGitHubGameSavePreservesBrokenTaxonomy(results: Assertion[]): 
 }
 
 /* ---------------------------------------------------------------------------
+   8. 关系持久化：归一化只服务 UI，写回只承认显式改动
+   --------------------------------------------------------------------------- */
+
+/** 数据仓里的历史脏数据：非法类型 / 悬挂目标 / 删除目标时要清理的入边 */
+function anomalyRawGames(): Record<string, unknown>[] {
+  return [
+    {
+      ...RAW_GAMES[0],
+      relations: [
+        { type: 'sequel', targetId: 'fixture-beta' },
+        { type: 'bogus', targetId: 'fixture-beta' },
+        { type: 'related', targetId: 'missing-alpha' },
+      ],
+    },
+    {
+      ...RAW_GAMES[1],
+      relations: [{ type: 'related', targetId: 'fixture-alpha' }],
+    },
+    { ...RAW_GAMES[2], relations: [] },
+    {
+      id: 'fixture-delta',
+      title: 'Fixture Delta',
+      author: 'Delta Author',
+      releaseYear: 2023,
+      ipSeries: 'Other Series',
+      engine: 'Unity',
+      coverImage: '/images/delta.png',
+      bannerImage: '/images/delta-banner.png',
+      gallery: [],
+      description: 'Synthetic fixture.',
+      downloads: [],
+      metrics: { fakeViews: 0, score: 0 },
+      tags: [],
+      platforms: [],
+      gameplayTypes: [],
+      mechanics: [],
+      relations: [
+        { type: 'related', targetId: 'fixture-gamma' },
+        { type: 'related', targetId: 'missing-delta' },
+      ],
+      developmentStatus: 'released',
+      status: 'published',
+    },
+  ]
+}
+
+/** 假数据仓当前内容里的全部原始记录（只解析一次，避免各处内联断言） */
+function persistedGames(state: RemoteState): Record<string, unknown>[] {
+  const parsed: unknown = JSON.parse(state.content)
+  if (!isRecord(parsed) || !Array.isArray(parsed.games)) return []
+  return parsed.games.filter(isRecord)
+}
+
+function persistedGame(state: RemoteState, id: string): Record<string, unknown> {
+  return persistedGames(state).find((game) => game.id === id) ?? {}
+}
+
+async function testGitHubRelationPersistence(results: Assertion[]): Promise<void> {
+  const initial = anomalyRawGames()
+  const state = await createRemoteStub(initial as unknown as AdminGame[])
+  const repo = createGitHubGameRepository({ token: 'fixture-token' })
+  const alphaRawRelations = JSON.stringify(initial[0]?.relations)
+  const betaRawRelations = JSON.stringify(initial[1]?.relations)
+
+  try {
+    await waitReady(repo)
+    const alpha = await repo.getGame('fixture-alpha')
+    check(
+      results,
+      '关系持久化 · 展示层看不到非法关系',
+      (alpha?.relations ?? []).some((relation) => (relation.type as string) === 'bogus'),
+      false,
+    )
+
+    // 场景 A：只改标题（编辑器会把未变化的 relations 一并提交）
+    await repo.updateGame('fixture-alpha', { title: 'Title Only' })
+    await repo.updateGame('fixture-alpha', {
+      title: 'Form Save',
+      relations: (await repo.getGame('fixture-alpha'))?.relations ?? [],
+    })
+    check(
+      results,
+      '关系持久化 · 无关字段保存保留原始异常关系',
+      JSON.stringify(persistedGame(state, 'fixture-alpha').relations),
+      alphaRawRelations,
+    )
+    check(
+      results,
+      '关系持久化 · 其他作品原始关系不被重写',
+      JSON.stringify(persistedGame(state, 'fixture-beta').relations),
+      betaRawRelations,
+    )
+    const persistedCodes = analyzeCatalog(JSON.parse(state.content))
+      .issues.map((issue) => issue.code)
+      .join(',')
+    check(
+      results,
+      '关系持久化 · 质量检查仍能看到非法类型',
+      persistedCodes.includes('relation-invalid-type'),
+      true,
+    )
+    check(
+      results,
+      '关系持久化 · 质量检查仍能看到悬挂目标',
+      persistedCodes.includes('relation-dangling'),
+      true,
+    )
+
+    // 场景 B：显式修改关系 → 写入新值；非法输入被拒绝且不产生提交
+    await repo.updateGame('fixture-alpha', {
+      relations: [{ type: 'related', targetId: 'fixture-gamma' }],
+    })
+    check(
+      results,
+      '关系持久化 · 显式修改写入新关系',
+      JSON.stringify(persistedGame(state, 'fixture-alpha').relations),
+      JSON.stringify([{ type: 'related', targetId: 'fixture-gamma' }]),
+    )
+    const invalidRelations: { label: string; relations: unknown }[] = [
+      { label: '自关联', relations: [{ type: 'related', targetId: 'fixture-alpha' }] },
+      {
+        label: '重复目标',
+        relations: [
+          { type: 'sequel', targetId: 'fixture-gamma' },
+          { type: 'prequel', targetId: 'fixture-gamma' },
+        ],
+      },
+      { label: '非法类型', relations: [{ type: 'bogus', targetId: 'fixture-gamma' }] },
+      { label: '目标不存在', relations: [{ type: 'related', targetId: 'missing-target' }] },
+    ]
+    for (const attempt of invalidRelations) {
+      const before = state.putCount
+      const message = await asyncErrorOf(
+        repo.updateGame('fixture-alpha', { relations: attempt.relations as never }),
+      )
+      check(results, `关系持久化 · ${attempt.label}被拒绝`, message.length > 0, true)
+      check(results, `关系持久化 · ${attempt.label}不产生提交`, state.putCount, before)
+    }
+
+    // 场景 D：词表操作只 patch 分类字段，关系与其他记录原样保留
+    const source = await repo.createVocabularyEntry('mechanics', { name: 'Persistence Source' })
+    await repo.updateGame('fixture-delta', { mechanics: [source.id] })
+    check(
+      results,
+      '关系持久化 · 无关字段保存不重写原始关系',
+      JSON.stringify(persistedGame(state, 'fixture-delta').relations),
+      JSON.stringify(initial[3]?.relations),
+    )
+    const gamesBeforeRename = JSON.stringify(persistedGames(state))
+    await repo.updateVocabularyEntry('mechanics', source.id, { name: 'Persistence Source Renamed' })
+    check(
+      results,
+      '关系持久化 · 词条改名不触碰作品记录',
+      JSON.stringify(persistedGames(state)),
+      gamesBeforeRename,
+    )
+    const target = await repo.createVocabularyEntry('mechanics', { name: 'Persistence Target' })
+    const deltaRelationsBeforeMerge = JSON.stringify(
+      persistedGame(state, 'fixture-delta').relations,
+    )
+    await repo.mergeVocabularyEntries('mechanics', source.id, target.id)
+    check(
+      results,
+      '关系持久化 · 合并词条只改写分类字段',
+      JSON.stringify(persistedGame(state, 'fixture-delta').mechanics),
+      JSON.stringify([target.id]),
+    )
+    check(
+      results,
+      '关系持久化 · 合并词条不清理关系',
+      JSON.stringify(persistedGame(state, 'fixture-delta').relations),
+      deltaRelationsBeforeMerge,
+    )
+    check(
+      results,
+      '关系持久化 · 合并词条不重写其他作品',
+      JSON.stringify(persistedGame(state, 'fixture-beta').relations),
+      betaRawRelations,
+    )
+
+    // 场景 C：删除目标 → 只清理指向它的入边，同记录上的其他关系保留
+    await repo.deleteGame('fixture-gamma')
+    check(
+      results,
+      '关系持久化 · 删除目标后入边被清理',
+      JSON.stringify(persistedGame(state, 'fixture-alpha').relations),
+      JSON.stringify([]),
+    )
+    check(
+      results,
+      '关系持久化 · 删除目标不误删同记录其他关系',
+      JSON.stringify(persistedGame(state, 'fixture-delta').relations),
+      JSON.stringify([{ type: 'related', targetId: 'missing-delta' }]),
+    )
+    check(
+      results,
+      '关系持久化 · 删除目标不触碰无关作品',
+      JSON.stringify(persistedGame(state, 'fixture-beta').relations),
+      betaRawRelations,
+    )
+    check(
+      results,
+      '关系持久化 · 删除目标保留其他字段',
+      JSON.stringify(persistedGame(state, 'fixture-delta').mechanics),
+      JSON.stringify([target.id]),
+    )
+    check(
+      results,
+      '关系持久化 · 删除目标本身',
+      persistedGames(state).some((game) => game.id === 'fixture-gamma'),
+      false,
+    )
+  } finally {
+    state.restore()
+  }
+}
+
+async function testLocalRelationPersistence(results: Assertion[]): Promise<void> {
+  const storage = memoryStorage()
+  const initial = anomalyRawGames()
+  storage.setItem(STORAGE_KEY, JSON.stringify(initial))
+  const repo = createLocalGameRepository({ storage })
+  const alpha = await repo.getGame('fixture-alpha')
+
+  check(
+    results,
+    '本地关系持久化 · 展示层看不到非法关系',
+    (alpha?.relations ?? []).some((relation) => (relation.type as string) === 'bogus'),
+    false,
+  )
+  await repo.updateGame('fixture-alpha', {
+    title: 'Local Rename',
+    relations: alpha?.relations ?? [],
+  })
+
+  /** 读取本机存档里的作品记录（落盘格式必然是数组） */
+  const readStored = (): Record<string, unknown>[] => {
+    const parsed: unknown = JSON.parse(storage.data.get(STORAGE_KEY) ?? '[]')
+    return Array.isArray(parsed) ? parsed.filter(isRecord) : []
+  }
+  check(
+    results,
+    '本地关系持久化 · 无关字段保存保留原始异常关系',
+    JSON.stringify(readStored().find((game) => game.id === 'fixture-alpha')?.relations),
+    JSON.stringify(initial[0]?.relations),
+  )
+  check(
+    results,
+    '本地关系持久化 · 其他作品未被重写',
+    JSON.stringify(readStored().find((game) => game.id === 'fixture-beta')?.relations),
+    JSON.stringify(initial[1]?.relations),
+  )
+
+  await repo.updateGame('fixture-alpha', {
+    relations: [{ type: 'related', targetId: 'fixture-gamma' }],
+  })
+  check(
+    results,
+    '本地关系持久化 · 显式修改写入新关系',
+    JSON.stringify(readStored().find((game) => game.id === 'fixture-alpha')?.relations),
+    JSON.stringify([{ type: 'related', targetId: 'fixture-gamma' }]),
+  )
+
+  const source = await repo.createVocabularyEntry('mechanics', { name: 'Local Persistence Source' })
+  await repo.updateGame('fixture-delta', { mechanics: [source.id] })
+  const target = await repo.createVocabularyEntry('mechanics', { name: 'Local Persistence Target' })
+  await repo.mergeVocabularyEntries('mechanics', source.id, target.id)
+  check(
+    results,
+    '本地关系持久化 · 合并词条不清理关系',
+    JSON.stringify(readStored().find((game) => game.id === 'fixture-delta')?.relations),
+    JSON.stringify(initial[3]?.relations),
+  )
+
+  await repo.deleteGame('fixture-gamma')
+  check(
+    results,
+    '本地关系持久化 · 删除目标后入边被清理',
+    JSON.stringify(readStored().find((game) => game.id === 'fixture-alpha')?.relations),
+    JSON.stringify([]),
+  )
+  check(
+    results,
+    '本地关系持久化 · 删除目标不误删其他关系',
+    JSON.stringify(readStored().find((game) => game.id === 'fixture-delta')?.relations),
+    JSON.stringify([{ type: 'related', targetId: 'missing-delta' }]),
+  )
+}
+
+
+/* ---------------------------------------------------------------------------
    入口
    --------------------------------------------------------------------------- */
 
@@ -1115,6 +1408,8 @@ export async function runStructuredDataAssertions(): Promise<Assertion[]> {
   await testGitHubGameSaveDoesNotSeedTaxonomy(results)
   await testGitHubRelationEdgeCases(results)
   await testGitHubGameSavePreservesBrokenTaxonomy(results)
+  await testGitHubRelationPersistence(results)
+  await testLocalRelationPersistence(results)
 
   return results
 }

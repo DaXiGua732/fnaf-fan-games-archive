@@ -121,8 +121,8 @@ const SKELETON_KEYS = [1, 2, 3, 4, 5, 6]
           FNAF Fan Games<br />Archive
         </h1>
         <p class="mt-10 max-w-[56ch] font-sans text-base leading-relaxed text-on-accent/90">
-          收录 Five Nights at Freddy's 系列同人游戏。按年份、作者、IP 系列交叉检索，
-          一键跳转第三方网盘下载。
+          收录 Five Nights at Freddy's 系列同人游戏。按玩法、机制、平台、作者、年份和系列等条件
+          交叉检索，一键跳转第三方网盘下载。
         </p>
 
         <div class="mt-10">

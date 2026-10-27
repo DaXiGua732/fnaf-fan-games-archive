@@ -21,12 +21,13 @@
  *   - 词表结构问题、跨集合同名、无人使用的词条
  * ============================================================================
  */
+import type { AdminGame } from '../types/admin'
 import type { Game } from '../types/game'
 import { DEVELOPMENT_STATUSES } from '../types/game'
 import { VOCABULARY_COLLECTIONS, VOCABULARY_LABELS } from '../types/taxonomy'
-import { normalizeGames } from './gameDefaults'
+import { normalizeGame } from './gameDefaults'
 import { isRecord } from './guards'
-import { isRelationType } from './relations'
+import { isRelationType, rawRelationTargetId } from './relations'
 import {
   countVocabularyUsage,
   normalizeTaxonomy,
@@ -67,6 +68,15 @@ const RELATION_LIMIT = 20
 const YEAR_MIN = 1990
 const YEAR_MAX = new Date().getFullYear() + 2
 
+/** 需要「必须是字符串数组」的原始字段；类型错误要单独报告，不能只靠归一化后的空数组 */
+const RAW_TEXT_LIST_FIELDS = [
+  { field: 'tags', code: 'invalid-tags', label: '标签' },
+  { field: 'altTitles', code: 'invalid-alt-titles', label: '其他名称' },
+  { field: 'platforms', code: 'invalid-platforms', label: '平台' },
+  { field: 'gameplayTypes', code: 'invalid-gameplay-types', label: '玩法类型' },
+  { field: 'mechanics', code: 'invalid-mechanics', label: '游戏机制' },
+] as const
+
 
 /** 大小写 / 空白归一化后找重复项；返回出现次数 > 1 的原值 */
 function duplicateValues(values: unknown): string[] {
@@ -84,8 +94,52 @@ function duplicateValues(values: unknown): string[] {
   return [...duplicates]
 }
 
-function readTargetId(relation: Record<string, unknown>): string {
-  return typeof relation.targetId === 'string' ? relation.targetId.trim() : ''
+/** 文本字段的类型兜底：类型不对时返回空串，让检查可以继续（问题由 raw 检查报告） */
+function readText(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+/** 文本数组的类型兜底：非数组 / 非字符串项一律排除，避免 `for...of` / `.trim()` 抛错 */
+function readTextList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
+}
+
+/** 给「实际是什么」一个可读描述，报告里能直接定位问题 */
+function describeValue(value: unknown): string {
+  if (value === null) return 'null'
+  if (Array.isArray(value)) return '数组'
+  return `类型 ${typeof value}`
+}
+
+/**
+ * 不可信记录 → 可继续检查的 `Game`。
+ *
+ * 只做**类型兜底**，不修改入参：字段缺失 / 类型错误会在逐条检查里单独报告，
+ * 绝不能靠这里填默认值后把脏数据当成正常（那正是质量检查要抓的东西）。
+ * 归一化本身（词表数组去重、开发状态回退等）复用读路径的 `normalizeGame()`。
+ */
+function toAnalysisGame(record: Record<string, unknown>): AdminGame {
+  return normalizeGame({
+    ...record,
+    id: String(record.id).trim(),
+    title: readText(record.title),
+    author: readText(record.author),
+    ipSeries: readText(record.ipSeries),
+    engine: readText(record.engine),
+    coverImage: readText(record.coverImage),
+    bannerImage: readText(record.bannerImage),
+    gallery: readTextList(record.gallery),
+    description: readText(record.description),
+    downloads: Array.isArray(record.downloads) ? record.downloads : [],
+    metrics: isRecord(record.metrics) ? record.metrics : { fakeViews: 0, score: 0 },
+    tags: readTextList(record.tags),
+    altTitles: readTextList(record.altTitles),
+    gameplayTypes: readTextList(record.gameplayTypes),
+    mechanics: readTextList(record.mechanics),
+    platforms: readTextList(record.platforms),
+  } as unknown as Game)
 }
 
 export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
@@ -102,6 +156,13 @@ export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
   const root = isRecord(raw) ? raw : {}
   const rawGames = Array.isArray(root.games) ? root.games : []
 
+  if (!isRecord(raw)) {
+    add(
+      'error',
+      'catalog-root-invalid',
+      `db.json 顶层应当是对象，实际是 ${describeValue(raw)}`,
+    )
+  }
   if (!Array.isArray(root.games)) {
     add('error', 'catalog-games-missing', 'db.json 顶层缺少 games 数组')
   }
@@ -110,20 +171,28 @@ export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
      游戏：先建立原始 id → 对象索引，再归一化
      --------------------------------------------------------------------------- */
   const rawById = new Map<string, Record<string, unknown>>()
-  for (const entry of rawGames) {
-    if (!isRecord(entry) || typeof entry.id !== 'string' || !entry.id.trim()) {
-      add('error', 'game-invalid', '有一条作品缺少合法的 id')
-      continue
+  rawGames.forEach((entry, index) => {
+    if (!isRecord(entry)) {
+      add('error', 'game-invalid', `games[${index}] 不是对象（实际为 ${describeValue(entry)}）`)
+      return
+    }
+    if (typeof entry.id !== 'string' || !entry.id.trim()) {
+      add(
+        'error',
+        'game-invalid',
+        `games[${index}] 缺少合法的 id（实际为 ${describeValue(entry.id)}）`,
+      )
+      return
     }
     const id = entry.id.trim()
     if (rawById.has(id)) {
       add('error', 'game-duplicate-id', `作品 id「${id}」重复`, id)
-      continue
+      return
     }
     rawById.set(id, entry)
-  }
+  })
 
-  const games = normalizeGames([...rawById.values()] as unknown as Game[])
+  const games = [...rawById.values()].map(toAnalysisGame)
   const byId = new Map(games.map((game) => [game.id, game]))
   const visibleGames = games.filter(isPubliclyVisible)
 
@@ -195,26 +264,126 @@ export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
     const rawGame = rawById.get(game.id) ?? {}
     const label = game.title || game.id
 
-    if (!game.title.trim()) add('error', 'missing-title', `作品「${game.id}」没有标题`, game.id)
-    if (!game.author.trim()) add('error', 'missing-author', `作品《${label}》没有作者`, game.id)
-    if (!game.coverImage.trim()) {
+    // 原始字段逐项检查类型：归一化会把缺失 / 类型错误填成空值，
+    // 只看归一化结果会把「数据坏了」误报成「还没填」，两种结论完全不同。
+    if (rawGame.title === undefined) {
+      add('error', 'missing-title', `作品「${game.id}」没有标题`, game.id)
+    } else if (typeof rawGame.title !== 'string') {
+      add(
+        'error',
+        'invalid-title',
+        `作品「${game.id}」的 title 不是字符串（实际为 ${describeValue(rawGame.title)}）`,
+        game.id,
+      )
+    } else if (!rawGame.title.trim()) {
+      add('error', 'missing-title', `作品「${game.id}」没有标题`, game.id)
+    }
+
+    if (rawGame.author === undefined) {
+      add('error', 'missing-author', `作品《${label}》没有作者`, game.id)
+    } else if (typeof rawGame.author !== 'string') {
+      add(
+        'error',
+        'invalid-author',
+        `作品《${label}》的 author 不是字符串（实际为 ${describeValue(rawGame.author)}）`,
+        game.id,
+      )
+    } else if (!rawGame.author.trim()) {
+      add('error', 'missing-author', `作品《${label}》没有作者`, game.id)
+    }
+
+    if (rawGame.coverImage === undefined) {
+      add('warning', 'missing-cover', `作品《${label}》没有封面图`, game.id)
+    } else if (typeof rawGame.coverImage !== 'string') {
+      add(
+        'error',
+        'invalid-cover',
+        `作品《${label}》的 coverImage 不是字符串（实际为 ${describeValue(rawGame.coverImage)}）`,
+        game.id,
+      )
+    } else if (!rawGame.coverImage.trim()) {
       add('warning', 'missing-cover', `作品《${label}》没有封面图`, game.id)
     }
-    if (!game.bannerImage.trim()) {
+
+    if (rawGame.bannerImage === undefined) {
+      add('warning', 'missing-banner', `作品《${label}》没有 Banner 宣传图`, game.id)
+    } else if (typeof rawGame.bannerImage !== 'string') {
+      add(
+        'error',
+        'invalid-banner',
+        `作品《${label}》的 bannerImage 不是字符串（实际为 ${describeValue(rawGame.bannerImage)}）`,
+        game.id,
+      )
+    } else if (!rawGame.bannerImage.trim()) {
       add('warning', 'missing-banner', `作品《${label}》没有 Banner 宣传图`, game.id)
     }
-    if (game.downloads.length === 0) {
+
+    if (rawGame.downloads === undefined) {
       add('warning', 'missing-downloads', `作品《${label}》没有下载渠道`, game.id)
+    } else if (!Array.isArray(rawGame.downloads)) {
+      add(
+        'error',
+        'invalid-downloads',
+        `作品《${label}》的 downloads 不是数组（实际为 ${describeValue(rawGame.downloads)}）`,
+        game.id,
+      )
+    } else if (rawGame.downloads.length === 0) {
+      add('warning', 'missing-downloads', `作品《${label}》没有下载渠道`, game.id)
+    } else {
+      rawGame.downloads.forEach((link, linkIndex) => {
+        const where = `作品《${label}》的第 ${linkIndex + 1} 个下载渠道`
+        if (!isRecord(link)) {
+          add('error', 'invalid-download', `${where}不是对象（实际为 ${describeValue(link)}）`, game.id)
+          return
+        }
+        if (typeof link.provider !== 'string' || !link.provider.trim()) {
+          add('error', 'invalid-download', `${where}缺少 provider`, game.id)
+        }
+        if (typeof link.url !== 'string' || !link.url.trim()) {
+          add('error', 'invalid-download', `${where}缺少 url`, game.id)
+        }
+        if (link.password !== undefined && typeof link.password !== 'string') {
+          add('error', 'invalid-download', `${where}的 password 不是字符串`, game.id)
+        }
+      })
     }
-    if (
-      !Number.isFinite(game.releaseYear) ||
-      game.releaseYear < YEAR_MIN ||
-      game.releaseYear > YEAR_MAX
-    ) {
+
+    for (const { field, code, label: fieldLabel } of RAW_TEXT_LIST_FIELDS) {
+      const value = rawGame[field]
+      if (value === undefined) continue
+      if (!Array.isArray(value)) {
+        add(
+          'error',
+          code,
+          `作品《${label}》的${fieldLabel}字段不是数组（实际为 ${describeValue(value)}）`,
+          game.id,
+        )
+        continue
+      }
+      const invalidItems = value.filter((item) => typeof item !== 'string')
+      if (invalidItems.length > 0) {
+        add(
+          'error',
+          code,
+          `作品《${label}》的${fieldLabel}字段包含 ${invalidItems.length} 个非字符串项`,
+          game.id,
+        )
+      }
+    }
+
+    const year = rawGame.releaseYear
+    if (typeof year !== 'number' || !Number.isFinite(year)) {
+      add(
+        'error',
+        'invalid-year',
+        `作品《${label}》的发行年份不是数字（实际为 ${describeValue(year)}）`,
+        game.id,
+      )
+    } else if (year < YEAR_MIN || year > YEAR_MAX) {
       add(
         'warning',
         'implausible-year',
-        `作品《${label}》的发行年份 ${String(game.releaseYear)} 不在 ${YEAR_MIN}–${YEAR_MAX} 之间`,
+        `作品《${label}》的发行年份 ${year} 不在 ${YEAR_MIN}–${YEAR_MAX} 之间`,
         game.id,
       )
     }
@@ -290,6 +459,7 @@ export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
     const game = byId.get(id)
     const label = game?.title || id
     if (rawGame.relations === undefined) continue
+
     if (!Array.isArray(rawGame.relations)) {
       add('error', 'relation-not-array', `作品《${label}》的 relations 不是数组`, id)
       continue
@@ -318,7 +488,16 @@ export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
           id,
         )
       }
-      const targetId = readTargetId(rawRelation)
+      if (rawRelation.targetId !== undefined && typeof rawRelation.targetId !== 'string') {
+        add(
+          'error',
+          'relation-invalid-target',
+          `作品《${label}》有一条关系的目标 id 不是字符串（实际为 ${describeValue(rawRelation.targetId)}）`,
+          id,
+        )
+        continue
+      }
+      const targetId = rawRelationTargetId(rawRelation)
       if (!targetId) {
         add('error', 'relation-empty-target', `作品《${label}》有一条关系缺少目标 id`, id)
         continue
@@ -339,6 +518,7 @@ export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
       seenTargets.add(targetId)
 
       const targetRaw = rawById.get(targetId)
+      const target = byId.get(targetId)
       if (!targetRaw) {
         add(
           'error',
@@ -349,7 +529,6 @@ export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
         continue
       }
 
-      const target = byId.get(targetId)
       if (target && !isPubliclyVisible(target)) {
         add(
           'info',
@@ -361,7 +540,7 @@ export function analyzeCatalog(raw: unknown, source = ''): DataQualityReport {
 
       // 两端各存一条（同一对作品只应有一条有向边）；只报告一次
       const back = Array.isArray(targetRaw.relations) && targetRaw.relations.some(
-        (relation) => isRecord(relation) && readTargetId(relation) === id,
+        (relation) => rawRelationTargetId(relation) === id,
       )
       if (back && id < targetId) {
         add(

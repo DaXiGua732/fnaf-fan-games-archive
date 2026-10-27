@@ -31,6 +31,13 @@ import { isRecord } from './guards'
 
 export interface VocabularyGameMutationResult extends VocabularyMutationResult {
   games: AdminGame[]
+  /**
+   * 本次实际改写的作品 id。
+   *
+   * 持久化只能写这些记录：把整个作品列表重新序列化会顺手清掉
+   * 未编辑作品上的历史异常关系（质量检查本来要报告它们）。
+   */
+  affectedGameIds: string[]
 }
 
 /* ---------------------------------------------------------------------------
@@ -406,6 +413,7 @@ export function mergeVocabularyEntriesIn(
   if (!target) fail(`找不到合并目标词条：${targetId}`)
 
   let affectedGames = 0
+  const affectedGameIds: string[] = []
   const nextGames = games.map((game) => {
     const values = getVocabularyValues(game, collection)
     let changed = false
@@ -424,12 +432,13 @@ export function mergeVocabularyEntriesIn(
     if (!changed) return game
 
     affectedGames += 1
+    affectedGameIds.push(game.id)
     return setVocabularyValues(game, collection, nextValues)
   })
 
   const nextTaxonomy = cloneTaxonomy(taxonomy)
   nextTaxonomy[collection] = nextTaxonomy[collection].filter((item) => item.id !== sourceId)
-  return { taxonomy: nextTaxonomy, games: nextGames, affectedGames }
+  return { taxonomy: nextTaxonomy, games: nextGames, affectedGames, affectedGameIds }
 }
 
 /**
@@ -454,19 +463,21 @@ export function deleteVocabularyEntryIn(
   }
 
   let affectedGames = 0
+  const affectedGameIds: string[] = []
   const nextGames = options.removeFromGames
     ? games.map((game) => {
         const values = getVocabularyValues(game, collection)
         const nextValues = values.filter((value) => !vocabularyValueMatches(value, entry))
         if (nextValues.length === values.length) return game
         affectedGames += 1
+        affectedGameIds.push(game.id)
         return setVocabularyValues(game, collection, nextValues)
       })
     : games
 
   const nextTaxonomy = cloneTaxonomy(taxonomy)
   nextTaxonomy[collection] = nextTaxonomy[collection].filter((item) => item.id !== id)
-  return { taxonomy: nextTaxonomy, games: nextGames, affectedGames }
+  return { taxonomy: nextTaxonomy, games: nextGames, affectedGames, affectedGameIds }
 }
 
 /* ---------------------------------------------------------------------------

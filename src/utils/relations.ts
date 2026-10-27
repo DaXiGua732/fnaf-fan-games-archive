@@ -79,6 +79,36 @@ export function normalizeRelations(input: unknown, selfId: string): GameRelation
 }
 
 /**
+ * 两组关系是否表达同一组有向边（顺序敏感 —— 顺序就是后台展示顺序）。
+ *
+ * 只比较 `type` / `targetId`：`normalizeRelations()` 会保留未知扩展字段，
+ * 而编辑器草稿只读写这两个字段。若把扩展字段也纳入比较，
+ * 一次没有碰关系的普通保存就会被误判成「明确修改了关系」，
+ * 从而把原始关系数组覆盖成归一化结果。
+ */
+export function sameRelations(
+  a: readonly GameRelation[],
+  b: readonly GameRelation[],
+): boolean {
+  if (a.length !== b.length) return false
+  return a.every((relation, index) => {
+    const other = b[index]
+    return (
+      other !== undefined &&
+      relation.type === other.type &&
+      relation.targetId === other.targetId
+    )
+  })
+}
+
+/** 原始（未归一化）关系对象里的目标 id；脏数据返回空字符串 */
+export function rawRelationTargetId(relation: unknown): string {
+  return isRecord(relation) && typeof relation.targetId === 'string'
+    ? relation.targetId.trim()
+    : ''
+}
+
+/**
  * 校验「提交上来的原始关系数组」的形状。
  *
  * 为什么不能只依赖 normalizeRelations：
