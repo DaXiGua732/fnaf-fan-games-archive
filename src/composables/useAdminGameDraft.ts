@@ -611,6 +611,8 @@ export interface AdminGameDraftAPI {
   removeRelation: (index: number) => void
   /** 关联目标候选（排除自身与已选），按标题排序 */
   searchRelationTargets: (needle: string, limit?: number) => AdminGame[]
+  /** 预览快照：已保存条目 + 当前草稿覆盖；新建时为 'preview' */
+  previewGame: () => AdminGame
 
   // —— 图片（Phase 7）——
   /** 当前草稿的图库（已归一化） */
@@ -691,16 +693,32 @@ export function useAdminGameDraft(): AdminGameDraftAPI {
   /** 下载渠道逐行校验错误，与 draftDownloads 一一对应（空字符串 = 该行通过） */
   const downloadErrors = computed<string[]>(() => readDownloads(draft).map(validateDownload))
 
-  /** 用「当前草稿覆盖后的作品」做关系校验；新建作品 id 为空，自关联留给仓储兜底 */
-  function currentDraftGame(): AdminGame {
+  /**
+   * 已保存条目 + 当前草稿覆盖。
+   *
+   * 不可编辑字段（metrics / createdAt / updatedAt）来自已保存条目，可编辑字段来自草稿。
+   * 关系校验与「预览」共用这一条规则 —— 两边各拼一次的话，
+   * 预览里看到的关系迟早和保存时校验的关系不是同一份。
+   */
+  function composeGame(id: string): AdminGame {
     const base = draftGameId.value
       ? adminGameRepository.value.games.value.find((game) => game.id === draftGameId.value)
       : undefined
     return {
       ...(base ?? blankGame()),
       ...draftToPatch(draft),
-      id: draftGameId.value,
+      id,
     } as AdminGame
+  }
+
+  /** 关系校验用：新建作品 id 为空，自关联留给仓储兜底 */
+  function currentDraftGame(): AdminGame {
+    return composeGame(draftGameId.value)
+  }
+
+  /** 预览用：新建作品给占位 id，详情页不会把它当成已存在的条目 */
+  function previewGame(): AdminGame {
+    return composeGame(draftGameId.value || 'preview')
   }
 
   /** 与 draftRelations 一一对应的行错误（空字符串 = 通过） */
@@ -1059,6 +1077,7 @@ export function useAdminGameDraft(): AdminGameDraftAPI {
     addRelation,
     removeRelation,
     searchRelationTargets,
+    previewGame,
     draftImages,
     canAddImage,
     setImage,

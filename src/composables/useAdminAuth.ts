@@ -18,6 +18,7 @@ import { computed, ref } from 'vue'
 import { useLocalAdminRepository, useRemoteAdminRepository } from '../repositories'
 import { DATA_REPO } from '../repositories/dataRepo'
 import { GithubApiError, githubRequest } from '../services/githubApi'
+import { getLocalStorage } from '../utils/localStorage'
 
 /** 本机存放令牌的键名。带版本号，将来换方案时改 v2 即可让旧值自然失效 */
 export const ADMIN_TOKEN_KEY = 'fnaf-archive:admin-token:v1'
@@ -27,19 +28,19 @@ export const TOKEN_CREATE_URL = 'https://github.com/settings/personal-access-tok
 
 function readStoredToken(): string {
   try {
-    if (typeof localStorage === 'undefined') return ''
-    return localStorage.getItem(ADMIN_TOKEN_KEY) ?? ''
+    return getLocalStorage()?.getItem(ADMIN_TOKEN_KEY) ?? ''
   } catch {
-    // 隐私模式下访问 localStorage 会抛错 —— 当作未登录处理
+    // 隐私模式下读取也可能抛错 —— 当作未登录处理
     return ''
   }
 }
 
 function writeStoredToken(value: string): void {
   try {
-    if (typeof localStorage === 'undefined') return
-    if (value) localStorage.setItem(ADMIN_TOKEN_KEY, value)
-    else localStorage.removeItem(ADMIN_TOKEN_KEY)
+    const storage = getLocalStorage()
+    if (!storage) return
+    if (value) storage.setItem(ADMIN_TOKEN_KEY, value)
+    else storage.removeItem(ADMIN_TOKEN_KEY)
   } catch {
     // 存不进去也只能接受：本次会话仍可用，只是刷新后要重新登录
   }

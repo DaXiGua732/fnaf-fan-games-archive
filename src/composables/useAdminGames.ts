@@ -45,6 +45,7 @@ import type {
 } from '../types/admin'
 import { TAG_LIMITS, isValidTag, normalizeTag } from '../types/admin'
 import type { GameStatus } from '../types/game'
+import { nowIso } from '../utils/gameFactory'
 import { prepareImageForUpload } from '../utils/imageProcess'
 import { DRAFT_LIMITS } from './useAdminGameDraft'
 
@@ -636,11 +637,6 @@ async function resetToSeed(): Promise<void> {
   tagCreatedAt.value = {}
   clearSelection()
   lastOutcome.value = null
-}
-
-/** 用于标记被改动条目的更新时间 —— 这是**真实**的编辑时刻，不是伪造的日期 */
-function nowIso(): string {
-  return new Date().toISOString()
 }
 
 /**

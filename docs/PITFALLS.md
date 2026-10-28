@@ -82,14 +82,14 @@
 20. **Abacus `/hit` 是 GET**：被浏览器 / CDN 缓存一次就少计一次浏览。
     provider 同时用 `cache: 'no-store'` 与时间戳兜底，别删这两道防线。
 
-21. **主题 storage key 有两个读者**：`index.html` 的防闪白内联脚本与 `useTheme.ts`
-    （模式 / 强调色 id / 自定义色三个 key）。改 key 必须同时改两处；
-    `selftest` 有静态守卫比对。
-    强调色 id 有三处读者（`useTheme.ts` 的联合类型 / `index.html` 的白名单 /
-    `src/styles/index.css` 的 `[data-theme]` 选择器），增删歌姬必须三处一起改，
+21. **主题的 storage key 只有一处定义**：`src/theme/themeSettings.ts`。首帧脚本
+    （`src/themeBoot.ts`，构建时内联进 `index.html`）与 `useTheme.ts` 都从这里取；
+    `selftest` 守卫 key 不得散落，`npm run build` 末尾检查产物里的占位符已被替换。
+    强调色 id 另有两处读者（`themeSettings.ts` 的数组 / 联合类型 与
+    `src/styles/index.css` 的 `[data-theme]` 选择器），增删歌姬必须一起改，
     否则会出现「选了没反应」或「属性正确但颜色不变」。
-    自定义色的派生算法还有两份实现（`src/utils/themeColor.ts` 与 `index.html`
-    内联脚本），改对比度阈值或推导规则必须同步；漏改的表现是「刷新前后颜色不一样」。
+    自定义色的派生算法只有 `src/utils/themeColor.ts` 一份，首帧与运行期共用；
+    不要再往 `index.html` 里手写等价逻辑。
 
 22. **`white` / `black` 已被重映射**为 `paper` / `ink`：不要在 `bg-accent*` 上用
     `text-white` / `text-black` 当前景，否则深色模式会反向；用 `text-on-accent`，

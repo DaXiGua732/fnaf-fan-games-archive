@@ -157,5 +157,5 @@ npm run check:data -- --strict          # 有 error 时退出码 1（默认总�
 | `fnaf-archive:request-voted:v1` | 本机已投记录 |
 | `fnaf-archive:request-client:v1` | 浏览器去重身份（不是安全凭据） |
 
-> 这些 key 都由对应模块导出常量，代码是唯一出处；主题 key 另有一致性守卫
-> （`index.html` 与 `useTheme.ts` 必须相同）。
+> 这些 key 都由对应模块导出常量，代码是唯一出处；主题 key 只定义在
+> `src/theme/themeSettings.ts`（首帧脚本与 `useTheme` 共用），有静态守卫。

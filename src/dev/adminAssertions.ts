@@ -802,6 +802,10 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   draftApi.draft.title = '被改过的标题'
   check('改动后 · isDirty', draftApi.isDirty.value, true)
   check('改动后 · changedFields', draftApi.changedFields.value.join(','), 'title')
+  const preview = draftApi.previewGame()
+  check('预览快照 · 已编辑字段取草稿', preview.title, '被改过的标题')
+  check('预览快照 · id 沿用已保存条目', preview.id, target.id)
+  check('预览快照 · 不可编辑字段沿用已保存条目', preview.metrics.score, target.metrics.score)
 
   draftApi.resetToBaseline()
   check('撤销修改后 · isDirty', draftApi.isDirty.value, false)
@@ -1071,6 +1075,10 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   check('新建后 · 目录总数 +1', lib.statusCounts.value.all, countBefore + 1)
   check('新建后 · 归入草稿计数', lib.statusCounts.value.draft, DRAFT0 + 1)
   check('新建后 · 可用作者包含新作者', lib.availableAuthors.value.includes('Test Author'), true)
+
+  const freshDraftApi = useAdminGameDraft()
+  freshDraftApi.loadFrom(undefined)
+  check('预览快照 · 新建作品的占位 id', freshDraftApi.previewGame().id, 'preview')
 
   // —— id 冲突时自动加后缀 ——
   const dupOutcome = await lib.saveGame({ patch: draftToPatch(newDraft) })

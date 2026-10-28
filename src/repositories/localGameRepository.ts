@@ -49,6 +49,7 @@ import {
   normalizeTaxonomy,
   updateVocabularyEntryIn,
 } from '../utils/taxonomy'
+import { getLocalStorage } from '../utils/localStorage'
 import type { GameRepository } from './gameRepository'
 
 /**
@@ -121,19 +122,6 @@ function seedTaxonomy(): Taxonomy {
   const raw = (db as { taxonomy?: unknown }).taxonomy
   const result = normalizeTaxonomy(raw)
   return result.usable ? result.taxonomy : initialTaxonomy()
-}
-
-/**
- * 取浏览器提供的 localStorage。
- * SSR（Node）与隐私模式下没有 —— 那时返回 null，仓储降级为「只写内存」。
- */
-function resolveBrowserStorage(): StorageLike | null {
-  try {
-    return typeof localStorage === 'undefined' ? null : localStorage
-  } catch {
-    // 某些隐私模式下单纯**访问** localStorage 就会抛错
-    return null
-  }
 }
 
 /**
@@ -212,8 +200,7 @@ function readStoredTaxonomy(
 export function createLocalGameRepository(
   options: { storage?: StorageLike | null } = {},
 ): GameRepository {
-  // 传了就用传进来的（测试注入），没传就取浏览器环境
-  const backend = options.storage === undefined ? resolveBrowserStorage() : options.storage
+  const backend = options.storage === undefined ? getLocalStorage() : options.storage
 
   const storedCatalog = readStoredCatalog(backend)
   const initial = storedCatalog ?? seedCatalog()

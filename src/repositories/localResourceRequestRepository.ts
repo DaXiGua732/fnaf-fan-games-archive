@@ -26,6 +26,8 @@ import {
   normalizeRequestTitle,
   sortResourceRequestsByPriority,
 } from '../utils/requestMatch'
+import { isRecord } from '../utils/guards'
+import { getLocalStorage } from '../utils/localStorage'
 import type { StorageLike } from './localGameRepository'
 
 export const RESOURCE_REQUEST_STORAGE_KEY = 'fnaf-archive:resource-requests:v1'
@@ -52,14 +54,6 @@ function emptyState(): StoredState {
   return { version: 1, requests: [], votes: {} }
 }
 
-function resolveBrowserStorage(): StorageLike | null {
-  try {
-    return typeof localStorage === 'undefined' ? null : localStorage
-  } catch {
-    return null
-  }
-}
-
 /**
  * Web Locks 让同一浏览器的多个标签页串行化「读 → 改 → 写」。
  * 没有该 API 的旧环境仍会退化为后写覆盖 —— 本机模式不是共享存储，
@@ -73,10 +67,6 @@ function getLockManager(): LockManagerLike | null {
   if (typeof navigator === 'undefined') return null
   const locks = (navigator as Navigator & { locks?: LockManagerLike }).locks
   return locks && typeof locks.request === 'function' ? locks : null
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function isStoredRequest(value: unknown): value is StoredRequest {
@@ -157,7 +147,7 @@ export function createLocalResourceRequestRepository(
   options: LocalResourceRequestRepositoryOptions = {},
 ): ResourceRequestRepository {
   const backend =
-    options.storage === undefined ? resolveBrowserStorage() : (options.storage ?? null)
+    options.storage === undefined ? getLocalStorage() : (options.storage ?? null)
   const now = options.now ?? Date.now
   const uuid = options.uuid ?? defaultUuid
 

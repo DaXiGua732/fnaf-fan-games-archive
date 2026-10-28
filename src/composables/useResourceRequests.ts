@@ -25,6 +25,8 @@ import {
   ResourceRequestError,
 } from '../types/resourceRequest'
 import { getRequestClientId } from '../utils/requestClient'
+import { isRecord } from '../utils/guards'
+import { getLocalStorage } from '../utils/localStorage'
 import {
   compareResourceRequests,
   matchFulfilledGameForTitle,
@@ -40,18 +42,6 @@ const GENERIC_ERROR = '请求服务暂时不可用，请稍后再试。'
 interface CachedRequests {
   at: number
   requests: ResourceRequest[]
-}
-
-function resolveStorage(): Storage | null {
-  try {
-    return typeof localStorage === 'undefined' ? null : localStorage
-  } catch {
-    return null
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function isRequest(value: unknown): value is ResourceRequest {
@@ -79,7 +69,7 @@ function parseRequestList(value: unknown): ResourceRequest[] | null {
 }
 
 function readVotedIds(): Set<string> {
-  const storage = resolveStorage()
+  const storage = getLocalStorage()
   if (!storage) return new Set()
   try {
     const raw = storage.getItem(VOTED_KEY)
@@ -93,7 +83,7 @@ function readVotedIds(): Set<string> {
 }
 
 function persistVotedIds(ids: Set<string>): void {
-  const storage = resolveStorage()
+  const storage = getLocalStorage()
   if (!storage) return
   try {
     storage.setItem(VOTED_KEY, JSON.stringify([...ids]))
@@ -103,7 +93,7 @@ function persistVotedIds(ids: Set<string>): void {
 }
 
 function readCache(): ResourceRequest[] | null {
-  const storage = resolveStorage()
+  const storage = getLocalStorage()
   if (!storage) return null
   try {
     const raw = storage.getItem(CACHE_KEY)
@@ -117,7 +107,7 @@ function readCache(): ResourceRequest[] | null {
 }
 
 function writeCache(requests: ResourceRequest[]): void {
-  const storage = resolveStorage()
+  const storage = getLocalStorage()
   if (!storage) return
   const payload: CachedRequests = { at: Date.now(), requests }
   try {

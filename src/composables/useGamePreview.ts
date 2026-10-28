@@ -25,6 +25,7 @@
  */
 import type { InjectionKey, Ref } from 'vue'
 import type { AdminGame } from '../types/admin'
+import { getLocalStorage } from '../utils/localStorage'
 
 /**
  * 用 **localStorage** 存预览内容。
@@ -49,22 +50,13 @@ const PREVIEW_KEY = 'fnaf-archive:preview:v1'
 /** 预览页的地址。挂在后台路由下，因此自动受登录门禁保护 */
 export const PREVIEW_PATH = '/admin/preview'
 
-function storage(): Storage | null {
-  try {
-    return typeof localStorage === 'undefined' ? null : localStorage
-  } catch {
-    // 隐私模式下访问 localStorage 会抛错 —— 当作没有
-    return null
-  }
-}
-
 /**
  * 把草稿写进 localStorage，供新标签页里的预览读取。
  * 写不进去也不报错：预览页会显示「没有可预览的内容」，而不是崩掉。
  */
 export function publishPreview(game: AdminGame): void {
   try {
-    storage()?.setItem(PREVIEW_KEY, JSON.stringify(game))
+    getLocalStorage()?.setItem(PREVIEW_KEY, JSON.stringify(game))
   } catch {
     // 配额满 / 隐私模式：预览会显示空状态，不影响编辑本身
   }
@@ -77,7 +69,7 @@ export function publishPreview(game: AdminGame): void {
  */
 export function readPreview(): AdminGame | null {
   try {
-    const store = storage()
+    const store = getLocalStorage()
     const raw = store?.getItem(PREVIEW_KEY)
     if (store) store.removeItem(PREVIEW_KEY)
     if (!raw) return null

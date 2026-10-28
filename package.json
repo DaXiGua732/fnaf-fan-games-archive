@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "data:pull": "node scripts/pull-data.mjs",
-    "build": "vite build",
+    "build": "vite build && node scripts/check-theme-boot.mjs",
     "typecheck": "vue-tsc --noEmit",
     "assets": "node scripts/gen-placeholders.mjs",
     "gamejolt:helper": "node scripts/gamejolt/helper.mjs",

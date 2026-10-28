@@ -23,12 +23,11 @@ import {
 } from '../../composables/useAdminGameDraft'
 import { useAdminGames } from '../../composables/useAdminGames'
 import { PREVIEW_PATH, publishPreview } from '../../composables/useGamePreview'
-import { blankGame, slugify } from '../../utils/gameFactory'
+import { slugify } from '../../utils/gameFactory'
 import {
   DRAFT_GROUP_FIELDS,
   DRAFT_TEXT_FIELDS,
   STORAGE_NOTICE,
-  type AdminGame,
   type DraftErrors,
   type StorageKind,
 } from '../../types/admin'
@@ -65,6 +64,7 @@ const {
   loadFrom,
   resetToBaseline,
   markSaved,
+  previewGame,
 } = provideAdminGameDraft()
 
 /** 新增模式：路由 /admin/games/new 不传 id */
@@ -286,18 +286,11 @@ async function onPublish(): Promise<void> {
  * 卸载即丢弃，未保存的改动就没了（离开拦截也是为这件事存在的）。
  * 新标签页毫发无损：本页不动，草稿原样留在原地。
  *
- * 【预览数据怎么来】以已保存的那条为底（保住 metrics 这类不可编辑字段），
- * 再把草稿盖上去 —— 于是「能编辑的字段是新的，不能编辑的字段还在」。
- * 传给预览页的方式是 localStorage（sessionStorage 不会跟着新标签页走）。
+ * 【预览数据怎么来】`previewGame()` 负责「已保存条目 + 草稿覆盖」，
+ * 与保存前的关系校验共用同一条组装规则。传给预览页的方式是 localStorage。
  */
 function onPreview(): void {
-  const source = props.id ? getGameById(props.id) : undefined
-  const preview: AdminGame = {
-    ...(source ?? blankGame()),
-    ...draftToPatch(draft),
-    id: props.id || 'preview',
-  }
-  publishPreview(preview)
+  publishPreview(previewGame())
   window.open(`${import.meta.env.BASE_URL}#${PREVIEW_PATH}`, '_blank', 'noopener')
 }
 

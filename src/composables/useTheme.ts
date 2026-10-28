@@ -1,9 +1,26 @@
 import { computed, ref, type ComputedRef } from 'vue'
+import { applyTheme } from '../theme/applyTheme'
 import {
-  DEFAULT_CUSTOM_COLOR,
-  deriveThemeVars,
-  parseHexColor,
-} from '../utils/themeColor'
+  DEFAULT_ACCENT,
+  DEFAULT_PREFERENCE,
+  THEME_ACCENT_STORAGE_KEY,
+  THEME_ACCENTS,
+  THEME_CUSTOM_STORAGE_KEY,
+  THEME_MODE_STORAGE_KEY,
+  isModePreference,
+  isThemeAccent,
+  readSystemPrefersDark,
+  readThemePreferences,
+  resolveMode,
+  type ModePreference,
+  type ThemeAccent,
+  type ThemeAccentOption,
+  type ThemeMode,
+} from '../theme/themeSettings'
+import { DEFAULT_CUSTOM_COLOR, parseHexColor } from '../utils/themeColor'
+import { getLocalStorage } from '../utils/localStorage'
+
+export type { ModePreference } from '../theme/themeSettings'
 
 /**
  * 站点主题系统
@@ -16,51 +33,10 @@ import {
  *  - 模块级单例 —— 公开站与后台共享同一份状态。
  *  - 所有 document / window / localStorage 访问都带 SSR / Node 守卫，
  *    因为冒烟测试会在 Node 里真实渲染组件（没有 DOM）。
- *  - 首屏防闪白由 index.html 里的内联脚本负责；本模块只负责应用内切换、
- *    跨标签页同步与系统主题变化。两处使用同一组 storage key，且自定义色的
- *    推导算法必须保持等价（见 utils/themeColor.ts）。
+ *  - 首屏防闪白由构建时内联的 `src/themeBoot.ts` 负责；它与本模块共用
+ *    `src/theme/**` 的读取与派生实现，因此不存在第二份算法。
+ *    本模块只负责应用内切换、跨标签页同步与系统主题变化。
  */
-
-export type ThemeAccent =
-  | 'miku'
-  | 'rin'
-  | 'len'
-  | 'luka'
-  | 'meiko'
-  | 'kaito'
-  | 'custom'
-export type ThemeMode = 'light' | 'dark'
-export type ModePreference = 'system' | 'light' | 'dark'
-
-export interface ThemeAccentOption {
-  readonly id: ThemeAccent
-  readonly label: string
-  /** 仅用于选择器里的色块；界面颜色本身由 CSS 变量提供 */
-  readonly swatch: string
-}
-
-/** ⚠️ 这三个字符串必须与 index.html 内联脚本中的完全一致 */
-export const THEME_MODE_STORAGE_KEY = 'fnaf-archive:theme-mode:v1'
-export const THEME_ACCENT_STORAGE_KEY = 'fnaf-archive:theme-accent:v1'
-export const THEME_CUSTOM_STORAGE_KEY = 'fnaf-archive:theme-custom:v1'
-
-export const THEME_ACCENTS: readonly ThemeAccentOption[] = [
-  { id: 'miku', label: '初音蓝', swatch: '#39c5bb' },
-  { id: 'rin', label: '镜音橙', swatch: '#f2a900' },
-  { id: 'len', label: '镜音黄', swatch: '#ffe211' },
-  { id: 'luka', label: '巡音粉', swatch: '#ff9ec4' },
-  { id: 'meiko', label: 'MEIKO红', swatch: '#c8102e' },
-  { id: 'kaito', label: 'KAITO蓝', swatch: '#3366cc' },
-]
-
-const DEFAULT_ACCENT: ThemeAccent = 'miku'
-const DEFAULT_PREFERENCE: ModePreference = 'system'
-
-/** 浏览器地址栏 / UA 主题色：与 CSS 中两种模式的 paper 一致 */
-const PAPER_THEME_COLORS: Record<ThemeMode, string> = {
-  light: '#fafaf8',
-  dark: '#141413',
-}
 
 /* ---------------------------------------------------------------------------
    模块级单例状态
@@ -79,125 +55,18 @@ let mediaListenerAttached = false
 let storageListenerAttached = false
 
 /* ---------------------------------------------------------------------------
-   纯函数与带守卫的读写
+   本机写入
    --------------------------------------------------------------------------- */
-export function isThemeAccent(value: unknown): value is ThemeAccent {
-  return (
-    value === 'custom' ||
-    (typeof value === 'string' && THEME_ACCENTS.some((option) => option.id === value))
-  )
-}
-
-export function isModePreference(value: unknown): value is ModePreference {
-  return value === 'system' || value === 'light' || value === 'dark'
-}
-
-export function resolveMode(
-  preference: ModePreference,
-  systemPrefersDarkValue: boolean,
-): ThemeMode {
-  if (preference === 'system') return systemPrefersDarkValue ? 'dark' : 'light'
-  return preference
-}
-
-function getStorage(): Storage | null {
-  try {
-    return typeof globalThis.localStorage === 'undefined'
-      ? null
-      : globalThis.localStorage
-  } catch {
-    // 隐私模式 / 被浏览器策略阻止时，读取 localStorage 本身可能抛错
-    return null
-  }
-}
-
-function readStored(key: string): string | null {
-  try {
-    return getStorage()?.getItem(key) ?? null
-  } catch {
-    return null
-  }
-}
-
 function writeStored(key: string, value: string): void {
   try {
-    getStorage()?.setItem(key, value)
+    getLocalStorage()?.setItem(key, value)
   } catch {
     // 存不下就算了：本次会话仍然应用所选主题，只是下次打开会回到默认
   }
 }
 
-export function readModePreference(): ModePreference {
-  const stored = readStored(THEME_MODE_STORAGE_KEY)
-  return isModePreference(stored) ? stored : DEFAULT_PREFERENCE
-}
-
-export function readAccent(): ThemeAccent {
-  const stored = readStored(THEME_ACCENT_STORAGE_KEY)
-  return isThemeAccent(stored) ? stored : DEFAULT_ACCENT
-}
-
-/** 自定义色始终读出来（切换回预设色时不丢，下次选「自定义」还在） */
-export function readCustomColor(): string {
-  return parseHexColor(readStored(THEME_CUSTOM_STORAGE_KEY)) ?? DEFAULT_CUSTOM_COLOR
-}
-
-function readSystemPrefersDark(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return false
-  }
-  try {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
-  } catch {
-    return false
-  }
-}
-
-/**
- * 把模式与强调色写到根元素和浏览器主题色上。
- * 只操作 documentElement / meta，不触碰任何布局样式。
- *
- * 预设色由 CSS 的 [data-theme] 提供变量；自定义色没有对应的 CSS 块，
- * 因此在这里现算四个变量并以内联 style 覆盖；切回预设色时再移除覆盖。
- */
-export function applyTheme(
-  themeMode: ThemeMode,
-  themeAccent: ThemeAccent,
-  custom: string = DEFAULT_CUSTOM_COLOR,
-): void {
-  if (typeof document === 'undefined') return
-
-  const root = document.documentElement
-  root.dataset.mode = themeMode
-  root.dataset.theme = themeAccent
-  root.style.colorScheme = themeMode
-
-  const vars =
-    themeAccent === 'custom'
-      ? deriveThemeVars(parseHexColor(custom) ?? DEFAULT_CUSTOM_COLOR, themeMode)
-      : null
-  const properties: readonly [string, string][] = vars
-    ? [
-        ['--accent-rgb', vars.accent],
-        ['--accent-surface-rgb', vars.surface],
-        ['--accent-bright-rgb', vars.bright],
-        ['--on-accent-rgb', vars.onAccent],
-      ]
-    : []
-  for (const [name, value] of properties) root.style.setProperty(name, value)
-  if (!vars) {
-    for (const name of [
-      '--accent-rgb',
-      '--accent-surface-rgb',
-      '--accent-bright-rgb',
-      '--on-accent-rgb',
-    ]) {
-      root.style.removeProperty(name)
-    }
-  }
-
-  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
-  meta?.setAttribute('content', PAPER_THEME_COLORS[themeMode])
+function applyCurrent(): void {
+  applyTheme(mode.value, accent.value, customColor.value)
 }
 
 /* ---------------------------------------------------------------------------
@@ -205,9 +74,7 @@ export function applyTheme(
    --------------------------------------------------------------------------- */
 function onSystemThemeChange(event: MediaQueryListEvent): void {
   systemPrefersDark.value = event.matches
-  if (modePreference.value === 'system') {
-    applyTheme(mode.value, accent.value, customColor.value)
-  }
+  if (modePreference.value === 'system') applyCurrent()
 }
 
 /** 只在「跟随系统」时保留媒体查询监听；切到日间 / 夜间后移除 */
@@ -231,20 +98,18 @@ function syncSystemMediaListener(): void {
 }
 
 function syncFromStorage(): void {
-  const nextPreference = readModePreference()
-  const nextAccent = readAccent()
-  const nextCustom = readCustomColor()
+  const next = readThemePreferences()
   const changed =
-    nextPreference !== modePreference.value ||
-    nextAccent !== accent.value ||
-    nextCustom !== customColor.value
+    next.preference !== modePreference.value ||
+    next.accent !== accent.value ||
+    next.custom !== customColor.value
 
-  modePreference.value = nextPreference
-  accent.value = nextAccent
-  customColor.value = nextCustom
+  modePreference.value = next.preference
+  accent.value = next.accent
+  customColor.value = next.custom
   syncSystemMediaListener()
 
-  if (changed) applyTheme(mode.value, accent.value, customColor.value)
+  if (changed) applyCurrent()
 }
 
 function onStorageChange(event: StorageEvent): void {
@@ -270,12 +135,13 @@ export function initTheme(): void {
   if (initialized) return
   initialized = true
 
-  modePreference.value = readModePreference()
-  accent.value = readAccent()
-  customColor.value = readCustomColor()
+  const prefs = readThemePreferences()
+  modePreference.value = prefs.preference
+  accent.value = prefs.accent
+  customColor.value = prefs.custom
   systemPrefersDark.value = readSystemPrefersDark()
 
-  applyTheme(mode.value, accent.value, customColor.value)
+  applyCurrent()
   syncSystemMediaListener()
 
   if (typeof window !== 'undefined' && !storageListenerAttached) {
@@ -287,21 +153,21 @@ export function initTheme(): void {
 function setMode(next: ModePreference): void {
   if (!isModePreference(next)) return
   modePreference.value = next
-  // 与内联脚本保持一致：即使选择「跟随系统」也写入字面量 'system'
+  // 即使选择「跟随系统」也写入字面量 'system'
   writeStored(THEME_MODE_STORAGE_KEY, next)
 
   if (next === 'system') {
     systemPrefersDark.value = readSystemPrefersDark()
   }
   syncSystemMediaListener()
-  applyTheme(mode.value, accent.value, customColor.value)
+  applyCurrent()
 }
 
 function setAccent(next: ThemeAccent): void {
   if (!isThemeAccent(next)) return
   accent.value = next
   writeStored(THEME_ACCENT_STORAGE_KEY, next)
-  applyTheme(mode.value, accent.value, customColor.value)
+  applyCurrent()
 }
 
 /**
@@ -315,7 +181,7 @@ function setCustomAccent(next: string): boolean {
   accent.value = 'custom'
   writeStored(THEME_CUSTOM_STORAGE_KEY, normalized)
   writeStored(THEME_ACCENT_STORAGE_KEY, 'custom')
-  applyTheme(mode.value, accent.value, customColor.value)
+  applyCurrent()
   return true
 }
 

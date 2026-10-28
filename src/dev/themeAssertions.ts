@@ -1,10 +1,14 @@
 import type { Assertion } from './libraryAssertions'
 import {
+  THEME_ACCENT_STORAGE_KEY,
+  THEME_ACCENTS,
+  THEME_CUSTOM_STORAGE_KEY,
+  THEME_MODE_STORAGE_KEY,
   isModePreference,
   isThemeAccent,
+  readThemePreferences,
   resolveMode,
-  THEME_ACCENTS,
-} from '../composables/useTheme'
+} from '../theme/themeSettings'
 import {
   DEFAULT_CUSTOM_COLOR,
   deriveThemeVars,
@@ -89,5 +93,35 @@ export function runThemeAssertions(): Assertion[] {
   const darkNavy = deriveThemeVars('#111111', 'dark')
   check('deriveThemeVars · 深色模式把暗色提亮成可读文字色', darkNavy.accent !== darkNavy.surface, true)
 
+  // 首帧启动脚本与 useTheme 共用 readThemePreferences —— 默认值 / 回退规则只此一份
+  const storageWith = (entries: Record<string, string>): Storage =>
+    ({ getItem: (key: string) => entries[key] ?? null }) as unknown as Storage
+
+  const empty = readThemePreferences(storageWith({}))
+  check('readThemePreferences · 空存储 → 跟随系统', empty.preference, 'system')
+  check('readThemePreferences · 空存储 → 默认强调色', empty.accent, 'miku')
+  check('readThemePreferences · 空存储 → 默认自定义色', empty.custom, DEFAULT_CUSTOM_COLOR)
+
+  const legacy = readThemePreferences(
+    storageWith({
+      [THEME_MODE_STORAGE_KEY]: 'auto',
+      [THEME_ACCENT_STORAGE_KEY]: 'red',
+      [THEME_CUSTOM_STORAGE_KEY]: 'not-a-color',
+    }),
+  )
+  check('readThemePreferences · 非法模式回退 system', legacy.preference, 'system')
+  check('readThemePreferences · 旧版强调色回退 miku', legacy.accent, 'miku')
+  check('readThemePreferences · 非法自定义色回退默认', legacy.custom, DEFAULT_CUSTOM_COLOR)
+
+  const custom = readThemePreferences(
+    storageWith({
+      [THEME_MODE_STORAGE_KEY]: 'dark',
+      [THEME_ACCENT_STORAGE_KEY]: 'custom',
+      [THEME_CUSTOM_STORAGE_KEY]: '  #39C5BB ',
+    }),
+  )
+  check('readThemePreferences · 读取模式', custom.preference, 'dark')
+  check('readThemePreferences · 读取自定义强调色', custom.accent, 'custom')
+  check('readThemePreferences · 自定义色规范化', custom.custom, '#39c5bb')
   return results
 }

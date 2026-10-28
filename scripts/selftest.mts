@@ -104,6 +104,20 @@ const FIXED_PALETTE_CLASS =
 
 const INDEX_HTML = readFileSync(join(PROJECT_ROOT, 'index.html'), 'utf8')
 
+/** 主题设置的唯一出处；首帧脚本与 useTheme 都从这里取 */
+const THEME_STORAGE_KEYS = [
+  'fnaf-archive:theme-mode:v1',
+  'fnaf-archive:theme-accent:v1',
+  'fnaf-archive:theme-custom:v1',
+]
+const THEME_SETTINGS_SOURCE = SOURCES.find((f) => f.path === 'src/theme/themeSettings.ts')
+/** 会被内联进首帧的模块 —— 引 Vue 会把整包拖进启动脚本 */
+const THEME_ENTRY_FILES = [
+  'src/themeBoot.ts',
+  'src/theme/applyTheme.ts',
+  'src/theme/themeSettings.ts',
+]
+
 /**
  * Supabase SQL 无法在本地执行（没有 psql / Docker），但它的安全边界必须可回归。
  * 这些守卫只检查「关键声明还在」：RLS、收回直接写权限、security definer + search_path、
@@ -177,13 +191,27 @@ const staticResults: Assertion[] = [
     '只使用 anon public key；service_role 绝不能进入前端',
   ),
   guard(
-    '静态守卫 · 主题启动脚本与 useTheme 使用同一组 key',
+    '静态守卫 · 首帧主题脚本由 themeBoot 构建注入',
     [
-      'fnaf-archive:theme-mode:v1',
-      'fnaf-archive:theme-accent:v1',
-      'fnaf-archive:theme-custom:v1',
-    ].filter((key) => !INDEX_HTML.includes(key)),
-    'index.html 的防闪白脚本必须读取与 useTheme 相同的 storage key',
+      !INDEX_HTML.includes('<!--THEME_BOOT-->')
+        ? 'index.html 缺少 <!--THEME_BOOT--> 占位符'
+        : '',
+      /fnaf-archive:theme-(mode|accent|custom):v1/.test(INDEX_HTML)
+        ? 'index.html 又写死了主题 storage key'
+        : '',
+      ...THEME_STORAGE_KEYS.filter(
+        (key) => !(THEME_SETTINGS_SOURCE?.code ?? '').includes(key),
+      ).map((key) => `themeSettings 缺少 ${key}`),
+      ...SOURCES.filter(
+        (f) =>
+          THEME_STORAGE_KEYS.some((key) => f.code.includes(key)) &&
+          f.path !== 'src/theme/themeSettings.ts',
+      ).map((f) => `${f.path} 重复定义了主题 storage key`),
+      ...SOURCES.filter(
+        (f) => THEME_ENTRY_FILES.includes(f.path) && /from\s+['"]vue['"]/.test(f.code),
+      ).map((f) => `${f.path} 不得依赖 Vue`),
+    ].filter(Boolean),
+    'index.html 只留占位符；实现与 storage key 只在 src/theme/** 一处',
   ),
   guard(
     'Supabase SQL · 两张请求表都启用 RLS',

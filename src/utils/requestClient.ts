@@ -5,6 +5,7 @@
  * 因此一个随机 UUID 就够。它会被写进 localStorage，也会发给 Supabase，
  * **不要**在这里放任何个人信息。
  */
+import { getLocalStorage } from './localStorage'
 
 export const REQUEST_CLIENT_ID_KEY = 'fnaf-archive:request-client:v1'
 
@@ -29,15 +30,6 @@ function createClientId(): string {
   return `client-${time}-${random}`
 }
 
-function getStorage(): Storage | null {
-  try {
-    return typeof localStorage === 'undefined' ? null : localStorage
-  } catch {
-    // 某些隐私模式下单纯访问 localStorage 就会抛错
-    return null
-  }
-}
-
 /**
  * 读取或生成本机 client id。
  *
@@ -47,7 +39,7 @@ function getStorage(): Storage | null {
 export function getRequestClientId(): string {
   if (sessionClientId) return sessionClientId
 
-  const storage = getStorage()
+  const storage = getLocalStorage()
   if (storage) {
     try {
       const stored = storage.getItem(REQUEST_CLIENT_ID_KEY)

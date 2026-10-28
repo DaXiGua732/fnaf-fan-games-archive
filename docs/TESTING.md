@@ -17,7 +17,7 @@
 | `test:ui:ci-launcher` | 端口被占用时不误连旧服务 | 真实浏览器（只验证启动器） |
 | `test:ui:ci` | 真实 Chromium 点击：主题 / 筛选 / 后台编辑 / 批量 / 上传 / 催资源 / GameJolt 导入 / 关系 | 真实 GitHub / Supabase 写入（网络层桩） |
 | `smoke` | 每条路由能否真实渲染出 DOM（**防白屏**） | 样式是否正确 |
-| `build` | 生产构建能否通过、代码分割是否正常 | — |
+| `build` | 生产构建能否通过、代码分割是否正常、首帧主题脚本是否已内联（占位符被替换） | — |
 
 ```
 npm run verify
@@ -49,7 +49,7 @@ npm run verify
   不出现 `service_role`）
 - `.vue` 不写死 hex 颜色、不用固定 Tailwind 调色板
 - 前端不出现 `service_role`
-- `index.html` 与 `useTheme` 使用同一组 storage key
+- 首帧主题：`index.html` 只留占位符；key 只在 `themeSettings.ts`；首帧模块不引 Vue
 
 实现方式：`esbuild` 把 `scripts/selftest.mts` 打成 `.tmp/selftest.mjs`（`--external:vue`），
 Node 直接跑。**不需要 vitest / jsdom**。

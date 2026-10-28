@@ -118,7 +118,8 @@ grep -o '\.rounded-md\|\.shadow{\|\.font-serif\|\.font-mono' "$CSS" | sort -u  #
 - `accent-bright` 向白移动到 4.5:1（面向页脚 / 灯箱的反色底）
 
 切回预设色时必须移除这四个内联变量，否则自定义色会继续覆盖预设色。
-`index.html` 的内联脚本有一份**等价实现**（首帧要在 Vue 之前应用），改算法必须两边一起改。
+首帧防闪白脚本在构建时由 `src/themeBoot.ts` 打包内联进 `index.html`，
+与 `useTheme` 共用 `src/theme/**` 的同一份读取与派生实现 —— 算法只有一处。
 
 > 自由取色的固有边界：如果用户选了中间调（黑 / 白前景都到不了 4.5:1），
 > `on-accent` 只能二选一取对比度更高的那个，**不会**为了达标而改掉用户选的颜色。
@@ -131,12 +132,16 @@ grep -o '\.rounded-md\|\.shadow{\|\.font-serif\|\.font-mono' "$CSS" | sort -u  #
 | `src/styles/index.css` | `:root` 下的预设色 CSS 变量；`data-mode` / `data-theme` 切换 |
 | `tailwind.config.js` | 把变量映射成语义工具类（`ink` / `paper` / `line` / `surface` / `accent` …） |
 | `src/utils/themeColor.ts` | 自定义色解析与四个变量的派生（纯函数，可断言） |
-| `src/composables/useTheme.ts` | 模块级单例：读写本机偏好、应用变量、跨标签页同步 |
+| `src/theme/themeSettings.ts` | storage key、合法取值、读取与回退（不依赖 Vue / DOM） |
+| `src/theme/applyTheme.ts` | 把模式 / 强调色 / 自定义色写到根元素与 `theme-color` |
+| `src/themeBoot.ts` | 首帧启动入口；构建时打包内联进 `index.html` |
+| `src/composables/useTheme.ts` | 模块级单例：应用内切换、跨标签页同步、系统主题变化 |
 | `src/components/ThemeSwitcher.vue` | 顶部「主题」下拉：模式 / 预设色 / 自定义取色 |
-| `index.html` | 样式与 Vue 之前的等价内联实现：首屏按 storage 应用，避免闪白 |
-| `src/dev/themeAssertions.ts` | 模式解析 / 色值白名单 / 自定义色解析与派生的纯函数断言 |
+| `index.html` | 只有 `<!--THEME_BOOT-->` 占位符，不写主题逻辑 |
+| `vite.config.ts` | `theme-boot` 插件：打包 `themeBoot.ts` 并替换占位符 |
+| `src/dev/themeAssertions.ts` | 模式解析 / 色值白名单 / 读取回退 / 自定义色派生的纯函数断言 |
 
-**storage key（内联脚本与 `useTheme.ts` 必须完全一致）**：
+**storage key（唯一出处：`src/theme/themeSettings.ts`）**：
 
 ```
 fnaf-archive:theme-mode:v1      # system | light | dark
@@ -144,9 +149,10 @@ fnaf-archive:theme-accent:v1    # miku | rin | len | luka | meiko | kaito | cust
 fnaf-archive:theme-custom:v1    # 自定义色 #rrggbb（切回预设色时保留）
 ```
 
-`selftest` 有一条静态守卫比对 key；内联脚本在 `localStorage` 不可用时按「跟随系统」降级。
-旧版的 `red / blue / teal / pink / purple` 已不是合法值：`readAccent()` 与内联脚本都会回退到
-默认的 `miku`（不改 storage key，旧值就地失效）。
+`selftest` 有静态守卫：占位符必须在、key 只能出现在 `themeSettings.ts`、首帧模块不得引 Vue；
+`npm run build` 末尾会检查产物里占位符确实被替换。`localStorage` 不可用时按「跟随系统」降级。
+旧版的 `red / blue / teal / pink / purple` 已不是合法值：`readThemePreferences()` 与首帧脚本
+（同一份实现）都会回退到默认的 `miku`（不改 storage key，旧值就地失效）。
 
 ### 语义 token
 

@@ -21,6 +21,7 @@ import type {
   ResourceRequestRepository,
 } from '../types/resourceRequest'
 import { ResourceRequestError } from '../types/resourceRequest'
+import { isRecord } from '../utils/guards'
 
 const DEFAULT_TIMEOUT_MS = 8_000
 
@@ -44,10 +45,6 @@ export interface SupabaseResourceRequestRepositoryOptions {
   anonKey: string
   fetchImpl?: typeof fetch
   timeoutMs?: number
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function unavailable(code: 'UNAVAILABLE' | 'BAD_RESPONSE' = 'UNAVAILABLE'): ResourceRequestError {
