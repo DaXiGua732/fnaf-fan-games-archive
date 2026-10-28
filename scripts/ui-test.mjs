@@ -685,6 +685,18 @@ await step('公开站 · 点卡片进入详情页', async () => {
   await shot('03-detail')
 })
 
+await step('页脚 · 回到顶部只滚动，不改变路由', async () => {
+  await go('/', '游戏库')
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+  await page.waitForTimeout(300)
+  const before = page.url()
+  await page.getByRole('button', { name: '回到顶部', exact: true }).click()
+  await page.waitForTimeout(300)
+  assert(page.url() === before, `回到顶部不应改变 URL，实际：${page.url()}`)
+  const scrollY = await page.evaluate(() => window.scrollY)
+  assert(scrollY === 0, `应回到页面顶部，实际 scrollY=${scrollY}`)
+})
+
 await step('详情页 · 截图灯箱支持键盘切换与关闭', async () => {
   if (!LIGHTBOX_GAME) {
     console.log('        （当前数据没有 ≥2 张图库的作品，跳过灯箱切换）')

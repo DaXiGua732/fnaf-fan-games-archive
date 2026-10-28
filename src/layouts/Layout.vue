@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import ThemeSwitcher from '../components/ThemeSwitcher.vue'
+import { focusAndScrollToId, scrollToTop } from '../utils/scroll'
 
 /**
  * Layout —— 公开站骨架
@@ -63,6 +64,7 @@ const currentYear = new Date().getFullYear()
     <a
       href="#main"
       class="sr-only focus:not-sr-only focus:absolute focus:left-0 focus:top-0 focus:z-[60] focus:border focus:border-black focus:bg-white focus:px-4 focus:py-2 focus:font-sans focus:text-xs focus:font-bold"
+      @click.prevent="focusAndScrollToId('main')"
     >
       跳到主内容
     </a>
@@ -137,7 +139,7 @@ const currentYear = new Date().getFullYear()
     </header>
 
     <!-- ============ 主体 ============ -->
-    <main id="main" class="flex-1">
+    <main id="main" tabindex="-1" class="flex-1">
       <RouterView />
     </main>
 
@@ -175,12 +177,13 @@ const currentYear = new Date().getFullYear()
                 </RouterLink>
               </li>
               <li>
-                <a
-                  href="#main"
-                  class="font-sans text-xs font-bold uppercase tracking-[0.16em] text-inverse-fg/80 transition-colors duration-150 hover:text-accent-bright"
+                <button
+                  type="button"
+                  class="text-left font-sans text-xs font-bold uppercase tracking-[0.16em] text-inverse-fg/80 transition-colors duration-150 hover:text-accent-bright"
+                  @click="scrollToTop"
                 >
                   回到顶部
-                </a>
+                </button>
               </li>
             </ul>
           </div>

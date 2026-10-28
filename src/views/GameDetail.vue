@@ -11,6 +11,7 @@ import { DEVELOPMENT_STATUS_LABELS } from '../types/game'
 import { assetUrl } from '../utils/asset'
 import type { VocabularyCollection } from '../types/taxonomy'
 import { resolveVocabularyEntry } from '../utils/taxonomy'
+import { scrollToId } from '../utils/scroll'
 import {
   relatedWorksFor,
   type RelatedWorks,
@@ -235,12 +236,6 @@ const RELATED_SECTIONS = computed(() => [
   { key: 'series', title: '同系列的其他作品', works: related.value.sameSeries },
 ])
 
-/** 页内跳转：Hash 路由下不能用 href="#downloads" */
-function scrollToDownloads(): void {
-  if (typeof document === 'undefined') return
-  document.getElementById('downloads')?.scrollIntoView({ block: 'start' })
-}
-
 // 标签页标题跟随游戏名（SSR 没有 document，必须守卫）
 watchEffect(() => {
   if (typeof document === 'undefined') return
@@ -285,7 +280,7 @@ watchEffect(() => {
             </p>
 
             <div class="mt-8 flex flex-wrap items-center gap-3">
-              <Button variant="solid" size="lg" @click="scrollToDownloads">查看下载渠道</Button>
+              <Button variant="solid" size="lg" @click="scrollToId('downloads')">查看下载渠道</Button>
               <Button
                 v-if="hasVideo"
                 variant="outline"
@@ -458,7 +453,7 @@ watchEffect(() => {
               <p class="mt-2 max-w-[38ch] font-sans text-xs leading-relaxed text-black/60">
                 全部指向第三方网盘，本站不存储、不分发任何游戏文件。
               </p>
-              <Button variant="solid" block class="mt-5" @click="scrollToDownloads">
+              <Button variant="solid" block class="mt-5" @click="scrollToId('downloads')">
                 前往下载
               </Button>
             </div>

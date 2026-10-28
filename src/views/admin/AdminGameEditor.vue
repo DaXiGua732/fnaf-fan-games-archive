@@ -24,6 +24,7 @@ import {
 import { useAdminGames } from '../../composables/useAdminGames'
 import { PREVIEW_PATH, publishPreview } from '../../composables/useGamePreview'
 import { slugify } from '../../utils/gameFactory'
+import { scrollToId } from '../../utils/scroll'
 import {
   DRAFT_GROUP_FIELDS,
   DRAFT_TEXT_FIELDS,
@@ -355,12 +356,6 @@ const SECTIONS = computed(() => [
   { id: 'section-feature', label: '推荐与排序', changed: featureChanged.value },
 ])
 
-/** 页内跳转：不用 `href="#id"` —— Hash 路由下那会被当成路由跳转 */
-function jumpTo(id: string): void {
-  if (typeof document === 'undefined') return
-  document.getElementById(id)?.scrollIntoView({ block: 'start' })
-}
-
 /**
  * Ctrl / Cmd + S 保存。
  *
@@ -513,7 +508,7 @@ const ACTION_DANGER = `${ACTION_BASE} border-accent bg-white text-accent hover:b
           :key="section.id"
           type="button"
           class="shrink-0 border border-transparent px-3 py-2 font-sans text-[11px] font-bold uppercase tracking-[0.12em] text-black/60 transition-colors duration-150 ease-out hover:text-accent"
-          @click="jumpTo(section.id)"
+          @click="scrollToId(section.id)"
         >
           {{ section.label }}
           <span v-if="section.changed" class="ml-1 text-accent" aria-label="有未保存修改">·</span>

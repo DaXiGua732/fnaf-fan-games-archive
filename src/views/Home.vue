@@ -6,6 +6,7 @@ import GameCard from '../components/GameCard.vue'
 import ResourceRequestBoard from '../components/ResourceRequestBoard.vue'
 import ResourceRequestDialog from '../components/ResourceRequestDialog.vue'
 import { useGameLibrary } from '../composables/useGameLibrary'
+import { scrollToId } from '../utils/scroll'
 
 const route = useRoute()
 const router = useRouter()
@@ -58,12 +59,6 @@ watch([activeFilters, currentPage], () => {
   void router.replace({ name: 'home', query: next })
 })
 
-/** Hash 路由下不能用 href="#library"：那会被当成路由跳转 */
-function scrollToLibrary(): void {
-  if (typeof document === 'undefined') return
-  document.getElementById('library')?.scrollIntoView({ block: 'start' })
-}
-
 /** 催资源弹窗 —— 只控制开合，请求状态在 useResourceRequests 单例里 */
 const requestDialogOpen = ref(false)
 
@@ -90,7 +85,7 @@ onMounted(() => {
   // 从详情页的索引入口进来（或带条件刷新）时，直接落在结果区，
   // 不让用户自己再滚一遍。页面内的筛选变化不会触发这里。
   if (Object.keys(route.query).length > 0) {
-    void nextTick(scrollToLibrary)
+    void nextTick(() => scrollToId('library'))
   }
 })
 

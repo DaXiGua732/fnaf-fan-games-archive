@@ -4,6 +4,7 @@ import AdminNav from '../components/admin/AdminNav.vue'
 import StyleAuditBadge from '../components/StyleAuditBadge.vue'
 import ThemeSwitcher from '../components/ThemeSwitcher.vue'
 import { useAdminAuth } from '../composables/useAdminAuth'
+import { focusAndScrollToId } from '../utils/scroll'
 
 /**
  * AdminLayout —— 后台骨架
@@ -42,6 +43,7 @@ async function onLogout(): Promise<void> {
     <a
       href="#admin-main"
       class="sr-only focus:not-sr-only focus:absolute focus:left-0 focus:top-0 focus:z-[60] focus:border focus:border-black focus:bg-white focus:px-4 focus:py-2 focus:font-sans focus:text-xs focus:font-bold"
+      @click.prevent="focusAndScrollToId('admin-main')"
     >
       跳到后台主内容
     </a>
@@ -98,7 +100,7 @@ async function onLogout(): Promise<void> {
     <div class="mx-auto flex w-full max-w-[1280px] flex-1 flex-col px-6 md:flex-row md:px-12">
       <AdminNav />
 
-      <main id="admin-main" class="min-w-0 flex-1 md:pl-10">
+      <main id="admin-main" tabindex="-1" class="min-w-0 flex-1 md:pl-10">
         <RouterView />
 
         <!-- 开发期视觉规范哨兵：全量扫描后台 DOM 的圆角 / 阴影 -->
