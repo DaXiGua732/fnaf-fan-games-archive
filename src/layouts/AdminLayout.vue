@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import AdminNav from '../components/admin/AdminNav.vue'
+import BackToTop from '../components/BackToTop.vue'
 import StyleAuditBadge from '../components/StyleAuditBadge.vue'
 import ThemeSwitcher from '../components/ThemeSwitcher.vue'
 import { useAdminAuth } from '../composables/useAdminAuth'
@@ -109,5 +110,7 @@ async function onLogout(): Promise<void> {
         </div>
       </main>
     </div>
+
+    <BackToTop />
   </div>
 </template>

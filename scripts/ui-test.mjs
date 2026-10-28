@@ -697,6 +697,22 @@ await step('页脚 · 回到顶部只滚动，不改变路由', async () => {
   assert(scrollY === 0, `应回到页面顶部，实际 scrollY=${scrollY}`)
 })
 
+await step('右下角 · 下翻后出现浮动回到顶部，点击后消失', async () => {
+  await go('/', '游戏库')
+  const floating = page.getByRole('button', { name: '回到页面顶部', exact: true })
+  assert((await floating.count()) === 0, '页面顶部不应显示浮动按钮')
+
+  await page.evaluate(() => window.scrollTo(0, window.innerHeight * 1.5))
+  await page.waitForTimeout(300)
+  assert(await floating.isVisible(), '下翻一个视口后应显示浮动按钮')
+
+  await floating.click()
+  await page.waitForTimeout(300)
+  const scrollY = await page.evaluate(() => window.scrollY)
+  assert(scrollY === 0, `点击浮动按钮后应回到顶部，实际 scrollY=${scrollY}`)
+  assert((await floating.count()) === 0, '回到顶部后浮动按钮应消失')
+})
+
 await step('详情页 · 截图灯箱支持键盘切换与关闭', async () => {
   if (!LIGHTBOX_GAME) {
     console.log('        （当前数据没有 ≥2 张图库的作品，跳过灯箱切换）')

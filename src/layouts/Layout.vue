@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
+import BackToTop from '../components/BackToTop.vue'
 import ThemeSwitcher from '../components/ThemeSwitcher.vue'
 import { focusAndScrollToId, scrollToTop } from '../utils/scroll'
 
@@ -191,10 +192,12 @@ const currentYear = new Date().getFullYear()
 
         <div class="mt-16 border-t border-inverse-fg/20 pt-6">
           <p class="swiss-meta text-inverse-fg/50">
-            © {{ currentYear }} FNAF Fan Games Archive · Swiss International Style · Built as a static site
+            © {{ currentYear }} FNAF Fan Games Archive
           </p>
         </div>
       </div>
     </footer>
+
+    <BackToTop />
   </div>
 </template>
