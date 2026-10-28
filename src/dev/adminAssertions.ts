@@ -7,7 +7,7 @@
  * 【边界】这里只做「输入 → 期望输出」的行为断言，
  *         绝不重新实现过滤 / 排序 / 分页 / 勾选逻辑（那属于深模块内部职责）。
  */
-import { nextTick } from 'vue'
+import { nextTick, shallowRef } from 'vue'
 import {
   draftToPatch,
   emptyDraft,
@@ -798,6 +798,21 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   check('loadFrom · 无未保存改动', draftApi.isDirty.value, false)
   check('loadFrom · 初始校验通过', draftApi.isValid.value, true)
   check('loadFrom · 初始未尝试提交', draftApi.touched.value, false)
+
+  // —— 草稿可注入隔离仓储（测试 / 预览） ——
+  const isolatedRepo = createLocalGameRepository({ storage: null })
+  isolatedRepo.hydrate([
+    { ...FIXTURE_GAMES[0], id: 'isolated-a', title: 'Isolated A' },
+    { ...FIXTURE_GAMES[1], id: 'isolated-b', title: 'Isolated B' },
+  ])
+  const isolatedDraft = useAdminGameDraft({ repository: shallowRef(isolatedRepo) })
+  isolatedDraft.loadFrom(isolatedRepo.games.value[0])
+  check('草稿 · 注入仓储后读取标题', isolatedDraft.draft.title, 'Isolated A')
+  check(
+    '草稿 · 关系候选来自注入仓储',
+    isolatedDraft.searchRelationTargets('Isolated B')[0]?.id,
+    'isolated-b',
+  )
 
   draftApi.draft.title = '被改过的标题'
   check('改动后 · isDirty', draftApi.isDirty.value, true)

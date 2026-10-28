@@ -125,6 +125,10 @@ UI 如实说「只写入了内存」。**写失败绝不假装成功。**
 `gameToDraft` / `draftToPatch` / `validateDraft` 都是纯函数导出，断言可直接测，不必构造组件。
 校验与转换各只有一处职责 —— 不要在组件里重写。
 
+草稿实例可以通过 `useAdminGameDraft({ repository })` 注入隔离目录（测试 / 预览用）；
+不传时使用当前后台仓储。`useAdminGames` 仍是模块级单例 —— 后台只有一份目录，
+见 [`adr/0004`](adr/0004-admin-catalog-singleton-draft-takes-repository.md)。
+
 编辑页在 `setup()` 里**同步**调用 `loadFrom()`，不能放进 `onMounted`：
 否则 SSR 首帧渲染空表单、客户端再填上，既造成 hydration 不一致，也让冒烟断言不到字段值。
 

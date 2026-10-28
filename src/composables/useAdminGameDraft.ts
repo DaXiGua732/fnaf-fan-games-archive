@@ -65,6 +65,7 @@ import {
   type VocabularyCollection,
 } from '../types/taxonomy'
 import { adminGameRepository } from '../repositories'
+import type { GameRepository } from '../repositories/gameRepository'
 import { resolveVocabularyEntry } from '../utils/taxonomy'
 import { blankGame } from '../utils/gameFactory'
 import { gamePublishIssues } from '../utils/gameRules'
@@ -100,6 +101,11 @@ export function emptyDraft(): GameDraft {
     archived: false,
     featured: false,
   }
+}
+
+export interface AdminGameDraftOptions {
+  /** 测试 / 预览可注入隔离目录；默认使用当前后台仓储 */
+  repository?: Ref<GameRepository>
 }
 
 /**
@@ -595,7 +601,7 @@ export interface AdminGameDraftAPI {
   moveDownload: (index: number, delta: -1 | 1) => boolean
 }
 
-export function useAdminGameDraft(): AdminGameDraftAPI {
+export function useAdminGameDraft(options: AdminGameDraftOptions = {}): AdminGameDraftAPI {
   const draft = reactive<GameDraft>(emptyDraft())
   /** 基线：进入页面（或上次保存成功）时的快照，用于脏检查与「撤销修改」 */
   const baseline = reactive<GameDraft>(emptyDraft())
@@ -637,10 +643,11 @@ export function useAdminGameDraft(): AdminGameDraftAPI {
   /**
    * 当前词表。
    *
-   * 读 `adminGameRepository` 而不是自己存一份：登录后仓储会换成远程仓，
+   * 读注入的仓储而不是自己存一份：登录后仓储会换成远程仓，
    * 词表随之更新；存副本会立刻过期。仓储切换本身是响应式的，所以这里也响应式。
    */
-  const taxonomy = computed(() => adminGameRepository.value.taxonomy.value)
+  const repository = options.repository ?? adminGameRepository
+  const taxonomy = computed(() => repository.value.taxonomy.value)
 
   const errors = computed<DraftErrors>(() => validateDraft(draft, taxonomy.value))
 
@@ -656,7 +663,7 @@ export function useAdminGameDraft(): AdminGameDraftAPI {
    */
   function composeGame(id: string): AdminGame {
     const base = draftGameId.value
-      ? adminGameRepository.value.games.value.find((game) => game.id === draftGameId.value)
+      ? repository.value.games.value.find((game) => game.id === draftGameId.value)
       : undefined
     return {
       ...(base ?? blankGame()),
@@ -677,7 +684,7 @@ export function useAdminGameDraft(): AdminGameDraftAPI {
 
   /** 与 draftRelations 一一对应的行错误（空字符串 = 通过） */
   const relationRowErrors = computed<string[]>(() =>
-    inspectGameRelations(adminGameRepository.value.games.value, currentDraftGame())
+    inspectGameRelations(repository.value.games.value, currentDraftGame())
       .rowErrors,
   )
 
@@ -882,7 +889,7 @@ export function useAdminGameDraft(): AdminGameDraftAPI {
     }
 
     const next: GameRelation[] = [...current, { type: type as RelationType, targetId: target }]
-    const candidate = inspectGameRelations(adminGameRepository.value.games.value, {
+    const candidate = inspectGameRelations(repository.value.games.value, {
       ...currentDraftGame(),
       relations: next,
     }).rowErrors
@@ -908,7 +915,7 @@ export function useAdminGameDraft(): AdminGameDraftAPI {
     const selected = new Set(draftRelations.value.map((relation) => relation.targetId))
     const size = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 8
 
-    return adminGameRepository.value.games.value
+    return repository.value.games.value
       .filter(
         (game) =>
           game.id !== draftGameId.value &&
