@@ -103,6 +103,11 @@ Bash `UI_BROWSER=chrome` / `BASE=... PROD=1`。
 | 催资源用 Supabase anon + RLS/RPC | 公开请求需跨访客共享，但游戏目录不能变成运行时依赖 | [`INTEGRATIONS.md`](INTEGRATIONS.md) |
 | 「已收录」只认归一化标题完全相等 | 包含匹配会把《Jolly》误判成《Jolly 4》已收录，静默消失 | [`INTEGRATIONS.md`](INTEGRATIONS.md) |
 | 请求数据不进 git | 匿名投票放进 GitHub 需要前端写权限或大量提交；代价是没有 git 审计 | [`INTEGRATIONS.md`](INTEGRATIONS.md) |
+| 写入校验在仓储 seam | 批量 / 行内 / 导入不能绕过发布缺口与数量上限 | [`adr/0001`](adr/0001-domain-write-validation-at-repository-seam.md) |
+| 写入事务是共享计划 | 两个 adapter 只做 transport，不各自漂移 | [`adr/0002`](adr/0002-catalog-write-transaction-is-a-shared-plan.md) |
+| 目录文档模型共享 | 本地 / 远程用同一套 records / identity / taxonomy 判断 | [`adr/0003`](adr/0003-catalog-document-model-shared-by-adapters.md) |
+| 后台目录保持单例 | 产品只有一份目录；草稿按会话注入仓储 | [`adr/0004`](adr/0004-admin-catalog-singleton-draft-takes-repository.md) |
+| 筛选维度暂不 registry | 没有第二个消费者，泛型表会擦类型或加策略回调 | [`adr/0005`](adr/0005-filter-dimensions-stay-explicit.md) |
 
 ## 6. 铁律
 
