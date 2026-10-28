@@ -131,6 +131,10 @@ _Avoid_: 用户、profile
 作品带上 `deleted_at` / `deleted_by` 后从后台默认列表与公开站隐藏，Owner 可恢复或永久清除。
 _Avoid_: 删除（未限定「永久」时指软删除）
 
+**审计事件 (Audit event)**：
+一次写操作留下的不可修改记录：操作者、会话、动作、目标、前后值与时间。
+_Avoid_: 日志、log（普通运行日志不是审计事件）
+
 ## Quality
 
 **资料质量检查 (Data quality check)**：
