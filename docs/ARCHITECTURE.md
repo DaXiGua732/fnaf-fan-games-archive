@@ -81,6 +81,18 @@ History 模式刷新子路径必然 404。
 两个实现：`localGameRepository`（localStorage）与 `githubGameRepository`（数据仓 `db.json` + `images/`）。
 当前生效的仓储由 `repositories/index.ts` 决定 —— **唯一的切换点**。
 
+### 写入事务与信任边界
+
+两个 adapter **不各写一遍写入事务**：`utils/gameWrite.ts` 的 `planCreateGame` / `planUpdateGame` /
+`planDeleteGame` 负责校验、应用改动、检测关系变化、生成落盘 patch 与提交摘要；adapter 只做 transport
+（localStorage 与回滚 / GitHub Contents API 与 409 重放）。
+
+领域约束（发布缺口、标签 / 图库 / 下载上限、字段格式、关系形状）在
+`utils/gameRules.ts:validateGameWrite()` 一处判定，由两个 adapter 在落库前调用。编辑器的
+`validateDraft` 只是同一规则的字段级展示投影 —— 批量、行内、导入、仓储 API 都绕不过这个边界。
+见 [`adr/0001`](adr/0001-domain-write-validation-at-repository-seam.md) 与
+[`adr/0002`](adr/0002-catalog-write-transaction-is-a-shared-plan.md)。
+
 ### 三条由自动化守住的规则
 
 `scripts/selftest.mts` 的「静态守卫」组会扫源码，失败即中断：

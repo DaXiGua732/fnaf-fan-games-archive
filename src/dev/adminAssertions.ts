@@ -9,13 +9,10 @@
  */
 import { nextTick } from 'vue'
 import {
-  DRAFT_LIMITS,
-  YEAR_RANGE,
   draftToPatch,
   emptyDraft,
   gameToDraft,
   useAdminGameDraft,
-  validateDownload,
   validateDraft,
 } from '../composables/useAdminGameDraft'
 import { initialTaxonomy } from '../config/taxonomy'
@@ -35,12 +32,15 @@ import type { Game } from '../types/game'
 import {
   ALT_TITLE_LIMITS,
   DOWNLOAD_LIMITS,
+  DRAFT_LIMITS,
   IMAGE_LIMITS,
   TAG_LIMITS,
+  YEAR_RANGE,
   isLocalPreviewUrl,
   isValidImageRef,
   isValidTag,
   normalizeTag,
+  validateDownload,
 } from '../types/admin'
 import type { AdminGame } from '../types/admin'
 import { GAME_VOCABULARY_LIMITS } from '../types/taxonomy'
@@ -1672,6 +1672,9 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
   const repoCreated = await publicGameRepository.createGame({
     title: 'Repository Contract Test',
     status: 'draft',
+    coverImage: '/images/repo-contract-cover.png',
+    bannerImage: '/images/repo-contract-banner.png',
+    downloads: [{ provider: 'Contract Drive', url: 'https://example.com/contract' }],
   })
   check('仓储 · createGame 由标题生成 slug id', repoCreated.id, 'repository-contract-test')
   check('仓储 · createGame 缺省状态是 draft', repoCreated.status, 'draft')
@@ -1686,6 +1689,62 @@ export async function runAdminAssertions(lib: AdminGamesAPI): Promise<Assertion[
     publicGameRepository.games.value.some((game) => game.id === repoCreated.id),
     true,
   )
+
+  // 上线门槛在仓储 seam 上执行：没有封面 / Banner / 下载渠道的条目不能上线
+  const incomplete = await publicGameRepository.createGame({
+    title: 'Incomplete Publish Test',
+  })
+  let publishError = ''
+  try {
+    await publicGameRepository.publishGame(incomplete.id)
+  } catch (error) {
+    publishError = error instanceof Error ? error.message : String(error)
+  }
+  check('仓储 · 缺发布素材时拒绝上线', publishError.includes('不能上线'), true)
+  check(
+    '仓储 · 拒绝上线后状态仍是草稿',
+    (await publicGameRepository.getGame(incomplete.id))?.status,
+    'draft',
+  )
+
+  let limitError = ''
+  try {
+    await publicGameRepository.updateGame(incomplete.id, {
+      tags: Array.from({ length: TAG_LIMITS.maxPerGame + 1 }, (_, index) => `tag-${index}`),
+    })
+  } catch (error) {
+    limitError = error instanceof Error ? error.message : String(error)
+  }
+  check('仓储 · 标签超限拒绝写入', limitError.includes('标签最多'), true)
+
+  limitError = ''
+  try {
+    await publicGameRepository.updateGame(incomplete.id, {
+      gallery: Array.from({ length: IMAGE_LIMITS.maxGallery + 1 }, (_, index) => `/images/x-${index}.png`),
+    })
+  } catch (error) {
+    limitError = error instanceof Error ? error.message : String(error)
+  }
+  check('仓储 · 图库超限拒绝写入', limitError.includes('图库最多'), true)
+
+  limitError = ''
+  try {
+    await publicGameRepository.updateGame(incomplete.id, {
+      downloads: Array.from({ length: DOWNLOAD_LIMITS.maxPerGame + 1 }, () => ({
+        provider: 'Drive',
+        url: 'https://example.com/x',
+      })),
+    })
+  } catch (error) {
+    limitError = error instanceof Error ? error.message : String(error)
+  }
+  check('仓储 · 下载渠道超限拒绝写入', limitError.includes('下载渠道最多'), true)
+
+  select([incomplete.id])
+  const gateOutcome = await lib.batchSetStatus([incomplete.id], 'published')
+  check('批量上线 · 缺发布素材计入失败', gateOutcome.failed, 1)
+  check('批量上线 · 失败原因可见', gateOutcome.error.includes('不能上线'), true)
+  await publicGameRepository.deleteGame(incomplete.id)
 
   const repoTwin = await publicGameRepository.createGame({ title: 'Repository Contract Test' })
   check('仓储 · 同名标题的 id 自动加后缀', repoTwin.id, 'repository-contract-test-2')

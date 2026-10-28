@@ -1665,13 +1665,33 @@ await step('编辑器 · Ctrl+S 直接保存当前草稿', async () => {
   await need('UI Test Sample Saved')
 })
 
-await step('列表 · 行内快捷上线 / 下线', async () => {
+await step('列表 · 缺素材不能上线，完整条目可行内快捷上下线', async () => {
   await go('/admin/games', '收录作品')
   // 过滤器是模块级单例状态，会跨路由保留；先切回「全部」再测行内快捷操作
   await chip('全部').click()
   await page.waitForTimeout(300)
+
+  // 新建的 UI Test Sample 没有封面 / Banner / 下载渠道：上线必须被仓储 seam 拦下
   await page.fill('#admin-search', 'UI Test Sample')
   await page.waitForTimeout(500)
+  await btn('上线这条').click()
+  await page.waitForTimeout(900)
+  await need('不能上线')
+  assert(
+    (await page.locator('tbody tr').first().innerText()).includes('草稿'),
+    '缺素材的条目不应被快捷上线',
+  )
+
+  // 完整条目（Phase 5 改过标题的 TEST_GAME，素材齐全）验证真正的行内上下线
+  await page.fill('#admin-search', 'UI 测试临时标题')
+  await page.waitForTimeout(600)
+  await btn('下线这条').click()
+  await page.waitForTimeout(900)
+  await need('实际改动 1 项')
+  assert(
+    (await page.locator('tbody tr').first().innerText()).includes('已下线'),
+    '快捷下线后该行状态应为已下线',
+  )
 
   await btn('上线这条').click()
   await page.waitForTimeout(900)
@@ -1680,13 +1700,9 @@ await step('列表 · 行内快捷上线 / 下线', async () => {
     (await page.locator('tbody tr').first().innerText()).includes('已上线'),
     '快捷上线后该行状态应为已上线',
   )
-
-  await btn('下线这条').click()
-  await page.waitForTimeout(900)
-  assert(
-    (await page.locator('tbody tr').first().innerText()).includes('已下线'),
-    '快捷下线后该行状态应为已下线',
-  )
+  // 下一步（删除确认）要针对 UI Test Sample —— 把搜索条件恢复回去
+  await page.fill('#admin-search', 'UI Test Sample')
+  await page.waitForTimeout(500)
 })
 
 await step('列表 · 删除入口弹出二次确认，取消不会删数据', async () => {

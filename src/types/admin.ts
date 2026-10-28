@@ -222,6 +222,54 @@ export const DOWNLOAD_LIMITS = {
   maxTextLength: 30,
 }
 
+/** 各文本字段的长度上限（保存与编辑器共用） */
+export const DRAFT_LIMITS = {
+  title: 120,
+  author: 80,
+  ipSeries: 60,
+  engine: 60,
+  shortDescription: 120,
+  description: 2000,
+  sourceUrl: 300,
+} as const
+
+/** 年份下限：FNAF 初代是 2014，留一点余量 */
+const YEAR_MIN = 1990
+/** 年份上限余量：允许填写「已公布发售日」的预告作品 */
+const YEAR_MAX_OFFSET = 2
+
+/** 允许的发行年份区间 */
+export const YEAR_RANGE = {
+  min: YEAR_MIN,
+  max: new Date().getFullYear() + YEAR_MAX_OFFSET,
+} as const
+
+/**
+ * 校验单行下载渠道，返回第一条错误文案（空字符串 = 通过）。
+ *
+ * 每行只报第一条错误 —— 一行同时飘三条红字只会让人不知道先改哪个。
+ */
+export function validateDownload(link: DownloadDraft): string {
+  const provider = link.provider.trim()
+  if (!provider) return '服务商不能为空'
+  if (provider.length > DOWNLOAD_LIMITS.maxTextLength) {
+    return `服务商不能超过 ${DOWNLOAD_LIMITS.maxTextLength} 个字符`
+  }
+
+  const url = link.url.trim()
+  if (!url) return '下载地址不能为空'
+  if (!/^https?:\/\/\S+$/i.test(url)) {
+    return '下载地址必须是 http:// 或 https:// 开头的完整链接'
+  }
+
+  const password = link.password.trim()
+  if (password.length > DOWNLOAD_LIMITS.maxTextLength) {
+    return `提取码不能超过 ${DOWNLOAD_LIMITS.maxTextLength} 个字符`
+  }
+
+  return ''
+}
+
 /** 草稿里所有参与「改动比较」的字段 */
 export type DraftField =
   | DraftTextField

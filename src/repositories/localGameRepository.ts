@@ -27,21 +27,14 @@ import type { AdminGame, GamePatch, StorageKind } from '../types/admin'
 import type { Game } from '../types/game'
 import type { Taxonomy, TaxonomyNormalizationResult } from '../types/taxonomy'
 import { normalizeGames } from '../utils/gameDefaults'
-import { applyPatch, createGameFrom } from '../utils/gameFactory'
 import {
-  buildGameWritePatch,
   buildVocabularyWritePatches,
   catalogIdentityErrorMessage,
   findCatalogIdentityIssues,
   removeRelationTarget,
 } from '../utils/gamePersistence'
+import { planCreateGame, planDeleteGame, planUpdateGame } from '../utils/gameWrite'
 import { isRecord } from '../utils/guards'
-import {
-  normalizeRelations,
-  sameRelations,
-  validateGameRelations,
-  validateRelationInput,
-} from '../utils/relations'
 import {
   createVocabularyEntryIn,
   deleteVocabularyEntryIn,
@@ -287,10 +280,6 @@ export function createLocalGameRepository(
     }
   }
 
-  function indexOf(id: string): number {
-    return store.value.findIndex((game) => game.id === id)
-  }
-
   /** 把词表操作产生的字段改动合并进原始记录；没有原始记录的新作品整条写入 */
   function applyRecordPatches(
     patches: Map<string, Record<string, unknown>>,
@@ -307,42 +296,18 @@ export function createLocalGameRepository(
 
   async function updateGame(id: string, patch: GamePatch): Promise<AdminGame> {
     assertWritableCatalog()
-    const index = indexOf(id)
-    // 显式抛错，不静默新建一条 —— 否则「保存」失败会被伪装成成功
-    if (index === -1) throw new Error(`updateGame: 找不到 id 为「${id}」的条目`)
+    const plan = planUpdateGame(store.value, id, patch, { taxonomy: taxonomyStore.value })
 
-    if (patch.relations !== undefined) {
-      const inputErrors = validateRelationInput(patch.relations, id)
-      if (inputErrors.length > 0) throw new Error(inputErrors.join('；'))
-    }
-
-    const current = store.value[index]
-    const updated = applyPatch(current, patch)
-    const games = store.value.map((game, i) => (i === index ? updated : game))
-
-    // 编辑器每次保存都会带上 relations；内容没变就不算「明确修改了关系」，
-    // 落盘时沿用原始数组，避免把归一化丢掉的异常关系写没。
-    const relationsChanged =
-      patch.relations !== undefined &&
-      !sameRelations(current.relations, normalizeRelations(patch.relations, id))
-
-    // 目录级校验只针对**明确修改过**的关系。历史数据里可能有悬挂 / 双端关系，
-    // 它们不应阻塞标题、状态、归档等无关字段的保存 —— 否则该作品会永远改不动。
-    if (relationsChanged) {
-      const relationErrors = validateGameRelations(games, updated)
-      if (relationErrors.length > 0) throw new Error(relationErrors.join('；'))
-    }
-
-    store.value = games
+    store.value = plan.games
     const original = records.get(id)
     records.set(
       id,
-      original
-        ? { ...original, ...buildGameWritePatch(current, updated, patch, relationsChanged) }
-        : recordOf(updated),
+      original && plan.writePatch
+        ? { ...original, ...plan.writePatch }
+        : recordOf(plan.game),
     )
     persist()
-    return updated
+    return plan.game
   }
 
   return {
@@ -388,40 +353,20 @@ export function createLocalGameRepository(
 
     async createGame(patch) {
       assertWritableCatalog()
-      const created = createGameFrom(store.value, patch)
-
-      // id 是创建时才生成的，所以关系校验必须放在它之后：
-      // 否则「目标正好等于新 id」会被 normalizeRelations 当作自关联静默丢弃。
-      if (patch.relations !== undefined) {
-        const inputErrors = validateRelationInput(patch.relations, created.id)
-        if (inputErrors.length > 0) throw new Error(inputErrors.join('；'))
-      }
-
-      const games = [created, ...store.value]
-      const relationErrors = validateGameRelations(games, created)
-      if (relationErrors.length > 0) throw new Error(relationErrors.join('；'))
-
-      store.value = games
-      records.set(created.id, recordOf(created))
+      const plan = planCreateGame(store.value, patch, { taxonomy: taxonomyStore.value })
+      store.value = plan.games
+      records.set(plan.game.id, recordOf(plan.game))
       persist()
-      return created
+      return plan.game
     },
 
     updateGame,
 
     async deleteGame(id) {
       assertWritableCatalog()
-      const index = indexOf(id)
-      if (index === -1) return false
-
-      // 与远程仓一致：删除作品时在同一操作里清理所有指向它的关系
-      store.value = store.value
-        .filter((_, i) => i !== index)
-        .map((game) => {
-          const relations = game.relations ?? []
-          const kept = relations.filter((relation) => relation.targetId !== id)
-          return kept.length === relations.length ? game : { ...game, relations: kept }
-        })
+      const plan = planDeleteGame(store.value, id)
+      if (!plan) return false
+      store.value = plan.games
 
       // 落盘走原始记录：只剔除指向目标的入边，其他历史异常关系保留。
       records.delete(id)

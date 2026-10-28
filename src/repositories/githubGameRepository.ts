@@ -47,21 +47,15 @@ import type { Game } from '../types/game'
 import type { Taxonomy, VocabularyEntry } from '../types/taxonomy'
 import { VOCABULARY_LABELS } from '../types/taxonomy'
 import { normalizeGames } from '../utils/gameDefaults'
-import { applyPatch, createGameFrom, slugify } from '../utils/gameFactory'
+import { slugify } from '../utils/gameFactory'
 import {
-  buildGameWritePatch,
   buildVocabularyWritePatches,
   catalogIdentityErrorMessage,
   findCatalogIdentityIssues,
   removeRelationTarget,
 } from '../utils/gamePersistence'
+import { planCreateGame, planDeleteGame, planUpdateGame } from '../utils/gameWrite'
 import { isRecord } from '../utils/guards'
-import {
-  normalizeRelations,
-  sameRelations,
-  validateGameRelations,
-  validateRelationInput,
-} from '../utils/relations'
 import {
   createVocabularyEntryIn,
   deleteVocabularyEntryIn,
@@ -342,41 +336,16 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
     let updated: AdminGame | null = null
 
     await commit((current) => {
-      const index = current.games.findIndex((game) => game.id === id)
-      if (index === -1) throw new Error(`找不到 id 为「${id}」的作品，可能已经被删掉了。`)
-
-      // 先拒绝非法形状，再归一化 —— 否则非法关系会被静默丢弃，保存却显示成功
-      if (patch.relations !== undefined) {
-        const inputErrors = validateRelationInput(patch.relations, id)
-        if (inputErrors.length > 0) throw new Error(inputErrors.join('；'))
-      }
-
-      const next = applyPatch(current.games[index], patch, account?.())
-      const games = current.games.map((game, i) => (i === index ? next : game))
-
-      // 编辑器每次保存都会带上 relations；只有内容确实变了才算「明确修改了关系」。
-      // 未变化时持久化层会沿用原始 JSON，避免把归一化丢掉的异常关系写没。
-      const relationsChanged =
-        patch.relations !== undefined &&
-        !sameRelations(current.games[index].relations, normalizeRelations(patch.relations, id))
-
-      // 目录级校验只针对**明确修改过**的关系。历史数据里可能有悬挂 / 双端关系，
-      // 它们不应阻塞标题、状态、归档等无关字段的保存 —— 否则该作品会永远改不动。
-      if (relationsChanged) {
-        const relationErrors = validateGameRelations(games, next)
-        if (relationErrors.length > 0) throw new Error(relationErrors.join('；'))
-      }
-
-      updated = next
-      // 只列出**实际改了哪些字段**，让 git 历史读起来有意义
-      const fields = Object.keys(patch).join('、')
-      return {
-        games,
+      const plan = planUpdateGame(current.games, id, patch, {
         taxonomy: current.taxonomy,
-        summary: `更新《${next.title || id}》的 ${fields || '字段'}`,
-        writes: new Map([
-          [id, buildGameWritePatch(current.games[index], next, patch, relationsChanged)],
-        ]),
+        updatedBy: account?.(),
+      })
+      updated = plan.game
+      return {
+        games: plan.games,
+        taxonomy: current.taxonomy,
+        summary: plan.summary,
+        writes: new Map([[id, plan.writePatch]]),
       }
     })
 
@@ -420,23 +389,15 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
       let created: AdminGame | null = null
 
       await commit((current) => {
-        created = createGameFrom(current.games, patch, account?.())
-
-        // id 是创建时才生成的；必须在它之后校验，否则「目标正好等于新 id」
-        // 会被 normalizeRelations 当作自关联静默丢弃。
-        if (patch.relations !== undefined) {
-          const inputErrors = validateRelationInput(patch.relations, created.id)
-          if (inputErrors.length > 0) throw new Error(inputErrors.join('；'))
-        }
-
-        const games = [created, ...current.games]
-        const relationErrors = validateGameRelations(games, created)
-        if (relationErrors.length > 0) throw new Error(relationErrors.join('；'))
-
-        return {
-          games,
+        const plan = planCreateGame(current.games, patch, {
           taxonomy: current.taxonomy,
-          summary: `新增作品《${created.title || '未命名'}》`,
+          updatedBy: account?.(),
+        })
+        created = plan.game
+        return {
+          games: plan.games,
+          taxonomy: current.taxonomy,
+          summary: plan.summary,
           // 新记录没有原始 JSON，序列化时会完整写入归一化结果
           writes: new Map(),
         }
@@ -452,21 +413,10 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
       let removed = false
 
       await commit((current) => {
-        const target = current.games.find((game) => game.id === id)
-        if (!target) return null
+        const plan = planDeleteGame(current.games, id)
+        if (!plan) return null
 
         removed = true
-        let cleanedRelations = 0
-        const games = current.games
-          .filter((game) => game.id !== id)
-          .map((game) => {
-            const relations = game.relations ?? []
-            const kept = relations.filter((relation) => relation.targetId !== id)
-            if (kept.length === relations.length) return game
-            cleanedRelations += relations.length - kept.length
-            return { ...game, relations: kept }
-          })
-
         // 内存里的归一化列表只负责 UI；落盘时从**原始记录**剔除入边，
         // 同一记录上的其他历史异常关系仍然保留，交给质量检查继续报告。
         const writes = new Map<string, Record<string, unknown>>()
@@ -477,11 +427,11 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
         }
 
         return {
-          games,
+          games: plan.games,
           taxonomy: current.taxonomy,
           summary:
-            `删除作品《${target.title || id}》` +
-            (cleanedRelations > 0 ? `，并清理 ${cleanedRelations} 条关联` : ''),
+            `删除作品《${plan.removed.title || id}》` +
+            (plan.cleanedRelations > 0 ? `，并清理 ${plan.cleanedRelations} 条关联` : ''),
           writes,
         }
       })

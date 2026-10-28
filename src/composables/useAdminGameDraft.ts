@@ -45,15 +45,18 @@ import {
   DOWNLOAD_LIMITS,
   DRAFT_ERROR_FIELDS,
   DRAFT_FIELDS,
+  DRAFT_LIMITS,
   DRAFT_TEXT_FIELDS,
   IMAGE_LIMITS,
   TAG_LIMITS,
+  YEAR_RANGE,
   isValidAltTitle,
   isValidImageRef,
   isValidTag,
   normalizeAltTitle,
   normalizeImageRef,
   normalizeTag,
+  validateDownload,
 } from '../types/admin'
 import {
   GAME_VOCABULARY_LIMITS,
@@ -64,29 +67,8 @@ import {
 import { adminGameRepository } from '../repositories'
 import { resolveVocabularyEntry } from '../utils/taxonomy'
 import { blankGame } from '../utils/gameFactory'
+import { gamePublishIssues } from '../utils/gameRules'
 import { inspectGameRelations, isRelationType } from '../utils/relations'
-
-/** 年份下限：FNAF 初代是 2014，留一点余量 */
-const YEAR_MIN = 1990
-/** 年份上限余量：允许填写「已公布发售日」的预告作品 */
-const YEAR_MAX_OFFSET = 2
-
-/** 模块加载时取一次，保证同一进程内校验边界恒定（便于断言） */
-const CURRENT_YEAR = new Date().getFullYear()
-
-/** 允许的发行年份区间 */
-export const YEAR_RANGE = { min: YEAR_MIN, max: CURRENT_YEAR + YEAR_MAX_OFFSET }
-
-/** 各字段的长度上限 */
-export const DRAFT_LIMITS = {
-  title: 120,
-  author: 80,
-  ipSeries: 60,
-  engine: 60,
-  shortDescription: 120,
-  description: 2000,
-  sourceUrl: 300,
-}
 
 /** 空白草稿（新增模式的起点） */
 export function emptyDraft(): GameDraft {
@@ -513,34 +495,6 @@ export function validateDraft(draft: GameDraft, taxonomy?: Taxonomy): DraftError
   return errors
 }
 
-/**
- * 校验单行下载渠道，返回第一条错误文案（空字符串 = 通过）。
- *
- * 下载是**逐行**校验的，一个扁平的错误记录（DraftErrors）装不下，
- * 所以单独导出，并在 isValid 里一起判断。每行只报第一条错误 ——
- * 一行同时飘三条红字只会让人不知道先改哪个。
- */
-export function validateDownload(link: DownloadDraft): string {
-  const provider = link.provider.trim()
-  if (!provider) return '服务商不能为空'
-  if (provider.length > DOWNLOAD_LIMITS.maxTextLength) {
-    return `服务商不能超过 ${DOWNLOAD_LIMITS.maxTextLength} 个字符`
-  }
-
-  const url = link.url.trim()
-  if (!url) return '下载地址不能为空'
-  if (!/^https?:\/\/\S+$/i.test(url)) {
-    return '下载地址必须是 http:// 或 https:// 开头的完整链接'
-  }
-
-  const password = link.password.trim()
-  if (password.length > DOWNLOAD_LIMITS.maxTextLength) {
-    return `提取码不能超过 ${DOWNLOAD_LIMITS.maxTextLength} 个字符`
-  }
-
-  return ''
-}
-
 /* ---------------------------------------------------------------------------
    对外接口
    --------------------------------------------------------------------------- */
@@ -751,13 +705,13 @@ export function useAdminGameDraft(): AdminGameDraftAPI {
    * 没有下载渠道，这个「资源导航站」的条目就没有意义。
    * 但草稿阶段允许缺，所以不能拦在保存这一步。
    */
-  const publishIssues = computed<string[]>(() => {
-    const issues: string[] = []
-    if (!asText(draft.coverImage).trim()) issues.push('还没有封面图')
-    if (!asText(draft.bannerImage).trim()) issues.push('还没有 Banner 宣传图')
-    if (readDownloads(draft).length === 0) issues.push('还没有下载渠道')
-    return issues
-  })
+  const publishIssues = computed<string[]>(() =>
+    gamePublishIssues({
+      coverImage: asText(draft.coverImage).trim(),
+      bannerImage: asText(draft.bannerImage).trim(),
+      downloads: readDownloads(draft),
+    }),
+  )
 
   /** 能否保存：基础校验通过，且「已上线」状态不能有发布缺口 */
   const canSave = computed(

@@ -10,6 +10,7 @@
 import { nextTick } from 'vue'
 import { isPubliclyVisible, type GameLibraryAPI } from '../composables/useGameLibrary'
 import { publicGameRepository } from '../repositories'
+import { YEAR_RANGE } from '../types/admin'
 import { resolveVocabularyEntry } from '../utils/taxonomy'
 
 export interface Assertion {
@@ -415,11 +416,15 @@ export async function runLibraryAssertions(lib: GameLibraryAPI): Promise<Asserti
   check('联动 · 起点前台可见数', lib.total.value, BASE)
   const TOTAL_BASE = lib.totalSize.value
 
+  const probeYear = YEAR_RANGE.max
   const probe = await publicGameRepository.createGame({
     title: 'Visibility Probe',
     author: 'Probe Author',
-    releaseYear: 2030,
+    releaseYear: probeYear,
     ipSeries: 'Probe Series',
+    coverImage: '/images/probe-cover.png',
+    bannerImage: '/images/probe-banner.png',
+    downloads: [{ provider: 'Probe Drive', url: 'https://example.com/probe' }],
     // 新建缺省就是 draft —— 先验证「草稿前台不可见」
     status: 'draft',
   })
@@ -430,14 +435,14 @@ export async function runLibraryAssertions(lib: GameLibraryAPI): Promise<Asserti
   check('探针（草稿）· Hero 的收录数不含它', lib.catalogSize.value, BASE)
   check('探针（草稿）· 收录总数含它', lib.totalSize.value, TOTAL_BASE + 1)
   check('探针（草稿）· 作者不进「可用作者」', lib.availableAuthors.value.includes('Probe Author'), false)
-  check('探针（草稿）· 年份不进「可用年份」', lib.availableYears.value.includes(2030), false)
+  check('探针（草稿）· 年份不进「可用年份」', lib.availableYears.value.includes(probeYear), false)
 
   await publicGameRepository.publishGame(probe.id)
   await settle(lib)
   check('探针（已上线）· 前台可见数 +1', lib.total.value, BASE + 1)
   check('探针（已上线）· 详情页能取到', Boolean(lib.getGameById(probe.id)), true)
   check('探针（已上线）· 作者进入「可用作者」', lib.availableAuthors.value.includes('Probe Author'), true)
-  check('探针（已上线）· 年份进入「可用年份」', lib.availableYears.value.includes(2030), true)
+  check('探针（已上线）· 年份进入「可用年份」', lib.availableYears.value.includes(probeYear), true)
 
   await publicGameRepository.unpublishGame(probe.id)
   await settle(lib)

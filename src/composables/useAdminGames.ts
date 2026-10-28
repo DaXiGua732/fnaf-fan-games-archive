@@ -43,11 +43,10 @@ import type {
   StatusFilter,
   StorageKind,
 } from '../types/admin'
-import { TAG_LIMITS, isValidTag, normalizeTag } from '../types/admin'
+import { DRAFT_LIMITS, TAG_LIMITS, isValidTag, normalizeTag } from '../types/admin'
 import type { GameStatus } from '../types/game'
 import { nowIso } from '../utils/gameFactory'
 import { prepareImageForUpload } from '../utils/imageProcess'
-import { DRAFT_LIMITS } from './useAdminGameDraft'
 
 /** 每页条数默认值（后台表格，比前台网格密，默认放宽到 20） */
 const DEFAULT_PAGE_SIZE = 20
