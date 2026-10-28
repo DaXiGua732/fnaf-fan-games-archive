@@ -36,6 +36,19 @@
 - 扩展当前靠「加载已解压扩展」分发，更新需手动重载。
 - 质量检查只报告，分类与关系仍需管理员按资料逐条录入。
 
+### 进行中：多管理员认证迁移（2026-10-28）
+
+后台拟从共享 GitHub PAT 换成 **Supabase Auth（Google OAuth）+ Postgres/RLS**：
+Owner / Editor 两角色、邀请制、软删除、服务端强制授权、数据仓定时镜像、A+C 后台 UI。
+设计已用 wayfinder 拆成决策地图：[issue #1](https://github.com/DaXiGua732/fnaf-fan-games-archive/issues/1)。
+
+- 已关闭：#2 身份、#3 角色、#4 强制边界、#5 schema、#8 镜像、#9 UX 原型、#10 授权测试。
+- 仍开放：**#6 Supabase 项目 / Google OAuth 控制台配置**（人工，向导 `scripts/setup-admin-auth.sh`）；
+  **#7 PAT → 账号双轨迁移**（被 #6 阻塞）。
+- ADR：0006–0012；原型分支 `prototype/admin-auth-ux`（A+C，未合并）。
+- 实现尚未开始：生产后台仍走旧 PAT；公开站不受影响。
+- 下一步：完成 #6 控制台配置 → 继续 #7 → `/to-spec` → 实现。
+
 ## 3. 架构（一张图）
 
 ```
