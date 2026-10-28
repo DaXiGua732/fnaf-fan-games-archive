@@ -29,6 +29,7 @@ import { applyPatch, blankGame, createGameFrom } from '../utils/gameFactory'
 import {
   explicitRelatedWorks,
   inspectGameRelations,
+  relatedWorksFor,
   inverseRelationLabel,
   normalizeRelations,
   relationLabel,
@@ -608,6 +609,25 @@ function testRelations(results: Assertion[]): void {
     sameSeriesWorks(plainList, plainCurrent, authorHits.map((work) => work.game.id)).length,
     0,
   )
+
+  const composed = relatedWorksFor(withCurrent, current)
+  check(
+    results,
+    '相关作品 · 显式关系分区',
+    composed.explicit.map((work) => work.game.id).join(','),
+    games[1].id,
+  )
+  check(results, '相关作品 · 同作者与显式关系去重', composed.sameAuthor.length, 0)
+  check(results, '相关作品 · 同系列与前面分区去重', composed.sameSeries.length, 0)
+
+  const composedPlain = relatedWorksFor(plainList, plainCurrent)
+  check(
+    results,
+    '相关作品 · 无显式关系时同作者命中',
+    composedPlain.sameAuthor.map((work) => work.game.id).join(','),
+    games[1].id,
+  )
+  check(results, '相关作品 · 同系列去重后为空', composedPlain.sameSeries.length, 0)
 }
 
 /* ---------------------------------------------------------------------------

@@ -310,3 +310,31 @@ export function sameSeriesWorks(
 ): RelatedWork[] {
   return relatedByField(visibleGames, current, 'ipSeries', excludeIds, limit)
 }
+
+export interface RelatedWorks {
+  explicit: RelatedWork[]
+  sameAuthor: RelatedWork[]
+  sameSeries: RelatedWork[]
+}
+
+/**
+ * 详情页「相关作品」的完整分区：显式关系 → 同作者 → 同系列，逐级去重。
+ * 去重顺序与每区上限属于展示规则，调用方只负责渲染。
+ */
+export function relatedWorksFor(
+  visibleGames: Game[],
+  current: Game,
+  limit = RELATED_WORK_LIMIT,
+): RelatedWorks {
+  const explicit = explicitRelatedWorks(visibleGames, current)
+  const explicitIds = explicit.map((work) => work.game.id)
+  const sameAuthor = sameAuthorWorks(visibleGames, current, explicitIds, limit)
+  const authorIds = sameAuthor.map((work) => work.game.id)
+  const sameSeries = sameSeriesWorks(
+    visibleGames,
+    current,
+    [...explicitIds, ...authorIds],
+    limit,
+  )
+  return { explicit, sameAuthor, sameSeries }
+}

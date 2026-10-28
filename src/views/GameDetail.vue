@@ -12,10 +12,8 @@ import { assetUrl } from '../utils/asset'
 import type { VocabularyCollection } from '../types/taxonomy'
 import { resolveVocabularyEntry } from '../utils/taxonomy'
 import {
-  explicitRelatedWorks,
-  sameAuthorWorks,
-  sameSeriesWorks,
-  type RelatedWork,
+  relatedWorksFor,
+  type RelatedWorks,
 } from '../utils/relations'
 
 /**
@@ -214,53 +212,27 @@ function openIndex(category: FilterCategory, value: string): void {
 }
 
 /**
- * 相关作品。三种来源互斥去重：
- *   1. 显式关系（出边 + 目标端反向派生）；
- *   2. 同作者的其他作品；
- *   3. 同 IP 系列的其他作品。
+ * 相关作品：显式关系 → 同作者 → 同系列，由 relations 模块统一去重与限流。
  * 全部只从 `visibleGames` 派生 —— 草稿 / 下线 / 归档不会经关联模块泄漏。
  */
-const explicitRelated = computed<RelatedWork[]>(() => {
-  const item = game.value
-  return item ? explicitRelatedWorks(visibleGames.value, item) : []
-})
-
-const explicitRelatedIds = computed(() =>
-  explicitRelated.value.map((work) => work.game.id),
-)
-
-const sameAuthorRelated = computed<RelatedWork[]>(() => {
+const related = computed<RelatedWorks>(() => {
   const item = game.value
   return item
-    ? sameAuthorWorks(visibleGames.value, item, explicitRelatedIds.value)
-    : []
-})
-
-const sameAuthorIds = computed(() =>
-  sameAuthorRelated.value.map((work) => work.game.id),
-)
-
-const sameSeriesRelated = computed<RelatedWork[]>(() => {
-  const item = game.value
-  return item
-    ? sameSeriesWorks(visibleGames.value, item, [
-        ...explicitRelatedIds.value,
-        ...sameAuthorIds.value,
-      ])
-    : []
+    ? relatedWorksFor(visibleGames.value, item)
+    : { explicit: [], sameAuthor: [], sameSeries: [] }
 })
 
 const hasRelatedWorks = computed(
   () =>
-    explicitRelated.value.length > 0 ||
-    sameAuthorRelated.value.length > 0 ||
-    sameSeriesRelated.value.length > 0,
+    related.value.explicit.length > 0 ||
+    related.value.sameAuthor.length > 0 ||
+    related.value.sameSeries.length > 0,
 )
 
 const RELATED_SECTIONS = computed(() => [
-  { key: 'explicit', title: '关联作品', works: explicitRelated.value },
-  { key: 'author', title: '同作者的其他作品', works: sameAuthorRelated.value },
-  { key: 'series', title: '同系列的其他作品', works: sameSeriesRelated.value },
+  { key: 'explicit', title: '关联作品', works: related.value.explicit },
+  { key: 'author', title: '同作者的其他作品', works: related.value.sameAuthor },
+  { key: 'series', title: '同系列的其他作品', works: related.value.sameSeries },
 ])
 
 /** 页内跳转：Hash 路由下不能用 href="#downloads" */
