@@ -36,6 +36,14 @@ declare module 'vue-router' {
  * 首屏之外的视图一律懒加载，避免把后台打进主包。
  */
 export const routes: RouteRecordRaw[] = [
+  /* ===================== 原型（仅 prototype 分支） ===================== */
+  {
+    path: '/prototype/admin-auth',
+    name: 'prototype-admin-auth',
+    component: () => import('../views/prototype/AdminAuthPrototype.vue'),
+    meta: { title: 'Prototype · Admin access' },
+  },
+
   /* ========================= 公开站 ========================= */
   {
     path: '/',
