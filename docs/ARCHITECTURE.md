@@ -93,6 +93,13 @@ History 模式刷新子路径必然 404。
 见 [`adr/0001`](adr/0001-domain-write-validation-at-repository-seam.md) 与
 [`adr/0002`](adr/0002-catalog-write-transaction-is-a-shared-plan.md)。
 
+### 目录文档模型
+
+`repositories/catalogDocument.ts` 的 `buildCatalogDocument()` 统一「原始记录索引 + 归一化作品 +
+身份问题 + 词表」；两个 adapter 只保留 transport。构建期的 `scripts/catalog-document.mjs`
+刻意保持独立（只保留顶层键、不做归一化），见
+[`adr/0003`](adr/0003-catalog-document-model-shared-by-adapters.md)。
+
 ### 三条由自动化守住的规则
 
 `scripts/selftest.mts` 的「静态守卫」组会扫源码，失败即中断：

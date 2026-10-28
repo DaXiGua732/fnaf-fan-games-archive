@@ -24,17 +24,14 @@ import { computed, ref } from 'vue'
 import db from '../data/db.json'
 import { initialTaxonomy } from '../config/taxonomy'
 import type { AdminGame, GamePatch, StorageKind } from '../types/admin'
-import type { Game } from '../types/game'
 import type { Taxonomy, TaxonomyNormalizationResult } from '../types/taxonomy'
-import { normalizeGames } from '../utils/gameDefaults'
 import {
   buildVocabularyWritePatches,
   catalogIdentityErrorMessage,
-  findCatalogIdentityIssues,
   removeRelationTarget,
 } from '../utils/gamePersistence'
+import { buildCatalogDocument, recordOf, type CatalogDocument } from './catalogDocument'
 import { planCreateGame, planDeleteGame, planUpdateGame } from '../utils/gameWrite'
-import { isRecord } from '../utils/guards'
 import {
   createVocabularyEntryIn,
   deleteVocabularyEntryIn,
@@ -69,52 +66,11 @@ export const STORAGE_KEY = 'fnaf-archive:admin-catalog:v1'
  */
 export const TAXONOMY_STORAGE_KEY = 'fnaf-archive:taxonomy:v1'
 
-/** 一份目录的两个视角：UI 读归一化结果，持久化写「原始记录 + 显式改动」 */
-interface CatalogState {
-  games: AdminGame[]
-  records: Map<string, Record<string, unknown>>
-  /**
-   * 记录身份问题（缺失 / 空白 / 非法 / 重复 id）。
-   * 非空时**任何写入都要拒绝** —— 按 id 匹配原始记录已不可靠。
-   */
-  identityIssues: string[]
-}
-
-/** 原始记录按 id 索引；非法 / 重复 id 不进入映射（写入会被整体拒绝） */
-function indexRecords(rawGames: unknown[]): Map<string, Record<string, unknown>> {
-  const records = new Map<string, Record<string, unknown>>()
-  const seen = new Set<string>()
-  for (const entry of rawGames) {
-    if (!isRecord(entry)) continue
-    const id = entry.id
-    if (typeof id !== 'string' || !id.trim() || id !== id.trim() || seen.has(id)) continue
-    seen.add(id)
-    // 键保持原始 id：`normalizeGame()` 也不改 id，持久化时才能命中对应记录
-    records.set(id, entry)
-  }
-  return records
-}
-
 /** 出厂数据（db.json）—— 只在首次访问与「恢复出厂」时用 */
-function seedCatalog(): CatalogState {
+function seedCatalog(): CatalogDocument {
   const raw = structuredClone(db.games) as unknown[]
-  return {
-    games: normalizeGames(raw.filter(isRecord) as unknown as Game[]),
-    records: indexRecords(raw),
-    identityIssues: findCatalogIdentityIssues(raw),
-  }
-}
-
-/** 归一化记录的直接落盘形态：新记录没有原始 JSON，只能整条写入 */
-function recordOf(game: AdminGame): Record<string, unknown> {
-  return { ...game } as unknown as Record<string, unknown>
-}
-
-/** 出厂词表：数据仓快照里有且结构可用就用它，否则用内置初始词表 */
-function seedTaxonomy(): Taxonomy {
-  const raw = (db as { taxonomy?: unknown }).taxonomy
-  const result = normalizeTaxonomy(raw)
-  return result.usable ? result.taxonomy : initialTaxonomy()
+  const rawTaxonomy = 'taxonomy' in db ? db.taxonomy : undefined
+  return buildCatalogDocument(raw, rawTaxonomy)
 }
 
 /**
@@ -122,7 +78,7 @@ function seedTaxonomy(): Taxonomy {
  * **任何异常都退回出厂数据** —— 一份损坏的存档绝不能让站点变成空白，
  * 那比丢失改动严重得多。
  */
-function readStoredCatalog(backend: StorageLike | null): CatalogState | null {
+function readStoredCatalog(backend: StorageLike | null): CatalogDocument | null {
   if (!backend) return null
 
   let raw: string | null = null
@@ -142,11 +98,7 @@ function readStoredCatalog(backend: StorageLike | null): CatalogState | null {
     // 走一遍归一化：存档可能是旧版本写的，缺的字段要补齐。
     // 同时保留原始记录，写回时未编辑的作品不会被归一化结果覆盖。
     // 非对象记录无法归一化，但身份检查会让所有写入被拒绝，原始存档不会被改写。
-    return {
-      games: normalizeGames(parsed.filter(isRecord) as unknown as Game[]),
-      records: indexRecords(parsed),
-      identityIssues: findCatalogIdentityIssues(parsed),
-    }
+    return buildCatalogDocument(parsed)
   } catch {
     console.warn('[localGameRepository] 本地存档解析失败，已退回出厂数据')
     return null
@@ -196,7 +148,8 @@ export function createLocalGameRepository(
   const backend = options.storage === undefined ? getLocalStorage() : options.storage
 
   const storedCatalog = readStoredCatalog(backend)
-  const initial = storedCatalog ?? seedCatalog()
+  const seed = seedCatalog()
+  const initial = storedCatalog ?? seed
   const store = ref<AdminGame[]>(initial.games)
   /**
    * 持久化视角：id → 最近一次写出的原始记录。
@@ -207,8 +160,8 @@ export function createLocalGameRepository(
   /** 当前数据源的记录身份问题；非空时所有目录写入都必须拒绝（reset 除外） */
   let identityIssues = initial.identityIssues
   const storedTaxonomy = readStoredTaxonomy(backend)
-  const taxonomyStore = ref<Taxonomy>(storedTaxonomy?.taxonomy ?? seedTaxonomy())
-  const taxonomyIssues = ref<string[]>(storedTaxonomy?.issues ?? [])
+  const taxonomyStore = ref<Taxonomy>(storedTaxonomy?.taxonomy ?? seed.taxonomy)
+  const taxonomyIssues = ref<string[]>(storedTaxonomy?.issues ?? seed.taxonomyIssues)
 
   /** 上一次落盘是否失败（配额满等）。失败就降级为「只写内存」，**不假装成功** */
   const persistFailed = ref(false)
@@ -327,17 +280,16 @@ export function createLocalGameRepository(
       // 用 JSON 深拷贝而不是 structuredClone：调用方可能传 Vue 响应式代理，
       // structuredClone 遇到 Proxy 会抛 DataCloneError。
       const cloned = JSON.parse(JSON.stringify(games)) as unknown[]
-      identityIssues = findCatalogIdentityIssues(cloned)
-      const nextGames = normalizeGames(cloned.filter(isRecord) as unknown as Game[])
-      store.value = nextGames
+      const doc = buildCatalogDocument(cloned, taxonomy)
+      identityIssues = doc.identityIssues
+      store.value = doc.games
       // hydrate 的数据本身就是归一化后的外部快照，没有可保留的原始 JSON；
       // 重建记录，避免下一次本地保存把过期的出厂原始数据写回去。
       records.clear()
-      for (const [id, record] of indexRecords(cloned)) records.set(id, record)
+      for (const [id, record] of doc.records) records.set(id, record)
       if (taxonomy) {
-        const normalized = normalizeTaxonomy(taxonomy)
-        taxonomyStore.value = normalized.taxonomy
-        taxonomyIssues.value = normalized.issues
+        taxonomyStore.value = doc.taxonomy
+        taxonomyIssues.value = doc.taxonomyIssues
       }
     },
 
@@ -393,8 +345,8 @@ export function createLocalGameRepository(
       records.clear()
       for (const [id, record] of seed.records) records.set(id, record)
       identityIssues = seed.identityIssues
-      taxonomyStore.value = seedTaxonomy()
-      taxonomyIssues.value = []
+      taxonomyStore.value = seed.taxonomy
+      taxonomyIssues.value = seed.taxonomyIssues
       persist()
     },
 

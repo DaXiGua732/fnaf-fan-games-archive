@@ -43,46 +43,35 @@ import {
   type GithubRepoRef,
 } from '../services/githubApi'
 import type { AdminGame, GamePatch, StorageKind } from '../types/admin'
-import type { Game } from '../types/game'
 import type { Taxonomy, VocabularyEntry } from '../types/taxonomy'
 import { VOCABULARY_LABELS } from '../types/taxonomy'
-import { normalizeGames } from '../utils/gameDefaults'
 import { slugify } from '../utils/gameFactory'
 import {
   buildVocabularyWritePatches,
   catalogIdentityErrorMessage,
-  findCatalogIdentityIssues,
   removeRelationTarget,
 } from '../utils/gamePersistence'
 import { planCreateGame, planDeleteGame, planUpdateGame } from '../utils/gameWrite'
-import { isRecord } from '../utils/guards'
 import {
   createVocabularyEntryIn,
   deleteVocabularyEntryIn,
   mergeVocabularyEntriesIn,
-  normalizeTaxonomy,
   updateVocabularyEntryIn,
 } from '../utils/taxonomy'
+import {
+  buildCatalogDocument,
+  type CatalogDocument as CatalogData,
+} from './catalogDocument'
 import { DATA_REPO, dataRepoPagesBase } from './dataRepo'
 import type { GameRepository } from './gameRepository'
 
 /** 冲突重试次数。3 次已经足够 —— 再撞上说明是真的人多手快，该让人重试而不是死循环 */
 const MAX_CONFLICT_RETRY = 3
 
-/** 数据仓 db.json 的完整内存形态：原始记录 + 归一化后的两份数据 */
-interface CatalogDocument {
+/** 数据仓 db.json 的完整内存形态：顶层原对象 + 共享目录文档 */
+interface CatalogDocument extends CatalogData {
   /** 原封不动的顶层对象，用于保留未知字段与键顺序 */
   raw: Record<string, unknown>
-  /** 原始作品记录，按 id 索引；持久化时未编辑的记录原样写回 */
-  originals: Map<string, Record<string, unknown>>
-  /**
-   * 记录身份问题（缺失 / 空白 / 非法 / 重复 id）。
-   * 非空时**任何写入都要拒绝** —— 按 id 匹配原始记录已不可靠。
-   */
-  identityIssues: string[]
-  games: AdminGame[]
-  taxonomy: Taxonomy
-  taxonomyIssues: string[]
 }
 
 /** 一次提交的计划：新内容 + 提交信息摘要 */
@@ -137,28 +126,7 @@ function parseCatalog(text: string): CatalogDocument {
     throw new Error('数据仓里 db.json 的格式不对：找不到 games 列表。')
   }
 
-  const originals = new Map<string, Record<string, unknown>>()
-  const seenIds = new Set<string>()
-  for (const entry of games) {
-    if (!isRecord(entry)) continue
-    const id = entry.id
-    if (typeof id !== 'string' || !id.trim() || id !== id.trim() || seenIds.has(id)) continue
-    seenIds.add(id)
-    // 键保持原始 id：归一化不改 id，持久化时 `game.id` 才能命中该记录
-    originals.set(id, entry)
-  }
-
-  const normalized = normalizeTaxonomy(raw.taxonomy)
-  return {
-    raw,
-    originals,
-    identityIssues: findCatalogIdentityIssues(games),
-    // 非对象记录无法归一化，但不在这里丢弃原始数组：写入已因身份问题被拒绝，
-    // 读取侧只需要能展示其余合法记录即可。
-    games: normalizeGames(games.filter(isRecord) as unknown as Game[]),
-    taxonomy: normalized.taxonomy,
-    taxonomyIssues: normalized.issues,
-  }
+  return { raw, ...buildCatalogDocument(games, raw.taxonomy) }
 }
 
 /**
@@ -170,7 +138,7 @@ function parseCatalog(text: string): CatalogDocument {
  */
 function serializeCatalog(document: CatalogDocument, plan: CommitPlan): string {
   const games = plan.games.map((game) => {
-    const original = document.originals.get(game.id)
+    const original = document.records.get(game.id)
     const writes = plan.writes.get(game.id)
     if (!original) return writes ? { ...game, ...writes } : game
     return writes ? { ...original, ...writes } : original
@@ -420,7 +388,7 @@ export function createGitHubGameRepository(options: GitHubRepositoryOptions): Ga
         // 内存里的归一化列表只负责 UI；落盘时从**原始记录**剔除入边，
         // 同一记录上的其他历史异常关系仍然保留，交给质量检查继续报告。
         const writes = new Map<string, Record<string, unknown>>()
-        for (const [gameId, record] of current.originals) {
+        for (const [gameId, record] of current.records) {
           if (gameId === id) continue
           const cleaned = removeRelationTarget(record, id)
           if (cleaned) writes.set(gameId, { relations: cleaned.relations })
