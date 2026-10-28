@@ -1,5 +1,7 @@
 # Admin sign-in is invite-only Supabase Auth magic link/OTP
 
+> **Status**: superseded by ADR-0010 for the sign-in method. Email Magic Link/OTP is replaced by Google OAuth; the invite-only, MFA, session, and offboarding decisions remain.
+
 后台目前用共享 GitHub PAT 登录，无法按人追责，也把非 GitHub 管理员挡在门外。现在改为
 Supabase Auth：所有者按邮箱邀请管理员，管理员用同一封邮件里的 Magic Link 或 6 位 OTP 登录，
 不设密码、不要求 GitHub 账号；登录调用 `signInWithOtp({ shouldCreateUser: false })`，未受邀邮箱
