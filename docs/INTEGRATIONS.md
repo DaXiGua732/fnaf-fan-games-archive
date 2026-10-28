@@ -219,5 +219,6 @@ npm run dev                # 终端 2
 **相关文件**：`supabase/resource_requests.sql`、`src/config/requests.ts`、
 `src/types/resourceRequest.ts`、`src/utils/requestMatch.ts`、`src/utils/requestClient.ts`、
 `src/repositories/localResourceRequestRepository.ts`、`src/repositories/supabaseResourceRequestRepository.ts`、
-`src/composables/useResourceRequests.ts`、`src/components/ResourceRequestBoard.vue`、
+`src/composables/resourceRequestStore.ts`（可构造的 store：缓存 / 合并 / 乐观回滚）、
+`src/composables/useResourceRequests.ts`（生产装配）、`src/components/ResourceRequestBoard.vue`、
 `src/components/ResourceRequestDialog.vue`、`src/dev/requestAssertions.ts`。

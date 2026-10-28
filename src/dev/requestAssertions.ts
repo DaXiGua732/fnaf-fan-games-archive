@@ -6,10 +6,19 @@
  */
 import { nextTick } from 'vue'
 import { useGameLibrary } from '../composables/useGameLibrary'
+import {
+  RESOURCE_REQUEST_CACHE_KEY,
+  createResourceRequestStore,
+} from '../composables/resourceRequestStore'
 import { createLocalResourceRequestRepository, RESOURCE_REQUEST_STORAGE_KEY } from '../repositories/localResourceRequestRepository'
 import { createSupabaseResourceRequestRepository } from '../repositories/supabaseResourceRequestRepository'
 import type { Game } from '../types/game'
-import { RESOURCE_REQUEST_LIMITS, ResourceRequestError } from '../types/resourceRequest'
+import {
+  RESOURCE_REQUEST_LIMITS,
+  ResourceRequestError,
+  type ResourceRequest,
+  type ResourceRequestRepository,
+} from '../types/resourceRequest'
 import type { StorageLike } from '../repositories/localGameRepository'
 import {
   isSameRequestTitle,
@@ -501,6 +510,105 @@ export async function runRequestAssertions(): Promise<Assertion[]> {
     const limited = library.searchGames(sample.title, 1)
     check('searchGames · 遵守 limit', limited.length <= 1, true)
   }
+
+  /* ------------------------------------------------- 催资源 store（可构造） */
+  const storeStorage = memoryStorage()
+  const visibleGame = fixtureGame('jolly', 'Jolly')
+  const rows: ResourceRequest[] = [
+    { id: 'r1', title: 'Jolly', votes: 2, createdAt: '2026-01-01T00:00:00.000Z' },
+    { id: 'r2', title: 'Wanted Game', votes: 5, createdAt: '2026-01-02T00:00:00.000Z' },
+  ]
+  let failList = false
+  let failVote = false
+  const repo: ResourceRequestRepository = {
+    kind: 'local',
+    async list() {
+      if (failList) throw new ResourceRequestError('NETWORK', 'offline')
+      return rows.map((row) => ({ ...row }))
+    },
+    async submit(title) {
+      const created: ResourceRequest = {
+        id: `r${rows.length + 1}`,
+        title,
+        votes: 1,
+        createdAt: '2026-01-03T00:00:00.000Z',
+      }
+      rows.push(created)
+      return { request: { ...created }, created: true, voted: true }
+    },
+    async vote(id) {
+      if (failVote) throw new ResourceRequestError('UNAVAILABLE', 'vote failed')
+      const row = rows.find((item) => item.id === id)
+      if (!row) throw new ResourceRequestError('REQUEST_NOT_FOUND', 'missing')
+      row.votes += 1
+      return { request: { ...row }, added: true }
+    },
+  }
+  const store = createResourceRequestStore({
+    repository: repo,
+    storage: storeStorage.storage,
+    visibleGames: () => [visibleGame],
+    clientId: () => 'client-test',
+    now: () => 1000,
+  })
+
+  const firstLoad = store.load()
+  const secondLoad = store.load()
+  check('store · 并发 load 复用同一个 Promise', firstLoad === secondLoad, true)
+  await firstLoad
+  check('store · load 填充列表', store.requests.value.length, 2)
+  check(
+    'store · 待上传排除已收录',
+    store.pendingRequests.value.map((request) => request.id).join(','),
+    'r2',
+  )
+  check('store · 已收录匹配到可见作品', store.fulfilledRequests.value[0]?.game.id, 'jolly')
+
+  const submitted = await store.submit('Brand New')
+  check('store · submit 写入请求', store.requests.value.some((request) => request.id === submitted.request.id), true)
+  check('store · submit 同步本机已投状态', store.votedIds.value.has(submitted.request.id), true)
+
+  const voted = await store.vote('r2')
+  check('store · vote 返回新票数', voted.request.votes, 6)
+  const duplicateVote = await store.vote('r2')
+  check('store · 重复投票不再加票', duplicateVote.added, false)
+
+  failVote = true
+  const beforeVote = store.requests.value.find((request) => request.id === 'r1')?.votes ?? -1
+  let voteError = ''
+  try {
+    await store.vote('r1')
+  } catch (cause) {
+    voteError = cause instanceof Error ? cause.message : String(cause)
+  }
+  check('store · 投票失败抛出错误', voteError.length > 0, true)
+  check(
+    'store · 投票失败回滚乐观票数',
+    store.requests.value.find((request) => request.id === 'r1')?.votes,
+    beforeVote,
+  )
+  check('store · 投票失败后移除 pending 标记', store.pendingVotes.value.has('r1'), false)
+  failVote = false
+
+  // 列表失败时回退最近一次缓存
+  const cachedStorage = memoryStorage({
+    [RESOURCE_REQUEST_CACHE_KEY]: JSON.stringify({
+      at: 1,
+      requests: [{ id: 'cached-1', title: 'Cached', votes: 3, createdAt: '2026-01-01T00:00:00.000Z' }],
+    }),
+  })
+  failList = true
+  const cachedStore = createResourceRequestStore({
+    repository: repo,
+    storage: cachedStorage.storage,
+    visibleGames: () => [],
+    clientId: () => 'client-cache',
+  })
+  await cachedStore.load()
+  check('store · 列表失败回退缓存', cachedStore.usingCache.value, true)
+  check('store · 缓存回退文案', cachedStore.error.value.includes('缓存'), true)
+  check('store · 缓存条数', cachedStore.requests.value.length, 1)
+  failList = false
 
   return results
 }
